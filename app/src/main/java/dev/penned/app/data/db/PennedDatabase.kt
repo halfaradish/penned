@@ -12,7 +12,9 @@ import dev.penned.app.data.db.dao.TransactionDao
 import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.data.db.entity.AttachmentEntity
 import dev.penned.app.data.db.entity.BookEntity
+import dev.penned.app.data.db.entity.BudgetEntity
 import dev.penned.app.data.db.entity.CategoryEntity
+import dev.penned.app.data.db.entity.ImportBatchEntity
 import dev.penned.app.data.db.entity.TagEntity
 import dev.penned.app.data.db.entity.TransactionEntity
 import dev.penned.app.data.db.entity.TransactionTagRefEntity
@@ -26,8 +28,10 @@ import dev.penned.app.data.db.entity.TransactionTagRefEntity
         TagEntity::class,
         TransactionTagRefEntity::class,
         AttachmentEntity::class,
+        BudgetEntity::class,
+        ImportBatchEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -39,6 +43,8 @@ abstract class PennedDatabase : RoomDatabase() {
 
     companion object {
         fun build(context: Context): PennedDatabase =
-            Room.databaseBuilder(context, PennedDatabase::class.java, "penned.db").build()
+            Room.databaseBuilder(context, PennedDatabase::class.java, "penned.db")
+                .addMigrations(MIGRATION_1_2)
+                .build()
     }
 }

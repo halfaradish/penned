@@ -34,6 +34,13 @@ android {
         compose = true
     }
 
+    sourceSets {
+        // Room 迁移测试读取本目录下的 schema JSON
+        getByName("test") {
+            assets.srcDir("schemas")
+        }
+    }
+
     testOptions {
         unitTests {
             isIncludeAndroidResources = true

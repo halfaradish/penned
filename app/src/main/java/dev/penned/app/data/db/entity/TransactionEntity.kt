@@ -1,9 +1,11 @@
 package dev.penned.app.data.db.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import dev.penned.app.domain.ReimburseState
+import dev.penned.app.domain.TxSource
 import dev.penned.app.domain.TxType
 
 /**
@@ -34,6 +36,14 @@ data class TransactionEntity(
     val currencyCode: String? = null,
     val rate: Double? = null,
     val address: String? = null,
+    /** 转账手续费（D022），记在转出方。 */
+    @ColumnInfo(defaultValue = "0") val feeCents: Long = 0,
+    /** 不计入收支（D020）。 */
+    @ColumnInfo(defaultValue = "0") val excludeFromStats: Boolean = false,
+    /** 不计入预算（D020）。 */
+    @ColumnInfo(defaultValue = "0") val excludeFromBudget: Boolean = false,
+    /** 记录方式（D021）。 */
+    @ColumnInfo(defaultValue = "MANUAL") val source: TxSource = TxSource.MANUAL,
     val creatorDeviceId: String,
     val createdAt: Long,
     val updatedAt: Long,

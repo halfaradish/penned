@@ -4,6 +4,7 @@ import androidx.room.TypeConverter
 import dev.penned.app.domain.AccountType
 import dev.penned.app.domain.CategoryType
 import dev.penned.app.domain.ReimburseState
+import dev.penned.app.domain.TxSource
 import dev.penned.app.domain.TxType
 
 class Converters {
@@ -18,4 +19,7 @@ class Converters {
 
     @TypeConverter fun reimburseStateToString(v: ReimburseState): String = v.name
     @TypeConverter fun stringToReimburseState(s: String): ReimburseState = ReimburseState.valueOf(s)
+
+    @TypeConverter fun txSourceToString(v: TxSource): String = v.name
+    @TypeConverter fun stringToTxSource(s: String): TxSource = TxSource.valueOf(s)
 }
