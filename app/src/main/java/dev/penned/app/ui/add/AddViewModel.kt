@@ -44,6 +44,9 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
         private set
     var feeText = MutableStateFlow("")
         private set
+    /** 记账日期（epochDay）；null = 今天。编辑时按原流水反推。 */
+    var dateEpochDay = MutableStateFlow<Long?>(null)
+        private set
     var note = MutableStateFlow("")
         private set
 
@@ -101,6 +104,7 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
             transferToId.value = tx.targetAccountId
             feeText.value = if (tx.feeCents > 0) Money.format(tx.feeCents) else ""
             note.value = tx.note.orEmpty()
+            dateEpochDay.value = dev.penned.app.domain.AddDate.dayFromMinute(tx.dateEpochMinute)
         }
     }
 
@@ -139,6 +143,10 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
 
     fun setFee(text: String) {
         feeText.value = text
+    }
+
+    fun setDate(day: Long?) {
+        dateEpochDay.value = day
     }
 
     fun pressKey(key: String) {
@@ -205,7 +213,8 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
                     accountId = from,
                     targetAccountId = to,
                     categoryId = null,
-                    dateEpochMinute = original?.dateEpochMinute ?: now / 60_000,
+                    dateEpochMinute = original?.dateEpochMinute
+                        ?: dev.penned.app.domain.AddDate.epochMinuteFor(dateEpochDay.value, java.time.ZonedDateTime.now()),
                     note = note.value.trim().ifEmpty { null },
                     feeCents = Money.parseToCents(feeText.value) ?: 0L,
                     source = original?.source ?: TxSource.MANUAL,
@@ -226,7 +235,8 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
                     accountId = accountId.value,
                     targetAccountId = null,
                     categoryId = category.id,
-                    dateEpochMinute = original?.dateEpochMinute ?: now / 60_000,
+                    dateEpochMinute = original?.dateEpochMinute
+                        ?: dev.penned.app.domain.AddDate.epochMinuteFor(dateEpochDay.value, java.time.ZonedDateTime.now()),
                     note = note.value.trim().ifEmpty { null },
                     source = original?.source ?: TxSource.MANUAL,
                     creatorDeviceId = original?.creatorDeviceId ?: app.deviceId,

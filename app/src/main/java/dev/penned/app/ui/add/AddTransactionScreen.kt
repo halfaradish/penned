@@ -69,6 +69,7 @@ fun AddTransactionScreen(
     val accounts by viewModel.accounts.collectAsStateWithLifecycle()
     val canSave by viewModel.canSave.collectAsStateWithLifecycle()
     val showEquals by viewModel.showEquals.collectAsStateWithLifecycle()
+    val dateEpochDay by viewModel.dateEpochDay.collectAsStateWithLifecycle()
 
     val parents = remember(categories, type) {
         val domain = if (type == TxType.INCOME) dev.penned.app.domain.CategoryType.INCOME else dev.penned.app.domain.CategoryType.EXPENSE
@@ -95,6 +96,7 @@ fun AddTransactionScreen(
         fromId = fromId,
         toId = toId,
         feeText = feeText,
+        dateEpochDay = dateEpochDay,
         accounts = accounts,
         parents = parents,
         expandedSubs = expandedSubs,
@@ -108,6 +110,7 @@ fun AddTransactionScreen(
         onPickTo = viewModel::pickTransferTo,
         onSwap = viewModel::swapTransfer,
         onFeeChange = viewModel::setFee,
+        onPickDate = viewModel::setDate,
         onSave = { viewModel.save(onDone) },
         onSaveAgain = viewModel::saveAgain,
         onEvaluate = viewModel::evaluate,
@@ -132,6 +135,7 @@ fun AddTransactionContent(
     fromId: String?,
     toId: String?,
     feeText: String,
+    dateEpochDay: Long? = null,
     accounts: List<AccountEntity>,
     parents: List<CategoryUi>,
     expandedSubs: List<CategoryUi>,
@@ -145,6 +149,7 @@ fun AddTransactionContent(
     onPickTo: (String?) -> Unit,
     onSwap: () -> Unit,
     onFeeChange: (String) -> Unit,
+    onPickDate: (Long?) -> Unit = {},
     onEvaluate: () -> Unit,
     onSave: () -> Unit,
     onSaveAgain: () -> Unit,
@@ -157,6 +162,7 @@ fun AddTransactionContent(
     var showFromPicker by remember { mutableStateOf(false) }
     var showToPicker by remember { mutableStateOf(false) }
     var showFee by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
     val amountColor = when (type) {
         TxType.EXPENSE -> ExpenseRed
         TxType.INCOME -> IncomeTeal
@@ -282,8 +288,12 @@ fun AddTransactionContent(
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    val today = LocalDate.now()
-                    StaticChip(text = "今天 ${today.monthValue}月${today.dayOfMonth}日")
+                    val today = java.time.LocalDate.now()
+                    SelectableChip(
+                        text = dev.penned.app.domain.AddDate.chipLabel(dateEpochDay, today),
+                        selected = dateEpochDay != null && dateEpochDay != today.toEpochDay(),
+                        onClick = { showDatePicker = true },
+                    )
                     if (type == TxType.TRANSFER) {
                         SelectableChip(
                             text = if (feeText.isBlank()) "手续费" else "手续费 ${feeText}",
@@ -362,6 +372,29 @@ fun AddTransactionContent(
             },
             onDismiss = { showFee = false },
         )
+    }
+    if (showDatePicker) {
+        val pickerState = androidx.compose.material3.rememberDatePickerState(
+            initialSelectedDateMillis = dev.penned.app.domain.AddDate.dayToPickerMillis(
+                dateEpochDay ?: java.time.LocalDate.now().toEpochDay(),
+            ),
+        )
+        androidx.compose.material3.DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    pickerState.selectedDateMillis?.let { millis ->
+                        onPickDate(dev.penned.app.domain.AddDate.pickerMillisToDay(millis))
+                    }
+                    showDatePicker = false
+                }) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("取消") }
+            },
+        ) {
+            androidx.compose.material3.DatePicker(state = pickerState, title = { Text("选择记账日期", modifier = Modifier.padding(16.dp)) })
+        }
     }
 }
 
