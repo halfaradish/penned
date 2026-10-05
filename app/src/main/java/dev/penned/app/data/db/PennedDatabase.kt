@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import dev.penned.app.data.db.dao.AccountDao
 import dev.penned.app.data.db.dao.BookDao
+import dev.penned.app.data.db.dao.BudgetDao
 import dev.penned.app.data.db.dao.CategoryDao
 import dev.penned.app.data.db.dao.ImportBatchDao
 import dev.penned.app.data.db.dao.TransactionDao
@@ -42,6 +43,7 @@ abstract class PennedDatabase : RoomDatabase() {
     abstract fun categoryDao(): CategoryDao
     abstract fun transactionDao(): TransactionDao
     abstract fun importBatchDao(): ImportBatchDao
+    abstract fun budgetDao(): BudgetDao
 
     companion object {
         fun build(context: Context): PennedDatabase =

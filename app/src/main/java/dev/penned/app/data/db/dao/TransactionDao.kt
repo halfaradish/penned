@@ -80,6 +80,20 @@ interface TransactionDao {
     @Query("UPDATE transactions SET deleted = 1, updatedAt = :now WHERE importBatchId = :batchId")
     suspend fun softDeleteByBatch(batchId: String, now: Long)
 
+    /** 月度分类支出（不含 excludeFromBudget），供预算与统计。 */
+    data class CategorySpend(val categoryId: String?, val cents: Long)
+
+    @Query(
+        """
+        SELECT categoryId, SUM(amountCents) AS cents
+        FROM transactions
+        WHERE deleted = 0 AND bookId = :bookId AND type = 'EXPENSE' AND excludeFromBudget = 0
+          AND dateEpochMinute BETWEEN :fromMinute AND :toMinute
+        GROUP BY categoryId
+        """
+    )
+    fun observeMonthSpendByCategory(bookId: String, fromMinute: Long, toMinute: Long): Flow<List<CategorySpend>>
+
     @Query("SELECT COUNT(*) FROM transactions")
     suspend fun count(): Int
 }

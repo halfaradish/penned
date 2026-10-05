@@ -24,6 +24,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -55,6 +56,7 @@ fun HomeScreen(
     onAdd: () -> Unit,
     onOpenDetail: (String) -> Unit,
     onManageBooks: () -> Unit,
+    onManageBudgets: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val rows by viewModel.rows.collectAsStateWithLifecycle()
@@ -62,6 +64,7 @@ fun HomeScreen(
     val currentBook by viewModel.currentBook.collectAsStateWithLifecycle()
     val selectionMode by viewModel.selectionMode.collectAsStateWithLifecycle()
     val selectedIds by viewModel.selectedIds.collectAsStateWithLifecycle()
+    val budgetSummary by viewModel.budgetSummary.collectAsStateWithLifecycle()
 
     var showBookMenu by remember { mutableStateOf(false) }
     var showAddBook by remember { mutableStateOf(false) }
@@ -70,6 +73,8 @@ fun HomeScreen(
         bookName = currentBook?.name ?: "账本",
         rows = rows,
         onAdd = onAdd,
+        budgetSummary = budgetSummary,
+        onOpenBudgets = onManageBudgets,
         onBookClick = { showBookMenu = true },
         bookMenu = {
             DropdownMenu(expanded = showBookMenu, onDismissRequest = { showBookMenu = false }) {
@@ -128,6 +133,8 @@ fun HomeContent(
     bookName: String,
     rows: List<TxWithCategory>,
     onAdd: () -> Unit,
+    budgetSummary: HomeViewModel.BudgetSummary? = null,
+    onOpenBudgets: () -> Unit = {},
     onBookClick: () -> Unit = {},
     bookMenu: @Composable () -> Unit = {},
     selectionMode: Boolean = false,
@@ -196,6 +203,23 @@ fun HomeContent(
                 }
             }
 
+            if (budgetSummary != null) {
+                BudgetSummaryRow(
+                    summary = budgetSummary,
+                    onClick = onOpenBudgets,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            } else {
+                TextButton(
+                    onClick = onOpenBudgets,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 0.dp),
+                ) { Text("设置本月预算，控制花销 →") }
+            }
+
             Button(
                 onClick = onAdd,
                 modifier = Modifier
@@ -259,7 +283,38 @@ fun HomeContent(
     }
 }
 
-// （批量选择状态由 HomeContent.selectedIds 直接传入）
+@Composable
+private fun BudgetSummaryRow(
+    summary: HomeViewModel.BudgetSummary,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val state = dev.penned.app.domain.BudgetMath.state(summary.totalCents, summary.spentCents)
+    Card(modifier = modifier.clickable(onClick = onClick)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("剩余预算", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                Text(
+                    if (state.overspent) "已超支 ${Money.format(-state.remainingCents)}" else Money.format(state.remainingCents),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (state.overspent) ExpenseRed else MaterialTheme.colorScheme.primary,
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            LinearProgressIndicator(
+                progress = { state.usedFraction },
+                modifier = Modifier.fillMaxWidth().height(5.dp),
+                color = if (state.overspent) ExpenseRed else MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "本月预算 ${Money.format(summary.totalCents)} · 已用 ${Money.format(summary.spentCents)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
 
 @Composable
 private fun SummaryCell(label: String, value: String, valueColor: Color) {

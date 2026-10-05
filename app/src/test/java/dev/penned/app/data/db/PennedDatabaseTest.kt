@@ -94,4 +94,29 @@ class PennedDatabaseTest {
         val rows = db.transactionDao().observeRecentWithCategory(book.id, 10).first()
         assertEquals(listOf("new", "old"), rows.map { it.id })
     }
+
+    @Test
+    fun `budget dao enforces one-per-category lookup with nullable categoryId`() = runTest {
+        val book = DefaultSeed.seedIfEmpty(db, "device-a", now = 1000L)!!
+
+        fun budget(id: String, categoryId: String?, amount: Long) = dev.penned.app.data.db.entity.BudgetEntity(
+            id = id, bookId = book.id, categoryId = categoryId, amountCents = amount,
+            startEpochDay = 0, createdAt = 1, updatedAt = 1, deviceId = "d",
+        )
+        db.budgetDao().upsert(budget("b-total", null, 100000))
+        db.budgetDao().upsert(budget("b-food", "food", 50000))
+
+        // IS :categoryId 语义：null 精确匹配（不落到 food 行）
+        assertEquals(100000L, db.budgetDao().getByCategory(book.id, null)?.amountCents)
+        assertEquals(50000L, db.budgetDao().getByCategory(book.id, "food")?.amountCents)
+        assertEquals(null, db.budgetDao().getByCategory(book.id, "other"))
+
+        // 更新走 upsert 复用行
+        db.budgetDao().upsert(budget("b-food", "food", 60000))
+        assertEquals(listOf("b-total", "b-food"), db.budgetDao().observeByBook(book.id).first().map { it.id })
+
+        // 软删后不出现
+        db.budgetDao().softDelete("b-food", 2)
+        assertEquals(listOf("b-total"), db.budgetDao().observeByBook(book.id).first().map { it.id })
+    }
 }

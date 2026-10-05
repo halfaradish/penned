@@ -34,6 +34,30 @@ class HomeViewModel(private val app: PennedApplication) : ViewModel() {
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** 首页「剩余预算」：总预算（分类预算不进首页汇总）。 */
+    data class BudgetSummary(val totalCents: Long, val spentCents: Long) {
+        val remainingCents: Long get() = totalCents - spentCents
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val budgetSummary: StateFlow<BudgetSummary?> = currentBook
+        .flatMapLatest { book ->
+            if (book == null) {
+                flowOf(null)
+            } else {
+                val today = java.time.LocalDate.now()
+                val window = dev.penned.app.domain.BudgetMath.monthWindowMinute(today.year, today.monthValue)
+                combine(
+                    db.budgetDao().observeByBook(book.id),
+                    db.transactionDao().observeMonthSpendByCategory(book.id, window.first, window.last),
+                ) { budgets, spend ->
+                    val totalBudget = budgets.firstOrNull { it.categoryId == null }?.amountCents ?: return@combine null
+                    BudgetSummary(totalBudget, spend.sumOf { it.cents })
+                }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     // 批量删除模式（探索报告 §一：长按账单可批量编辑）
     val selectionMode = MutableStateFlow(false)
     val selectedIds = MutableStateFlow<Set<String>>(emptySet())
