@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 fun MineScreen(
     onOpenDataManagement: () -> Unit,
     onOpenCategories: () -> Unit,
+    onOpenPinLock: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(modifier = modifier.fillMaxSize()) { padding ->
@@ -49,6 +50,7 @@ fun MineScreen(
             MenuRow("分类管理", "新增 / 重命名 / 隐藏支出与收入分类", onOpenCategories)
             HorizontalDivider()
             SectionLabel("其他")
+            MenuRow("密码锁", "启动与回到应用时需输入 4 位密码", onOpenPinLock)
             MenuRow("关于", "版本 0.1.0（M1）", onClick = {})
             HorizontalDivider()
         }

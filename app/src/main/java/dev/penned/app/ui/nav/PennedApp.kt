@@ -30,6 +30,8 @@ import dev.penned.app.ui.detail.DetailScreen
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.home.HomeScreen
 import dev.penned.app.ui.home.HomeViewModel
+import dev.penned.app.ui.lock.PinManageScreen
+import dev.penned.app.ui.lock.PinViewModel
 import dev.penned.app.ui.mine.MineScreen
 import dev.penned.app.ui.stub.StubScreen
 
@@ -125,10 +127,17 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                 )
                 CategoriesScreen(viewModel = vm, onBack = { navController.popBackStack() })
             }
+            composable("pin") {
+                val vm: PinViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+                    initializer = { PinViewModel(app) },
+                )
+                PinManageScreen(viewModel = vm, onBack = { navController.popBackStack() })
+            }
             composable("mine") {
                 MineScreen(
                     onOpenDataManagement = { navController.navigate("data") },
                     onOpenCategories = { navController.navigate("categories") },
+                    onOpenPinLock = { navController.navigate("pin") },
                 )
             }
             composable("data") {
