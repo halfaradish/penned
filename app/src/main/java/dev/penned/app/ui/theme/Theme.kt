@@ -5,21 +5,44 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 
 private val LightColors = lightColorScheme(
     primary = PrimaryLight,
-    onPrimary = androidx.compose.ui.graphics.Color.White,
+    onPrimary = OnPrimaryLight,
     primaryContainer = PrimaryContainerLight,
     onPrimaryContainer = OnPrimaryContainerLight,
-    // 中性浅灰，去掉默认 M3 的紫灰色偏（记一笔页背景/圆底用）
-    surfaceVariant = androidx.compose.ui.graphics.Color(0xFFEDF0EF),
-    onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF5A6462),
+    background = BackgroundLight,
+    onBackground = OnBackgroundLight,
+    surface = SurfaceLight,
+    onSurface = OnSurfaceLight,
+    surfaceVariant = SurfaceVariantLight,
+    onSurfaceVariant = OnSurfaceVariantLight,
+    outline = OutlineLight,
+    surfaceContainer = SurfaceContainerLight,
+    surfaceContainerHigh = SurfaceContainerLight,
+    surfaceContainerHighest = SurfaceContainerLight,
+    surfaceContainerLow = SurfaceVariantLight,
+    surfaceContainerLowest = SurfaceLight,
 )
 
 private val DarkColors = darkColorScheme(
     primary = PrimaryDark,
+    onPrimary = OnPrimaryDark,
     primaryContainer = PrimaryContainerDark,
     onPrimaryContainer = OnPrimaryContainerDark,
+    background = BackgroundDark,
+    onBackground = OnBackgroundDark,
+    surface = SurfaceDark,
+    onSurface = OnSurfaceDark,
+    surfaceVariant = SurfaceVariantDark,
+    onSurfaceVariant = OnSurfaceVariantDark,
+    outline = OutlineDark,
+    surfaceContainer = SurfaceContainerDark,
+    surfaceContainerHigh = SurfaceContainerDark,
+    surfaceContainerHighest = SurfaceContainerDark,
+    surfaceContainerLow = SurfaceVariantDark,
+    surfaceContainerLowest = SurfaceDark,
 )
 
 @Composable
@@ -33,3 +56,11 @@ fun PennedTheme(
         content = content,
     )
 }
+
+/** 支出红：暗色下用提亮变体（多处直接引用色值而非 scheme 槽位）。 */
+@Composable
+fun expenseColor(): Color = if (isSystemInDarkTheme()) ExpenseRedDark else ExpenseRed
+
+/** 收入青绿：暗色下用提亮变体。 */
+@Composable
+fun incomeColor(): Color = if (isSystemInDarkTheme()) IncomeTealDark else IncomeTeal

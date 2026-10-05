@@ -40,10 +40,10 @@ import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.icons.PennedIcons
-import dev.penned.app.ui.theme.ExpenseRed
-import dev.penned.app.ui.theme.IncomeTeal
 import dev.penned.app.ui.theme.PennedTheme
 import java.time.LocalDate
+import dev.penned.app.ui.theme.expenseColor
+import dev.penned.app.ui.theme.incomeColor
 
 @Composable
 fun AddTransactionScreen(
@@ -168,8 +168,8 @@ fun AddTransactionContent(
     var showAddCategory by remember { mutableStateOf(false) }
     var addCategoryParent by remember { mutableStateOf<String?>(null) }
     val amountColor = when (type) {
-        TxType.EXPENSE -> ExpenseRed
-        TxType.INCOME -> IncomeTeal
+        TxType.EXPENSE -> expenseColor()
+        TxType.INCOME -> incomeColor()
         TxType.TRANSFER -> MaterialTheme.colorScheme.onSurface
     }
 

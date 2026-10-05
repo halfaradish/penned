@@ -33,7 +33,6 @@ import dev.penned.app.PennedApplication
 import dev.penned.app.data.db.entity.TransactionEntity
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.TxType
-import dev.penned.app.ui.theme.ExpenseRed
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -43,6 +42,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
+import dev.penned.app.ui.theme.expenseColor
 
 data class DetailUi(
     val tx: TransactionEntity,
@@ -134,7 +134,7 @@ fun DetailScreen(
                         prefix + Money.format(d.tx.amountCents),
                         style = MaterialTheme.typography.headlineSmall,
                         color = when (d.tx.type) {
-                            TxType.EXPENSE -> ExpenseRed
+                            TxType.EXPENSE -> expenseColor()
                             TxType.INCOME -> MaterialTheme.colorScheme.primary
                             TxType.TRANSFER -> MaterialTheme.colorScheme.onSurface
                         },
@@ -158,7 +158,7 @@ fun DetailScreen(
                 Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
                     Button(onClick = { onEdit(d.tx.id) }, modifier = Modifier.weight(1f)) { Text("编辑") }
                     OutlinedButton(onClick = { viewModel.delete(onBack) }, modifier = Modifier.weight(1f)) {
-                        Text("删除", color = ExpenseRed)
+                        Text("删除", color = expenseColor())
                     }
                 }
             }

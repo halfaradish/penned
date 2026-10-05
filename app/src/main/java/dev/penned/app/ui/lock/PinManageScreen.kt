@@ -21,12 +21,12 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.penned.app.PennedApplication
 import dev.penned.app.domain.PinHasher
-import dev.penned.app.ui.theme.ExpenseRed
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import dev.penned.app.ui.theme.expenseColor
 
 /** 密码锁设置：开启（两次输入）/ 修改（先验旧）/ 关闭。哈希经 [PinHasher] 存储。 */
 class PinViewModel(private val app: PennedApplication) : ViewModel() {
@@ -128,7 +128,7 @@ fun PinManageScreen(
                     TextButton(
                         onClick = { viewModel.removePin(); onBack() },
                         modifier = Modifier.align(androidx.compose.ui.Alignment.End).padding(horizontal = 24.dp),
-                    ) { Text("关闭密码锁", color = ExpenseRed) }
+                    ) { Text("关闭密码锁", color = expenseColor()) }
                     PinPad(
                         filledCount = state.pin.length,
                         title = "输入当前密码",

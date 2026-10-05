@@ -37,7 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.penned.app.domain.BudgetMath
 import dev.penned.app.domain.CategoryType
 import dev.penned.app.domain.Money
-import dev.penned.app.ui.theme.ExpenseRed
+import dev.penned.app.ui.theme.expenseColor
 
 /**
  * 预算管理页：总预算 + 分类预算，月度周期；支出为当月流水重算。
@@ -174,14 +174,14 @@ private fun BudgetCard(row: BudgetsViewModel.BudgetRow, label: String, onClick: 
             Text(
                 "剩 " + Money.format(row.state.remainingCents),
                 style = MaterialTheme.typography.titleMedium,
-                color = if (row.state.overspent) ExpenseRed else MaterialTheme.colorScheme.primary,
+                color = if (row.state.overspent) expenseColor() else MaterialTheme.colorScheme.primary,
             )
         }
         Spacer(Modifier.height(6.dp))
         LinearProgressIndicator(
             progress = { row.state.usedFraction },
             modifier = Modifier.fillMaxWidth().height(6.dp),
-            color = if (row.state.overspent) ExpenseRed else MaterialTheme.colorScheme.primary,
+            color = if (row.state.overspent) expenseColor() else MaterialTheme.colorScheme.primary,
         )
         Spacer(Modifier.height(4.dp))
         Text(
@@ -228,7 +228,7 @@ private fun BudgetAmountDialog(
         dismissButton = {
             Row {
                 if (onDelete != null) {
-                    TextButton(onClick = onDelete) { Text("删除", color = ExpenseRed) }
+                    TextButton(onClick = onDelete) { Text("删除", color = expenseColor()) }
                 }
                 TextButton(onClick = onDismiss) { Text("取消") }
             }

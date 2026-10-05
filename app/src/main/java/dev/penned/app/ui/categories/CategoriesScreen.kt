@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
+import dev.penned.app.ui.theme.expenseColor
 
 /**
  * 分类管理页：支出/收入两域树形列表，支持新增（一级/子级）、重命名、软删除。
@@ -236,7 +237,7 @@ private fun EditCategoryDialog(
         },
         dismissButton = {
             Row {
-                TextButton(onClick = onDelete) { Text("删除", color = dev.penned.app.ui.theme.ExpenseRed) }
+                TextButton(onClick = onDelete) { Text("删除", color = dev.penned.app.ui.theme.expenseColor()) }
                 TextButton(onClick = onDismiss) { Text("取消") }
             }
         },

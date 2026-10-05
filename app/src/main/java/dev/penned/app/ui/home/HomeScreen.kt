@@ -44,11 +44,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.penned.app.data.db.dao.TxWithCategory
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.TxType
-import dev.penned.app.ui.theme.ExpenseRed
-import dev.penned.app.ui.theme.IncomeTeal
 import dev.penned.app.ui.theme.PennedTheme
 import java.time.LocalDate
 import java.time.ZoneId
+import dev.penned.app.ui.theme.expenseColor
+import dev.penned.app.ui.theme.incomeColor
 
 @Composable
 fun HomeScreen(
@@ -163,7 +163,7 @@ fun HomeContent(
                     textAlign = TextAlign.Center,
                 )
                 TextButton(onClick = onDeleteSelected, enabled = selectedIds.isNotEmpty()) {
-                    Text("删除", color = ExpenseRed)
+                    Text("删除", color = expenseColor())
                 }
             } else {
                 Box {
@@ -197,8 +197,8 @@ fun HomeContent(
                         .padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    SummaryCell("本月支出", Money.format(totals.expenseCents), ExpenseRed)
-                    SummaryCell("本月收入", Money.format(totals.incomeCents), IncomeTeal)
+                    SummaryCell("本月支出", Money.format(totals.expenseCents), expenseColor())
+                    SummaryCell("本月收入", Money.format(totals.incomeCents), incomeColor())
                     SummaryCell("本月结余", Money.format(totals.incomeCents - totals.expenseCents), MaterialTheme.colorScheme.onSurface)
                 }
             }
@@ -297,14 +297,14 @@ private fun BudgetSummaryRow(
                 Text(
                     if (state.overspent) "已超支 ${Money.format(-state.remainingCents)}" else Money.format(state.remainingCents),
                     style = MaterialTheme.typography.titleMedium,
-                    color = if (state.overspent) ExpenseRed else MaterialTheme.colorScheme.primary,
+                    color = if (state.overspent) expenseColor() else MaterialTheme.colorScheme.primary,
                 )
             }
             Spacer(Modifier.height(6.dp))
             LinearProgressIndicator(
                 progress = { state.usedFraction },
                 modifier = Modifier.fillMaxWidth().height(5.dp),
-                color = if (state.overspent) ExpenseRed else MaterialTheme.colorScheme.primary,
+                color = if (state.overspent) expenseColor() else MaterialTheme.colorScheme.primary,
             )
             Spacer(Modifier.height(4.dp))
             Text(
@@ -382,8 +382,8 @@ private fun TransactionRow(
             }
         }
         val color = when (row.type) {
-            TxType.EXPENSE -> ExpenseRed
-            TxType.INCOME -> IncomeTeal
+            TxType.EXPENSE -> expenseColor()
+            TxType.INCOME -> incomeColor()
             TxType.TRANSFER -> MaterialTheme.colorScheme.onSurface
         }
         val prefix = when (row.type) {

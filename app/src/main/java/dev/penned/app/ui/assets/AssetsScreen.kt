@@ -49,7 +49,6 @@ import dev.penned.app.domain.AccountType
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.MoneyInput
 import dev.penned.app.ui.home.categoryColor
-import dev.penned.app.ui.theme.ExpenseRed
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -60,6 +59,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
+import dev.penned.app.ui.theme.expenseColor
 
 data class AssetsUiState(
     val accounts: List<AccountWithBalance> = emptyList(),
@@ -163,7 +163,7 @@ fun AssetsScreen(modifier: Modifier = Modifier) {
                         Text(
                             Money.format(state.netCents),
                             style = MaterialTheme.typography.headlineSmall,
-                            color = if (state.netCents < 0) ExpenseRed else MaterialTheme.colorScheme.primary,
+                            color = if (state.netCents < 0) expenseColor() else MaterialTheme.colorScheme.primary,
                         )
                     }
                     Column(horizontalAlignment = Alignment.End) {
@@ -243,7 +243,7 @@ fun AssetsScreen(modifier: Modifier = Modifier) {
                                 Text(
                                     Money.format(account.balanceCents),
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = if (account.balanceCents < 0) ExpenseRed else MaterialTheme.colorScheme.onSurface,
+                                    color = if (account.balanceCents < 0) expenseColor() else MaterialTheme.colorScheme.onSurface,
                                     textAlign = TextAlign.End,
                                 )
                             }
