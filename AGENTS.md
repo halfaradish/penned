@@ -1,0 +1,68 @@
+# AGENTS.md — penned（一笔一记）
+
+> 每个 agent 会话开工必读。改了约定请同步改这里。
+
+## 项目是什么
+
+Android 单端本地记账 App「一笔一记 / penned」，功能对标"一木记账"（闭源，只做参考，不抄任何资源/名称/UI 素材）。无自建服务端（唯一例外：静态文件更新检查，M2）。技术栈：Kotlin + Jetpack Compose + Room，本地优先。
+
+## 会话开场循环（必须）
+
+1. 读本文件 → 读 `docs/specs/` 当前里程碑规格 → 读 `docs/decisions.md` → 读 `docs/plan/board.md`
+2. 从 board 领取就绪任务（依赖已完成的）
+3. 干活，满足 DoD
+4. 更新 board.md（状态/产出/遗留问题）后结束
+
+## 硬性约定（违反 = 返工）
+
+- **金额一律 Long 存分**，禁止 Double/Float 存钱
+- 所有业务表：`id` 为 uuid 字符串主键、`createdAt/updatedAt` epochMillis、`deleted` 软删、`deviceId` 来源设备
+- **余额、统计一律从流水重算，不落库**（同步冲突面最小化）
+- 流水的 `accountId` 可空（支持纯现金无账户记账）
+- Room schema 变更必须：version+1、写 Migration、更新 schema JSON（`app/schemas/` 提交进仓库）、附 migration 测试
+- 流水时间存 `dateEpochMinute`（本地墙钟，分钟精度）
+- 依赖版本只认 `gradle/libs.versions.toml`；**不得升级/新增依赖**，需要就写进 board 提案区等人批
+- 本机 `dl.google.com` 不通：仓库镜像已在 `settings.gradle.kts` 配置（阿里云 google/gradle-plugin + Maven Central），**不得移除**
+- 构建用 `./gradlew`（JAVA_HOME=jdk-21 已就位；PATH 里的 java 是 1.8，别用它）
+- 分类图标不引 material-icons-extended，用自绘矢量（见 `ui/icons/`）或色块+文字
+- Robolectric 测试统一 `@Config(sdk = [35], qualifiers = "w400dp-h800dp")`（D016/D018；sdk36 会触发 FileDescriptor 崩溃，默认视口会把 weight 区域压没）
+
+## 不许做
+
+- 不加规格外功能（有想法 → board 提案区）
+- 不跨里程碑重构
+- 不反编译/不引用一木记账的任何资源
+- 会话结束不更新 board（下个会话必返工）
+
+## DoD（任务完成的定义）
+
+1. `./gradlew build test lint` 全绿
+2. 涉及 DB：migration 测试 + schema JSON 已更新
+3. 涉及 UI：Roborazzi 截图测试，Preview 可渲染
+4. 涉及钱/日期/解析：表驱动单元测试
+5. board.md 已更新
+6. 小步提交，commit message = 任务号 + 一句话
+
+## 常用命令
+
+```
+./gradlew :app:assembleDebug        # 出 APK（app/build/outputs/apk/debug/）
+./gradlew :app:testDebugUnitTest    # 单测（含 Robolectric/Roborazzi）
+./gradlew build                     # 全量
+```
+
+## 文档地图
+
+- `docs/可行性分析与技术方案.md` 总方案与里程碑（M0~M6）
+- `docs/信息架构分析.md` 页面结构（对标参考）
+- `docs/local/一木导出反分析.md` schema 依据 + 导入器格式（**私密文档，已 gitignore，克隆仓库后可能不存在；需要真实数据时问用户**）
+- `docs/开发工作流.md` 工作流全文
+- `docs/specs/M{n}.md` 冻结规格 | `docs/decisions.md` 决策日志 | `docs/plan/board.md` 任务看板
+
+> `docs/local/` 不入库：存放用户真实账单（xls）、界面截图、导出反分析等私密材料。涉及一木导入器的测试一律用**脱敏 fixture**（进仓库），不得引用 docs/local 里的真实文件。
+
+## 关键参数
+
+- applicationId `dev.penned.app`（**M2 发布前必须最终确认**，改了=换应用身份）
+- minSdk 26 / targetSdk 36 / compileSdk 36
+- 版本冻结见 `gradle/libs.versions.toml`
