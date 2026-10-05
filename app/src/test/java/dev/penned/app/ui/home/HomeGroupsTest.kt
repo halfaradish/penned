@@ -67,4 +67,30 @@ class HomeGroupsTest {
         assertEquals("${java.time.LocalDate.now(zone).monthValue}月${java.time.LocalDate.now(zone).dayOfMonth}日 今天", HomeGroups.dayLabel(today, zone))
         assertEquals("${java.time.LocalDate.ofEpochDay(today - 1).monthValue}月${java.time.LocalDate.ofEpochDay(today - 1).dayOfMonth}日 昨天", HomeGroups.dayLabel(today - 1, zone))
     }
+
+    @Test
+    fun `category totals groups by name merges tail and computes fractions`() {
+        fun namedRow(id: String, cents: Long, name: String?, type: TxType = TxType.EXPENSE) =
+            row(id, minute("2026-10-0${(id.first().code % 5) + 1}T10:00"), type, cents)
+                .copy(categoryName = name)
+        val rows = listOf(
+            namedRow("1", 5000, "食品餐饮"),
+            namedRow("2", 3000, "购物消费"),
+            namedRow("3", 2000, "出行交通"),
+            namedRow("4", 1000, "文化教育"),
+            namedRow("5", 99000, "工资", TxType.INCOME),
+        )
+        val totals = HomeGroups.categoryTotals(rows, TxType.EXPENSE, topN = 2)
+        // 按金额降序，topN=2 后其余合并为"其他"
+        assertEquals(listOf("食品餐饮", "购物消费", "其他"), totals.map { it.name })
+        assertEquals(listOf(5000L, 3000L, 3000L), totals.map { it.cents })
+        val sum = totals.sumOf { it.cents }
+        assertEquals(11000L, sum)
+        // fraction 加总为 1
+        assertEquals(1.0f, totals.sumOf { it.fraction.toDouble() }.toFloat(), 0.0001f)
+        // 收入域单独聚合
+        assertEquals(1, HomeGroups.categoryTotals(rows, TxType.INCOME).size)
+        // 无数据返回空
+        assertEquals(0, HomeGroups.categoryTotals(emptyList(), TxType.EXPENSE).size)
+    }
 }

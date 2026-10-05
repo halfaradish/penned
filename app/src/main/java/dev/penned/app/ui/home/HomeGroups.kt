@@ -63,6 +63,38 @@ object HomeGroups {
         return if (relative != null) "$base $relative" else base
     }
 
+    data class CategoryTotal(val name: String, val cents: Long, val fraction: Float)
+
+    /**
+     * 统计页分类聚合（specs/M1.md 第二批）：按一级分类名汇总某类型金额，降序；
+     * 超出 [topN] 的合并为「其他」，fraction 相对该类型总额（含未分类）。
+     */
+    fun categoryTotals(
+        rows: List<TxWithCategory>,
+        type: TxType,
+        topN: Int = 6,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): List<CategoryTotal> {
+        val byCategory = rows.filter { it.type == type }
+            .groupBy { it.categoryName ?: "未分类" }
+            .mapValues { (_, items) -> items.sumOf { it.amountCents } }
+            .filterValues { it > 0 }
+        val total = byCategory.values.sum()
+        if (total == 0L) return emptyList()
+        val sorted = byCategory.entries.sortedByDescending { it.value }
+        val head = sorted.take(topN)
+        val rest = sorted.drop(topN)
+        val result = head.map { (name, cents) ->
+            CategoryTotal(name, cents, cents.toFloat() / total)
+        }
+        return if (rest.isEmpty()) {
+            result
+        } else {
+            val restCents = rest.sumOf { it.value }
+            result + CategoryTotal("其他", restCents, restCents.toFloat() / total)
+        }
+    }
+
     private fun epochMinuteToLocalDate(epochMinute: Long, zone: ZoneId): LocalDate =
         Instant.ofEpochSecond(epochMinute * 60).atZone(zone).toLocalDate()
 }

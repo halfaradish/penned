@@ -94,6 +94,22 @@ interface TransactionDao {
     )
     fun observeMonthSpendByCategory(bookId: String, fromMinute: Long, toMinute: Long): Flow<List<CategorySpend>>
 
+    @Query(
+        """
+        SELECT t.id AS id, t.type AS type, t.amountCents AS amountCents,
+               t.accountId AS accountId, t.categoryId AS categoryId,
+               t.dateEpochMinute AS dateEpochMinute, t.note AS note,
+               c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey
+        FROM transactions t
+        LEFT JOIN categories c ON c.id = t.categoryId
+        LEFT JOIN categories p ON p.id = c.parentId
+        WHERE t.deleted = 0 AND t.bookId = :bookId
+          AND t.dateEpochMinute BETWEEN :fromMinute AND :toMinute
+        ORDER BY t.dateEpochMinute DESC
+        """
+    )
+    fun observeMonthTxsWithCategory(bookId: String, fromMinute: Long, toMinute: Long): Flow<List<TxWithCategory>>
+
     @Query("SELECT COUNT(*) FROM transactions")
     suspend fun count(): Int
 }

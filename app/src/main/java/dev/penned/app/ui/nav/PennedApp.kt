@@ -33,6 +33,8 @@ import dev.penned.app.ui.home.HomeViewModel
 import dev.penned.app.ui.lock.PinManageScreen
 import dev.penned.app.ui.lock.PinViewModel
 import dev.penned.app.ui.mine.MineScreen
+import dev.penned.app.ui.stats.StatsScreen
+import dev.penned.app.ui.stats.StatsViewModel
 import dev.penned.app.ui.stub.StubScreen
 
 private data class TabSpec(val route: String, val label: String, val icon: ImageVector)
@@ -161,7 +163,12 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
             }
             composable("calendar") { StubScreen("日历", "M1 第二批") }
             composable("assets") { AssetsScreen() }
-            composable("stats") { StubScreen("统计", "M1 第二批") }
+            composable("stats") {
+                val vm: StatsViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+                    initializer = { StatsViewModel(app) },
+                )
+                StatsScreen(viewModel = vm)
+            }
         }
     }
 }
