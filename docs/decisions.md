@@ -22,3 +22,7 @@
 - **D014 无 DI 框架** · 单模块小项目，手动构造 + viewModelFactory 足够；引 Hilt 是过度设计 · 2026-10-05
 - **D015 Room schema export 开启，app/schemas/ 入库** · migration 测试的前提 · 2026-10-05
 - **D019 Tab 图标手写 ImageVector，分类图标 = 哈希色块 + 首字**（黄金角散列色相）· 正式图标设计推迟到 M6 打磨 · 2026-10-05
+- **D020 流水增加 excludeFromStats / excludeFromBudget 两个独立标志** · 一木账单详情页实测（模拟机探索报告 §二）；"不计入收支"与"不计入预算"是分开的开关 · 2026-10-05
+- **D021 流水增加 source 来源字段**（MANUAL/VOICE/TEXT/SCREENSHOT/IMPORT/AUTO…）· 对应一木"记录方式"；统计"记录构成"与导入批次追溯都要用 · 2026-10-05
+- **D022 转账增加 feeCents 手续费字段** · 一木转账 Tab 有"手续费"chip（模拟机探索 §一）；手续费记在转账流水上 · 2026-10-05
+- **D023 引入 androidx.datastore-preferences 1.2.1** · 存当前账本 id、密码哈希等设置项（M1 冻结规格 S3/S 第二批）；经批准随 M1 第一批引入 · 2026-10-05
