@@ -8,6 +8,7 @@ import dev.penned.app.data.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -30,6 +31,12 @@ class PennedApplication : Application() {
         super.onCreate()
         appScope.launch {
             DefaultSeed.seedIfEmpty(database, deviceId, System.currentTimeMillis())
+            // 首次启动把当前账本设置落盘，否则直接读 settings.currentBookId 的消费方（如添加账户）会拿到 null
+            if (settings.currentBookId.firstOrNull() == null) {
+                database.bookDao().observeAll().firstOrNull()?.firstOrNull()?.let {
+                    settings.setCurrentBook(it.id)
+                }
+            }
         }
     }
 

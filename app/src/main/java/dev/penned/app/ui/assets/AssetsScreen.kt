@@ -2,6 +2,8 @@ package dev.penned.app.ui.assets
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -300,7 +302,8 @@ private fun AddAccountDialog(
         onDismissRequest = onDismiss,
         title = { Text("添加账户") },
         text = {
-            Column {
+            // 内容可能超出对话框高度（13 个预设 chip + 输入框），必须可滚动，否则键盘弹出时按钮被盖住
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 ACCOUNT_PRESETS.forEach { (group, presets) ->
                     Text(
                         group,
