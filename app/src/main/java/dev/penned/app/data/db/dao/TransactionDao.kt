@@ -32,21 +32,43 @@ interface TransactionDao {
         FROM transactions t
         LEFT JOIN categories c ON c.id = t.categoryId
         LEFT JOIN categories p ON p.id = c.parentId
-        WHERE t.deleted = 0
+        WHERE t.deleted = 0 AND t.bookId = :bookId
         ORDER BY t.dateEpochMinute DESC
         LIMIT :limit
         """
     )
-    fun observeRecentWithCategory(limit: Int): Flow<List<TxWithCategory>>
+    fun observeRecentWithCategory(bookId: String, limit: Int): Flow<List<TxWithCategory>>
+
+    @Query("SELECT * FROM transactions WHERE id = :id")
+    fun observeById(id: String): Flow<TransactionEntity?>
+
+    /** 报销汇总（资产页）：可报 = 待报销金额，已报 = 已报销金额 */
+    data class ReimburseSums(val pendingCents: Long, val doneCents: Long)
+
+    @Query(
+        """
+        SELECT COALESCE(SUM(CASE WHEN reimburseState = 'PENDING' THEN amountCents END), 0) AS pendingCents,
+               COALESCE(SUM(CASE WHEN reimburseState = 'DONE' THEN amountCents END), 0) AS doneCents
+        FROM transactions
+        WHERE deleted = 0 AND bookId = :bookId AND reimburseState != 'NONE'
+        """
+    )
+    fun observeReimburseSums(bookId: String): Flow<ReimburseSums>
 
     @Query("SELECT * FROM transactions WHERE deleted = 0")
     suspend fun all(): List<TransactionEntity>
+
+    @Query("SELECT * FROM transactions WHERE id = :id")
+    suspend fun get(id: String): TransactionEntity?
 
     @Upsert
     suspend fun upsert(tx: TransactionEntity)
 
     @Query("UPDATE transactions SET deleted = 1, updatedAt = :now WHERE id = :id")
     suspend fun softDelete(id: String, now: Long)
+
+    @Query("UPDATE transactions SET deleted = 1, updatedAt = :now WHERE id IN (:ids)")
+    suspend fun softDeleteAll(ids: List<String>, now: Long)
 
     @Query("SELECT COUNT(*) FROM transactions")
     suspend fun count(): Int

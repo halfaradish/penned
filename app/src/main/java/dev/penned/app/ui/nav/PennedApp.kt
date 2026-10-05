@@ -10,12 +10,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import dev.penned.app.PennedApplication
+import androidx.navigation.navArgument
 import dev.penned.app.ui.add.AddTransactionScreen
+import dev.penned.app.ui.assets.AssetsScreen
+import dev.penned.app.ui.books.BooksScreen
+import dev.penned.app.ui.detail.DetailScreen
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.home.HomeScreen
 import dev.penned.app.ui.home.HomeViewModel
@@ -32,27 +36,29 @@ private val TABS = listOf(
 )
 
 @Composable
-fun PennedApp(app: PennedApplication) {
+fun PennedApp(app: dev.penned.app.PennedApplication) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                TABS.forEach { tab ->
-                    NavigationBarItem(
-                        selected = currentRoute == tab.route,
-                        onClick = {
-                            navController.navigate(tab.route) {
-                                popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = { Icon(tab.icon, contentDescription = tab.label) },
-                        label = { Text(tab.label) },
-                    )
+            if (currentRoute in TABS.map { it.route }) {
+                NavigationBar {
+                    TABS.forEach { tab ->
+                        NavigationBarItem(
+                            selected = currentRoute == tab.route,
+                            onClick = {
+                                navController.navigate(tab.route) {
+                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            icon = { Icon(tab.icon, contentDescription = tab.label) },
+                            label = { Text(tab.label) },
+                        )
+                    }
                 }
             }
         },
@@ -64,21 +70,44 @@ fun PennedApp(app: PennedApplication) {
         ) {
             composable("home") {
                 val vm: HomeViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
-                    initializer = { HomeViewModel(app.database) },
+                    initializer = { HomeViewModel(app) },
                 )
                 HomeScreen(
                     viewModel = vm,
-                    bookName = "日常账本", // M1：随账本管理改为动态
                     onAdd = { navController.navigate("add") },
+                    onOpenDetail = { id -> navController.navigate("detail/$id") },
+                    onManageBooks = { navController.navigate("books") },
                 )
             }
-            composable("add") {
-                AddTransactionScreen(app = app, onDone = { navController.popBackStack() })
+            composable(
+                route = "add?editId={editId}",
+                arguments = listOf(navArgument("editId") { type = NavType.StringType; defaultValue = "" }),
+            ) { entry ->
+                AddTransactionScreen(
+                    app = app,
+                    editId = entry.arguments?.getString("editId")?.ifEmpty { null },
+                    onDone = { navController.popBackStack() },
+                )
             }
-            composable("calendar") { StubScreen("日历", "M1") }
-            composable("assets") { StubScreen("资产", "M1/M3") }
-            composable("stats") { StubScreen("统计", "M3") }
-            composable("mine") { StubScreen("我的", "M1") }
+            composable(
+                route = "detail/{txId}",
+                arguments = listOf(navArgument("txId") { type = NavType.StringType }),
+            ) { entry ->
+                DetailScreen(
+                    txId = entry.arguments?.getString("txId").orEmpty(),
+                    onEdit = { id ->
+                        navController.navigate("add?editId=$id")
+                    },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable("books") {
+                BooksScreen(onBack = { navController.popBackStack() })
+            }
+            composable("calendar") { StubScreen("日历", "M1 第二批") }
+            composable("assets") { AssetsScreen() }
+            composable("stats") { StubScreen("统计", "M1 第二批") }
+            composable("mine") { StubScreen("我的", "M1 第二批") }
         }
     }
 }

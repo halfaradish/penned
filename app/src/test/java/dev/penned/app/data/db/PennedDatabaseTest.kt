@@ -68,13 +68,13 @@ class PennedDatabaseTest {
         )
         db.transactionDao().upsert(tx)
 
-        val rows = db.transactionDao().observeRecentWithCategory(100).first()
+        val rows = db.transactionDao().observeRecentWithCategory(book.id, 100).first()
         assertEquals(1, rows.size)
         assertEquals("晚餐", rows[0].categoryName)
         assertEquals("食品餐饮", rows[0].categoryParentName)
 
         db.transactionDao().softDelete("tx-1", now + 1)
-        assertTrue(db.transactionDao().observeRecentWithCategory(100).first().isEmpty())
+        assertTrue(db.transactionDao().observeRecentWithCategory(book.id, 100).first().isEmpty())
         // 软删不是物理删除，原始行仍在（同步需要）
         assertEquals(1, db.transactionDao().count())
     }
@@ -91,7 +91,7 @@ class PennedDatabaseTest {
         db.transactionDao().upsert(tx("old", 1000))
         db.transactionDao().upsert(tx("new", 2000))
 
-        val rows = db.transactionDao().observeRecentWithCategory(10).first()
+        val rows = db.transactionDao().observeRecentWithCategory(book.id, 10).first()
         assertEquals(listOf("new", "old"), rows.map { it.id })
     }
 }

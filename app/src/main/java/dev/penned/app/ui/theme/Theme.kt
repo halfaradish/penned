@@ -11,6 +11,9 @@ private val LightColors = lightColorScheme(
     onPrimary = androidx.compose.ui.graphics.Color.White,
     primaryContainer = PrimaryContainerLight,
     onPrimaryContainer = OnPrimaryContainerLight,
+    // 中性浅灰，去掉默认 M3 的紫灰色偏（记一笔页背景/圆底用）
+    surfaceVariant = androidx.compose.ui.graphics.Color(0xFFEDF0EF),
+    onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF5A6462),
 )
 
 private val DarkColors = darkColorScheme(

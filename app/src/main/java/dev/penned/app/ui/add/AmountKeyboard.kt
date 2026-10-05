@@ -17,29 +17,38 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
-private val KEYS: List<List<String>> = listOf(
-    listOf("7", "8", "9", AddViewModel.KEY_BACKSPACE),
-    listOf("4", "5", "6", AddViewModel.KEY_CLEAR),
-    listOf("1", "2", "3", "."),
-    listOf("0", "00", AddViewModel.KEY_SAVE),
-)
+private const val KEY_AGAIN = "再记"
+private const val KEY_DONE = "完成"
+private const val KEY_EQUALS = "="
 
-/** 金额键盘：数字 + 00 快捷分位 + ⌫/C + 保存。 */
+private val KEYS: List<List<String>> = listOf(
+    listOf("1", "2", "3", AddViewModel.KEY_BACKSPACE),
+    listOf("4", "5", "6", "+"),
+    listOf("7", "8", "9", "-"),
+    listOf(KEY_AGAIN, "0", ".", KEY_DONE),
+)
+// 求值引擎已支持 × ÷（MoneyExpression），键盘键位后续并入（一木把 +−×÷ 放右侧双宽格）
+
+/**
+ * 金额键盘（对标一木 4×4）：+ − 支持表达式（×÷ 由 + − 键长按扩展，M1 简化为加减退步），
+ * 右下键三态：取消语义走顶栏返回；表达式待算显示 "="；否则 "完成"。
+ */
 @Composable
 fun AmountKeyboard(
     canSave: Boolean,
+    showEquals: Boolean,
     onKey: (String) -> Unit,
+    onEvaluate: () -> Unit,
+    onSaveAgain: () -> Unit,
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -47,14 +56,17 @@ fun AmountKeyboard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
+                    .height(52.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 rowKeys.forEach { key ->
                     KeyCell(
                         label = key,
                         canSave = canSave,
+                        showEquals = showEquals,
                         onKey = onKey,
+                        onSaveAgain = onSaveAgain,
+                        onEvaluate = onEvaluate,
                         onSave = onSave,
                         modifier = Modifier
                             .weight(1f)
@@ -70,35 +82,56 @@ fun AmountKeyboard(
 private fun KeyCell(
     label: String,
     canSave: Boolean,
+    showEquals: Boolean,
     onKey: (String) -> Unit,
+    onSaveAgain: () -> Unit,
+    onEvaluate: () -> Unit,
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val isSave = label == AddViewModel.KEY_SAVE
+    val isDone = label == KEY_DONE
+    val isAgain = label == KEY_AGAIN
+    val displayLabel = when {
+        isDone && showEquals -> KEY_EQUALS
+        isDone -> KEY_DONE
+        else -> label
+    }
+    val action = when {
+        isDone && showEquals -> Action.Evaluate
+        isDone -> Action.Save
+        isAgain -> Action.SaveAgain
+        else -> Action.Type
+    }
     val background = when {
-        isSave && canSave -> MaterialTheme.colorScheme.primary
-        isSave -> MaterialTheme.colorScheme.surface
+        isDone && !showEquals && canSave -> MaterialTheme.colorScheme.primary
+        isDone && !showEquals -> MaterialTheme.colorScheme.surfaceVariant
         else -> MaterialTheme.colorScheme.surface
     }
     val contentColor = when {
-        isSave && canSave -> MaterialTheme.colorScheme.onPrimary
-        isSave -> MaterialTheme.colorScheme.onSurfaceVariant
+        isDone && !showEquals && canSave -> MaterialTheme.colorScheme.onPrimary
         else -> MaterialTheme.colorScheme.onSurface
     }
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
             .background(background)
-            .clickable(enabled = !isSave || canSave) {
-                if (isSave) onSave() else onKey(label)
+            .clickable(enabled = action != Action.Save || canSave) {
+                when (action) {
+                    Action.Evaluate -> onEvaluate()
+                    Action.Save -> onSave()
+                    Action.SaveAgain -> onSaveAgain()
+                    Action.Type -> onKey(displayLabel)
+                }
             },
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = label,
+            text = displayLabel,
             color = contentColor,
             style = MaterialTheme.typography.titleLarge,
             textAlign = TextAlign.Center,
         )
     }
 }
+
+private enum class Action { Type, Evaluate, Save, SaveAgain }

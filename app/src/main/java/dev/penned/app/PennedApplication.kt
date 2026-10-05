@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import dev.penned.app.data.db.PennedDatabase
 import dev.penned.app.data.seed.DefaultSeed
+import dev.penned.app.data.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -13,6 +14,7 @@ import java.util.UUID
 class PennedApplication : Application() {
 
     val database: PennedDatabase by lazy { PennedDatabase.build(this) }
+    val settings: SettingsRepository by lazy { SettingsRepository(this) }
 
     /** 本设备标识：同步/创建者字段用（D003）。 */
     val deviceId: String by lazy {

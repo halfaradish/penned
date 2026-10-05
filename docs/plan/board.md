@@ -8,7 +8,7 @@
 
 ## 待办
 
-- **M1 规格冻结**（specs/M1.md）：流水编辑/删除、账户管理与转账（含转账导出格式确认）、预算表、CSV 导入导出（含一木 xls 导入器）、密码锁、深色主题、账本管理（首页账本名动态化）
+- **M1 规格冻结**（specs/M1.md）：流水编辑/删除（账单详情页 + 批量编辑，参考 `docs/local/一木模拟机探索/探索报告.md` §二）、账户管理与转账（含手续费 D022）、预算表、CSV 导入导出（一木 xls 导入器 + 导入批次）、密码锁、深色主题、账本管理（popover 切换，探索报告 §七）、转账/债务 Tab、快捷 chips、宫格内新增分类、计算器键盘、自绘线条图标集评估
 - **M2 规格**：update.json 协议 + UpdateChecker + 签名密钥生成与离线备份（**首次发版前 applicationId 终审 D013**）+ release minify 打开（D012）
 - 升级 robolectric >4.17 时回归试 `@Config(sdk=[36])`（D016）
 - M1 引入 Roborazzi gradle 插件，把"每次测试都重录截图"改为 record/verify 双任务（D018）
@@ -18,6 +18,11 @@
 （无）
 
 ## 已完成
+
+### M0.5 记一笔页重设计（2026-10-05）
+- 顶栏返回箭头（P0 修复）+ 支出/收入胶囊 Tab + 编辑占位；分类卡片 5 列、一级行内展开子分类条带（含 ··· 徽标与"+ 新增"占位）；中性圆底+首字（选中青绿反白）；信息条 = 备注 + 实时金额同行 + 今天/无账户 chips；键盘重排（再记/完成，取消走顶栏）；主题 surfaceVariant 中性化
+- 验证：`./gradlew build` 全绿；Roborazzi 断言（返回/子分类展开/再记/完成）+ 截图 `m05_add_screen.png` 人工验收通过
+- 涉及：AddViewModel（expandedParentId/selectParent/selectSub/saveAgain）、CategoryPanel（新）、AmountKeyboard、AddTransactionScreen（重构）、PennedIcons.Back、Theme；删除 CategoryGrid
 
 ### M0 地基（2026-10-05，一个会话完成 T1~T8）
 - **T1 记忆系统**：AGENTS.md、decisions.md（D001~D019）、specs/M0.md、board.md ✓

@@ -14,6 +14,21 @@ import androidx.compose.ui.unit.dp
  */
 object PennedIcons {
 
+    val Back: ImageVector by lazy {
+        icon("back") {
+            path(fill = SolidColor(Color.Black)) {
+                moveTo(15.4f, 4.6f)
+                lineTo(13.9f, 3.1f)
+                lineTo(5.9f, 11.1f)
+                lineTo(5.9f, 12.9f)
+                lineTo(13.9f, 20.9f)
+                lineTo(15.4f, 19.4f)
+                lineTo(8.0f, 12.0f)
+                close()
+            }
+        }
+    }
+
     val Home: ImageVector by lazy {
         icon("home") {
             path(fill = SolidColor(Color.Black)) {
