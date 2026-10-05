@@ -57,6 +57,9 @@ interface AccountDao {
     @Query("SELECT * FROM accounts WHERE deleted = 0 AND bookId = :bookId ORDER BY groupName, name")
     fun observeByBook(bookId: String): Flow<List<AccountEntity>>
 
+    @Query("SELECT * FROM accounts WHERE deleted = 0 AND bookId = :bookId ORDER BY groupName, name")
+    suspend fun allInBook(bookId: String): List<AccountEntity>
+
     @Query("SELECT * FROM accounts WHERE id = :id")
     suspend fun get(id: String): AccountEntity?
 

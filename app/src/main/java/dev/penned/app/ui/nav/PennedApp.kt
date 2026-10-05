@@ -19,10 +19,14 @@ import androidx.navigation.navArgument
 import dev.penned.app.ui.add.AddTransactionScreen
 import dev.penned.app.ui.assets.AssetsScreen
 import dev.penned.app.ui.books.BooksScreen
+import dev.penned.app.ui.data.DataManagementScreen
+import dev.penned.app.ui.data.DataViewModel
+import dev.penned.app.ui.data.ImportBatchesScreen
 import dev.penned.app.ui.detail.DetailScreen
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.home.HomeScreen
 import dev.penned.app.ui.home.HomeViewModel
+import dev.penned.app.ui.mine.MineScreen
 import dev.penned.app.ui.stub.StubScreen
 
 private data class TabSpec(val route: String, val label: String, val icon: ImageVector)
@@ -104,10 +108,31 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
             composable("books") {
                 BooksScreen(onBack = { navController.popBackStack() })
             }
+            composable("mine") {
+                MineScreen(onOpenDataManagement = { navController.navigate("data") })
+            }
+            composable("data") {
+                val vm: DataViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+                    initializer = { DataViewModel(app) },
+                )
+                DataManagementScreen(
+                    viewModel = vm,
+                    onBack = { navController.popBackStack() },
+                    onOpenBatches = { navController.navigate("data/batches") },
+                )
+            }
+            composable("data/batches") {
+                val vm: DataViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+                    initializer = { DataViewModel(app) },
+                )
+                ImportBatchesScreen(
+                    viewModel = vm,
+                    onBack = { navController.popBackStack() },
+                )
+            }
             composable("calendar") { StubScreen("日历", "M1 第二批") }
             composable("assets") { AssetsScreen() }
             composable("stats") { StubScreen("统计", "M1 第二批") }
-            composable("mine") { StubScreen("我的", "M1 第二批") }
         }
     }
 }

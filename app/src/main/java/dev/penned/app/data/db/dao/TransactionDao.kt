@@ -58,17 +58,27 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE deleted = 0")
     suspend fun all(): List<TransactionEntity>
 
+    @Query("SELECT * FROM transactions WHERE deleted = 0 AND bookId = :bookId")
+    suspend fun allInBook(bookId: String): List<TransactionEntity>
+
     @Query("SELECT * FROM transactions WHERE id = :id")
     suspend fun get(id: String): TransactionEntity?
 
     @Upsert
     suspend fun upsert(tx: TransactionEntity)
 
+    @Upsert
+    suspend fun upsertAll(txs: List<TransactionEntity>)
+
     @Query("UPDATE transactions SET deleted = 1, updatedAt = :now WHERE id = :id")
     suspend fun softDelete(id: String, now: Long)
 
     @Query("UPDATE transactions SET deleted = 1, updatedAt = :now WHERE id IN (:ids)")
     suspend fun softDeleteAll(ids: List<String>, now: Long)
+
+    /** 按导入批次整体软删（导入批次管理页）。 */
+    @Query("UPDATE transactions SET deleted = 1, updatedAt = :now WHERE importBatchId = :batchId")
+    suspend fun softDeleteByBatch(batchId: String, now: Long)
 
     @Query("SELECT COUNT(*) FROM transactions")
     suspend fun count(): Int

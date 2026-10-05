@@ -14,7 +14,7 @@ import dev.penned.app.domain.TxType
  */
 @Entity(
     tableName = "transactions",
-    indices = [Index("bookId"), Index("dateEpochMinute"), Index("categoryId"), Index("accountId")],
+    indices = [Index("bookId"), Index("dateEpochMinute"), Index("categoryId"), Index("accountId"), Index("importBatchId")],
 )
 data class TransactionEntity(
     @PrimaryKey val id: String,
@@ -44,6 +44,8 @@ data class TransactionEntity(
     @ColumnInfo(defaultValue = "0") val excludeFromBudget: Boolean = false,
     /** 记录方式（D021）。 */
     @ColumnInfo(defaultValue = "MANUAL") val source: TxSource = TxSource.MANUAL,
+    /** 所属导入批次（v3）；手动记账为 null。 */
+    val importBatchId: String? = null,
     val creatorDeviceId: String,
     val createdAt: Long,
     val updatedAt: Long,

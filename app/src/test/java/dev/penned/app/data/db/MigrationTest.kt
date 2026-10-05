@@ -69,7 +69,7 @@ class MigrationTest {
             )
         }
         val real = Room.databaseBuilder(context, PennedDatabase::class.java, dbName)
-            .addMigrations(MIGRATION_1_2)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
             .allowMainThreadQueries()
             .build()
         try {
@@ -86,6 +86,43 @@ class MigrationTest {
                 assertEquals(0, c.getInt(1))
                 assertEquals("MANUAL", c.getString(2))
                 assertEquals(0L, c.getLong(3))
+                c.close()
+            }
+        } finally {
+            real.close()
+        }
+    }
+
+    @Test
+    fun `migrate 2 to 3 adds importBatchId column and keeps data`() {
+        createLegacyDatabase(2) { db ->
+            db.execSQL(
+                "INSERT INTO books (id, name, sortOrder, createdAt, updatedAt, deleted, deviceId) " +
+                    "VALUES ('b1', '测试账本', 0, 1, 1, 0, 'd')"
+            )
+            db.execSQL(
+                "INSERT INTO transactions (id, bookId, type, amountCents, accountId, targetAccountId, categoryId, " +
+                    "dateEpochMinute, note, refundCents, discountCents, reimburseState, reimburseAccountId, " +
+                    "currencyCode, rate, address, feeCents, excludeFromStats, excludeFromBudget, source, " +
+                    "creatorDeviceId, createdAt, updatedAt, deleted, deviceId) " +
+                    "VALUES ('t1', 'b1', 'EXPENSE', 1600, NULL, NULL, NULL, 100, NULL, 0, 0, 'NONE', NULL, " +
+                    "NULL, NULL, NULL, 0, 0, 0, 'IMPORT', 'd', 1, 1, 0, 'd')"
+            )
+        }
+        val real = Room.databaseBuilder(context, PennedDatabase::class.java, dbName)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            runTest {
+                val txs = real.transactionDao().all()
+                assertEquals(1, txs.size)
+                assertEquals("IMPORT", txs[0].source.name)
+                // 新列默认 null
+                val c = real.openHelper.readableDatabase
+                    .query("SELECT importBatchId FROM transactions WHERE id = 't1'")
+                c.moveToFirst()
+                assertTrue(c.isNull(0))
                 c.close()
             }
         } finally {
