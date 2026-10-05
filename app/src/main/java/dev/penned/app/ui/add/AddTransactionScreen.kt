@@ -111,6 +111,7 @@ fun AddTransactionScreen(
         onSwap = viewModel::swapTransfer,
         onFeeChange = viewModel::setFee,
         onPickDate = viewModel::setDate,
+        onAddCategory = { name, parentId -> viewModel.addCategoryAndSelect(name, parentId) },
         onSave = { viewModel.save(onDone) },
         onSaveAgain = viewModel::saveAgain,
         onEvaluate = viewModel::evaluate,
@@ -150,6 +151,7 @@ fun AddTransactionContent(
     onSwap: () -> Unit,
     onFeeChange: (String) -> Unit,
     onPickDate: (Long?) -> Unit = {},
+    onAddCategory: (name: String, parentId: String?) -> Unit = { _, _ -> },
     onEvaluate: () -> Unit,
     onSave: () -> Unit,
     onSaveAgain: () -> Unit,
@@ -163,6 +165,8 @@ fun AddTransactionContent(
     var showToPicker by remember { mutableStateOf(false) }
     var showFee by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var showAddCategory by remember { mutableStateOf(false) }
+    var addCategoryParent by remember { mutableStateOf<String?>(null) }
     val amountColor = when (type) {
         TxType.EXPENSE -> ExpenseRed
         TxType.INCOME -> IncomeTeal
@@ -241,6 +245,8 @@ fun AddTransactionContent(
                     expandedSubs = expandedSubs,
                     onSelectParent = onSelectParent,
                     onSelectSub = onSelectSub,
+                    onAddParent = { addCategoryParent = null; showAddCategory = true },
+                    onAddSub = { parentId -> addCategoryParent = parentId; showAddCategory = true },
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
                 )
             }
@@ -371,6 +377,18 @@ fun AddTransactionContent(
                 showFee = false
             },
             onDismiss = { showFee = false },
+        )
+    }
+    if (showAddCategory) {
+        val parentName = parents.firstOrNull { it.id == addCategoryParent }?.name
+        TextNameDialog(
+            title = if (addCategoryParent == null) "新增一级分类" else "添加子分类到「$parentName」",
+            placeholder = "分类名称",
+            onConfirm = { name ->
+                onAddCategory(name, addCategoryParent)
+                showAddCategory = false
+            },
+            onDismiss = { showAddCategory = false },
         )
     }
     if (showDatePicker) {
@@ -545,8 +563,45 @@ fun AccountPickerDialog(
 }
 
 @Composable
-private fun TextAmountDialog(title: String, initial: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
-    var text by remember { mutableStateOf(initial) }
+private fun TextNameDialog(
+    title: String,
+    placeholder: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var text by remember { mutableStateOf("") }
+    // 用 BasicTextField 而非 OutlinedTextField：后者在 Robolectric 弹窗内会导致无法 idle
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            BasicTextField(
+                value = text,
+                onValueChange = { text = it },
+                singleLine = true,
+                textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = MaterialTheme.typography.bodyLarge.fontSize),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(12.dp),
+                decorationBox = { inner ->
+                    Box {
+                        if (text.isEmpty()) {
+                            Text(placeholder, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        inner()
+                    }
+                },
+            )
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(text) }, enabled = text.isNotBlank()) { Text("保存") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+@Composable
+private fun TextAmountDialog(title: String, initial: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {    var text by remember { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },

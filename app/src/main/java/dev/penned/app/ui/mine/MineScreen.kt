@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun MineScreen(
     onOpenDataManagement: () -> Unit,
+    onOpenCategories: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(modifier = modifier.fillMaxSize()) { padding ->
@@ -45,6 +46,7 @@ fun MineScreen(
             Spacer(Modifier.height(16.dp))
             SectionLabel("数据")
             MenuRow("数据管理", "导入一木 xls / CSV 备份 · 导出 · 导入批次", onOpenDataManagement)
+            MenuRow("分类管理", "新增 / 重命名 / 隐藏支出与收入分类", onOpenCategories)
             HorizontalDivider()
             SectionLabel("其他")
             MenuRow("关于", "版本 0.1.0（M1）", onClick = {})

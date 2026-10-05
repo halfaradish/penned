@@ -30,6 +30,7 @@ class AddScreenScreenshotTest {
     private fun content(
         dateEpochDay: Long? = null,
         onPickDate: (Long?) -> Unit = {},
+        onAddCategory: (String, String?) -> Unit = { _, _ -> },
     ) = AddTransactionContent(
         type = TxType.EXPENSE,
         amountText = "16.5",
@@ -60,7 +61,7 @@ class AddScreenScreenshotTest {
         ),
         onSelectType = {}, onKey = {}, onSelectParent = {}, onSelectSub = {},
         onNoteChange = {}, onPickAccount = {}, onPickFrom = {}, onPickTo = {},
-        onSwap = {}, onFeeChange = {}, onPickDate = onPickDate, onEvaluate = {},
+        onSwap = {}, onFeeChange = {}, onPickDate = onPickDate, onAddCategory = onAddCategory, onEvaluate = {},
         onSave = {}, onSaveAgain = {}, onBack = {}, onEdit = {},
     )
 
@@ -95,6 +96,15 @@ class AddScreenScreenshotTest {
         // 确定：回传日期
         composeRule.onNodeWithText("确定").performClick()
         org.junit.Assert.assertNotNull(picked)
+    }
+
+    @Test
+    fun captureAddCategoryEntry() {
+        composeRule.setContent { PennedTheme { content() } }
+        // 规格断言：一级宫格尾部有「新增」入口（弹窗交互在模拟机人工验证——
+        // Robolectric 下点击后 AlertDialog 内无法 idle，见 board 遗留问题）
+        composeRule.onNodeWithText("新增").assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_add_category_entry.png")
     }
 }
 

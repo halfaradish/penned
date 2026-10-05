@@ -21,6 +21,8 @@ import dev.penned.app.ui.assets.AssetsScreen
 import dev.penned.app.ui.books.BooksScreen
 import dev.penned.app.ui.budgets.BudgetScreen
 import dev.penned.app.ui.budgets.BudgetsViewModel
+import dev.penned.app.ui.categories.CategoriesScreen
+import dev.penned.app.ui.categories.CategoriesViewModel
 import dev.penned.app.ui.data.DataManagementScreen
 import dev.penned.app.ui.data.DataViewModel
 import dev.penned.app.ui.data.ImportBatchesScreen
@@ -117,8 +119,17 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                 )
                 BudgetScreen(viewModel = vm, onBack = { navController.popBackStack() })
             }
+            composable("categories") {
+                val vm: CategoriesViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+                    initializer = { CategoriesViewModel(app) },
+                )
+                CategoriesScreen(viewModel = vm, onBack = { navController.popBackStack() })
+            }
             composable("mine") {
-                MineScreen(onOpenDataManagement = { navController.navigate("data") })
+                MineScreen(
+                    onOpenDataManagement = { navController.navigate("data") },
+                    onOpenCategories = { navController.navigate("categories") },
+                )
             }
             composable("data") {
                 val vm: DataViewModel = androidx.lifecycle.viewmodel.compose.viewModel(

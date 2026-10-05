@@ -149,6 +149,32 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
         dateEpochDay.value = day
     }
 
+    /** 记一笔宫格内新增分类并直接选中（M1 第二批）。parentId 为空 = 新增一级。 */
+    fun addCategoryAndSelect(name: String, parentId: String?, onDone: () -> Unit = {}) {
+        viewModelScope.launch {
+            val trimmed = name.trim()
+            if (trimmed.isEmpty()) return@launch
+            val book = currentBook.value ?: return@launch
+            val domain = if (type.value == TxType.INCOME) CategoryType.INCOME else CategoryType.EXPENSE
+            val siblings = db.categoryDao().allInBook(book.id).filter { it.parentId == parentId && it.type == domain }
+            val now = System.currentTimeMillis()
+            val category = CategoryEntity(
+                id = UUID.randomUUID().toString(),
+                bookId = book.id,
+                parentId = parentId,
+                name = trimmed,
+                type = domain,
+                sortOrder = siblings.size,
+                createdAt = now,
+                updatedAt = now,
+                deviceId = app.deviceId,
+            )
+            db.categoryDao().upsert(category)
+            selectedCategoryId.value = category.id
+            onDone()
+        }
+    }
+
     fun pressKey(key: String) {
         amountText.value = when (key) {
             KEY_BACKSPACE -> amountText.value.dropLast(1)

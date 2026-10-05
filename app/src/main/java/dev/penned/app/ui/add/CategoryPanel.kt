@@ -39,6 +39,8 @@ fun CategoryPanel(
     expandedSubs: List<CategoryUi>,
     onSelectParent: (CategoryUi) -> Unit,
     onSelectSub: (CategoryUi) -> Unit,
+    onAddParent: () -> Unit = {},
+    onAddSub: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
@@ -59,22 +61,54 @@ fun CategoryPanel(
                 SubBand(
                     subs = expandedSubs,
                     selectedId = selectedId,
+                    expandedParentId = expandedId,
                     onSelectSub = onSelectSub,
+                    onAddSub = onAddSub,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 6.dp),
                 )
             }
         }
+        // 一级宫格尾部「+ 新增」（M1 第二批：宫格内新增分类入口）
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable(onClick = onAddParent)
+                    .padding(vertical = 6.dp, horizontal = 2.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("+", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text(
+                    "新增",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            repeat(4) { Spacer(modifier = Modifier.weight(1f)) }
+        }
     }
 }
 
-/** 展开的子分类条带：灰色圆角面 + 子分类 + 尾部"新增"（M1 接分类管理） */
+/** 展开的子分类条带：灰色圆角面 + 子分类 + 尾部"新增"（M1 第二批接通新增入口） */
 @Composable
 private fun SubBand(
     subs: List<CategoryUi>,
     selectedId: String?,
+    expandedParentId: String?,
     onSelectSub: (CategoryUi) -> Unit,
+    onAddSub: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = modifier) {
@@ -98,7 +132,10 @@ private fun SubBand(
                     text = "+ 新增",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { expandedParentId?.let(onAddSub) },
                     textAlign = TextAlign.Center,
                 )
             }
