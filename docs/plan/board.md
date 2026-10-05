@@ -4,20 +4,35 @@
 
 ## 进行中
 
-（无——M1 第一批已完成并提交，见"已完成"）
+（无——M1 第二批已完成并提交，见"已完成"）
 
 ## 待办
 
-- **M1 规格冻结**（specs/M1.md）：流水编辑/删除（账单详情页 + 批量编辑，参考 `docs/local/一木模拟机探索/探索报告.md` §二）、账户管理与转账（含手续费 D022）、预算表、CSV 导入导出（一木 xls 导入器 + 导入批次）、密码锁、深色主题、账本管理（popover 切换，探索报告 §七）、转账/债务 Tab、快捷 chips、宫格内新增分类、计算器键盘、自绘线条图标集评估
-- **M2 规格**：update.json 协议 + UpdateChecker + 签名密钥生成与离线备份（**首次发版前 applicationId 终审 D013**）+ release minify 打开（D012）
-- 升级 robolectric >4.17 时回归试 `@Config(sdk=[36])`（D016）
+- **M1 收尾**：账单详情「退款」流程（specs/M1.md 第二批最后一项，与 D007/M3 退款模型对齐）；转账/债务 Tab 中债务仍占位（M3）
+- 首页流水行的转账记录显示「未分类？」——应显示「转账 → 账户」样式（polish，改 HomeGroups/HomeScreen 行渲染）
+- 添加账户弹窗：点预设 chip 会覆盖已输入的名称（小 UX，与一木对齐时可改为仅作 placeholder）
+- Robolectric 怪癖：AlertDialog 内含文本输入时 Compose 不 idle（分类新增弹窗无法截图测试，入口仅做存在性断言；PinPad/Budget 等用自绘输入绕开）。后续可试 Robolectric 升级或改用 compose ui-test 的 autoAdvance
 - M1 引入 Roborazzi gradle 插件，把"每次测试都重录截图"改为 record/verify 双任务（D018）
+- 升级 robolectric >4.17 时回归试 `@Config(sdk=[36])`（D016）
+- **M2 规格**：update.json 协议 + UpdateChecker + 签名密钥生成与离线备份（**首次发版前 applicationId 终审 D013**）+ release minify 打开（D012）
+- M5 提案候选：CSV 目前是「当前账本流水级备份」（带 id），全实体（账本/分类/账户）无损备份留给离线备份设计时统一考虑
 
 ## 提案区（等人裁决）
 
 （无）
 
 ## 已完成
+
+### M1 第二批（2026-10-06，提交 8b95392~f671308）
+- **冒烟回归**：修复 2 个真 bug——currentBookId 从未初始化导致添加账户静默失败（启动时落盘默认账本）；添加账户弹窗内容超高且键盘盖住保存键（verticalScroll）
+- **2.1 一木 xls 导入器 + CSV 导入导出**（3d72c13）：纯 Kotlin OLE2/BIFF8 解析器（无新依赖，FAT/MiniFAT 双路径、SST CONTINUE 跨片）；语义层（负号还原/退款/优惠/账户可空/分钟日期/坏行跳过）；分类账本账户按名匹配缺则创建；事务写入 source=IMPORT + importBatchId（schema v3 + 2→3 迁移测试）；RFC4180 CSV 编解码 + penned 备份格式；我的页/数据管理页（SAF）/导入批次管理页；**真实 751 行账单导入验证通过**（750 支出/1 收入/5 全额退款/7 退款行）；脱敏 fixture×2（FAT/MiniFAT）入库
+- **2.2 预算 UI**（ceef93b）：BudgetDao（一账本一分类一预算）+ 月度分类支出聚合查询（排除不计预算）+ BudgetMath 纯函数（表驱动单测）+ 预算管理页（总/分类、进度条、超支红显）+ 首页「剩余预算」行接真数据
+- **2.3 日期选择**（9fd12fb）：「今天」chip 接 M3 DatePickerDialog；AddDate 纯函数（选日+当前时刻落库 minute、编辑反推、UTC 毫秒换算，表驱动单测）；编辑预填
+- **2.4 分类管理**（dc914db）：分类管理页（两域树形列表、新增一级/子级、重命名、软删）+ 记一笔宫格「+ 新增」与子分类条带「+ 新增」接通并自动选中
+- **2.5 密码锁**（84708f2）：PinHasher（SHA-256(salt+pin) 存 salt:hash 无明文、常数时间比较）+ LockGate（冷启动锁定、后台恢复重锁、会话中设置不打断）+ 设置页（设置/改密/关闭）；修复步骤切换 PIN 缓冲未清空 bug
+- **2.6 深色主题**（0a3c6e2）：Light/Dark 全槽位色板（青灰偏中性色，替代 M3 默认紫灰）；expenseColor/incomeColor 暗色提亮变体全调用点替换；8 页暗色 Roborazzi 截图 + 系统深色模式实测
+- **2.7 统计页第一版**（f671308）：HomeGroups.categoryTotals 纯函数（topN+其他合并、fraction 归一）；月窗口查询；月切换 ‹ ›；月汇总卡 + Canvas 环形图 + 分类排行（占比条）；空态；**真实验证 2024-09 支出 2955.70 与库一致**
+- 验证：`./gradlew build` 全绿（单测 + lint + Roborazzi）；每个切片独立提交；关键流程模拟机人工走查
 
 ### M1 第一批（2026-10-05，提交 6f2602d~7332724）
 - S1 schema v2（D020~D022 字段 + budgets/import_batches + 迁移测试，2.json 入库）
