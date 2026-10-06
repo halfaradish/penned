@@ -407,14 +407,6 @@ private fun SummaryColumn(label: String, value: String, valueColor: Color, modif
 }
 
 
-/** 由分类名哈希生成稳定配色：黄金角散列避免色相聚集（M0 方案，图标系统随 M6 落地）。 */
-fun categoryColor(name: String): Color {
-    val golden = 0.61803398875
-    val h = name.hashCode().toLong() and 0xFFFFFFFFL
-    val hueFraction = ((h * golden) % 1.0).toFloat()
-    return Color.hsl(hueFraction * 360f, 0.42f, 0.55f) // Color.hsl 的 hue 单位是度
-}
-
 @Composable
 fun AddBookDialog(onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
     var name by remember { mutableStateOf("") }

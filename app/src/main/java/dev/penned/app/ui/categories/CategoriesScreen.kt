@@ -32,7 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.penned.app.data.db.entity.CategoryEntity
 import dev.penned.app.domain.CategoryType
-import dev.penned.app.ui.home.categoryColor
+import dev.penned.app.ui.theme.categoryColor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size

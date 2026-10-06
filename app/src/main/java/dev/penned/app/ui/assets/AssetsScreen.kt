@@ -47,7 +47,7 @@ import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.domain.AccountType
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.MoneyInput
-import dev.penned.app.ui.home.categoryColor
+import dev.penned.app.ui.theme.categoryColor
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow

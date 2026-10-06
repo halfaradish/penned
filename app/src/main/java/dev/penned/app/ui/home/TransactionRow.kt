@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import dev.penned.app.data.db.dao.TxWithCategory
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.TxType
+import dev.penned.app.ui.theme.categoryColor
 import dev.penned.app.ui.theme.expenseColor
 import dev.penned.app.ui.theme.incomeColor
 

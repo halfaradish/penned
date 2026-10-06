@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.penned.app.domain.Money
 import dev.penned.app.ui.home.HomeGroups
-import dev.penned.app.ui.home.categoryColor
+import dev.penned.app.ui.theme.categoryColor
 import dev.penned.app.ui.theme.expenseColor
 import dev.penned.app.ui.theme.incomeColor
 import java.time.YearMonth
@@ -246,6 +246,8 @@ private fun DonutSection(
 /** 环形图：每类一段，起于 12 点方向；分段间留 2° 缝。 */
 @Composable
 private fun DonutChart(categories: List<HomeGroups.CategoryTotal>, modifier: Modifier = Modifier) {
+    // 颜色先在 composable 上下文里解析：Canvas 的 DrawScope lambda 不是 composable，读不了主题
+    val colors = categories.map { categoryColor(it.name) }
     Canvas(modifier = modifier) {
         val stroke = 26.dp.toPx()
         val inset = stroke / 2 + 1.dp.toPx()
@@ -253,10 +255,10 @@ private fun DonutChart(categories: List<HomeGroups.CategoryTotal>, modifier: Mod
         val topLeft = Offset(inset, inset)
         var start = -90f
         val gap = 2f
-        categories.forEach { cat ->
+        categories.forEachIndexed { index, cat ->
             val sweep = (cat.fraction.coerceIn(0f, 1f) * 360f).coerceAtLeast(0.5f)
             drawArc(
-                color = categoryColor(cat.name),
+                color = colors[index],
                 startAngle = start,
                 sweepAngle = (sweep - gap).coerceAtLeast(0.5f),
                 useCenter = false,
