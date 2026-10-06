@@ -21,8 +21,10 @@
 - **D013 applicationId = dev.penned.app** · 占位；M2 首次发布前必须终审（改 id = 换应用身份，影响自更新）· 2026-10-05
 - **D014 无 DI 框架** · 单模块小项目，手动构造 + viewModelFactory 足够；引 Hilt 是过度设计 · 2026-10-05
 - **D015 Room schema export 开启，app/schemas/ 入库** · migration 测试的前提 · 2026-10-05
-- **D019 Tab 图标手写 ImageVector，分类图标 = 哈希色块 + 首字**（黄金角散列色相）· 正式图标设计推迟到 M6 打磨 · 2026-10-05
+- **D019 Tab 图标手写 ImageVector，分类图标 = 哈希色块 + 首字**（黄金角散列色相）· 正式图标设计推迟到 M6 打磨 · 2026-10-05（"分类图标 = 哈希色相"部分已被 D024 取代：改为 8 色颜料盘；"手写 ImageVector、不引图标库"的部分继续有效）
 - **D020 流水增加 excludeFromStats / excludeFromBudget 两个独立标志** · 一木账单详情页实测（模拟机探索报告 §二）；"不计入收支"与"不计入预算"是分开的开关 · 2026-10-05
 - **D021 流水增加 source 来源字段**（MANUAL/VOICE/TEXT/SCREENSHOT/IMPORT/AUTO…）· 对应一木"记录方式"；统计"记录构成"与导入批次追溯都要用 · 2026-10-05
 - **D022 转账增加 feeCents 手续费字段** · 一木转账 Tab 有"手续费"chip（模拟机探索 §一）；手续费记在转账流水上 · 2026-10-05
 - **D023 引入 androidx.datastore-preferences 1.2.1** · 存当前账本 id、密码哈希等设置项（M1 冻结规格 S3/S 第二批）；经批准随 M1 第一批引入 · 2026-10-05
+- **D024 界面重构：建立 token 层 + 共用组件库，分类色改 8 色颜料盘** · M1 功能齐了但观感停在 M3 默认值：分类色是哈希任意色相（首页头像彩虹、统计页紫/洋红/橙环），`Typography()` 全默认，无 Shapes/间距常量，卡片与背景只差 2% 亮度，品牌色当正文用（3.3:1 不达标）。定案：主色青绿不变（保身份），新增 `primaryInk` 作正文色；中性层重做（纸灰底 + 白卡 + 1dp 发丝线，全局不用阴影）；分类色改 8 色等彩度明度颜料盘（朱砂/赭石/藤黄/石绿/石青/靛青/紫檀/墨灰，头像 = 14% tint 底 + ink 首字），统计图表复用同一套；补 `error` 槽位顶掉 M3 默认紫。规范全文 `docs/界面重构方案.md`，本轮为 M1 后置重构（非跨里程碑功能扩张，规格外功能一律不进）· 2026-10-06
+- **D025 inset 必须显式消费**：外层 Scaffold 的 padding 传给 NavHost 时用 `Modifier.padding(padding).consumeWindowInsets(padding)` · 普通 `Modifier.padding` 不标记 inset 已消费，内层 Scaffold/TopAppBar 会再加一遍状态栏/导航栏高度——真机上搜索页顶部出现 2× 状态栏的无内容死带（Robolectric 是零 inset 环境，截图看不出来）。此后新增下钻页一律用 `PennedTopBar`（自带 inset 处理）· 2026-10-06
