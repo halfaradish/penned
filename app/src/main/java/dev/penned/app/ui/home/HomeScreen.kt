@@ -332,16 +332,14 @@ private fun HomeSummaryCard(
 ) {
     Card(modifier = modifier) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                SummaryInline("支出", Money.format(totals.expenseCents), expenseColor())
-                SummaryInline("收入", Money.format(totals.incomeCents), incomeColor())
-                SummaryInline(
+            Row(modifier = Modifier.fillMaxWidth()) {
+                SummaryColumn("支出", Money.format(totals.expenseCents), expenseColor(), Modifier.weight(1f))
+                SummaryColumn("收入", Money.format(totals.incomeCents), incomeColor(), Modifier.weight(1f))
+                SummaryColumn(
                     "结余",
                     Money.format(totals.incomeCents - totals.expenseCents),
                     MaterialTheme.colorScheme.onSurface,
+                    Modifier.weight(1f),
                 )
             }
             Spacer(Modifier.height(6.dp))
@@ -391,12 +389,12 @@ private fun HomeSummaryCard(
     }
 }
 
-/** 合并卡第一行的一格：标签与金额同行（比"标签上一行、金额下一行"省一半高度）。 */
+/** 合并卡第一行的三列：标签一行、数值一行（等宽三列，居中）。 */
 @Composable
-private fun SummaryInline(label: String, value: String, valueColor: Color) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+private fun SummaryColumn(label: String, value: String, valueColor: Color, modifier: Modifier = Modifier) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.width(4.dp))
+        Spacer(Modifier.height(2.dp))
         Text(value, style = MaterialTheme.typography.titleSmall, color = valueColor)
     }
 }
