@@ -54,11 +54,17 @@ class PennedCsvTest {
             tx("t1") { it.copy(note = "备注,带逗号", refundCents = 500, source = TxSource.IMPORT, importBatchId = "batch-1") },
             tx("t2") { it.copy(type = TxType.TRANSFER, accountId = "a1", targetAccountId = "a2", feeCents = 100, excludeFromStats = true) },
             tx("t3") { it.copy(type = TxType.INCOME, amountCents = 350000, categoryId = null) },
+            tx("t4") {
+                it.copy(
+                    currencyCode = "USD", rate = 7.12, address = "上海市,静安区",
+                    reimburseState = dev.penned.app.domain.ReimburseState.PENDING, reimburseAccountId = "a9",
+                )
+            },
         )
         val csv = PennedCsv.export(original)
         val restored = PennedCsv.import(csv, bookId = "b2")
 
-        assertEquals(3, restored.size)
+        assertEquals(4, restored.size)
         val r1 = restored.first { it.id == "t1" }
         assertEquals("备注,带逗号", r1.note)
         assertEquals(500L, r1.refundCents)
@@ -77,6 +83,14 @@ class PennedCsvTest {
         assertEquals(TxType.INCOME, r3.type)
         assertEquals(350000L, r3.amountCents)
         assertEquals(null, r3.categoryId)
+
+        // 无损备份：币种/汇率/地址/报销也在 CSV 里往返
+        val r4 = restored.first { it.id == "t4" }
+        assertEquals("USD", r4.currencyCode)
+        assertEquals(7.12, r4.rate!!, 1e-9)
+        assertEquals("上海市,静安区", r4.address)
+        assertEquals(dev.penned.app.domain.ReimburseState.PENDING, r4.reimburseState)
+        assertEquals("a9", r4.reimburseAccountId)
     }
 
     @Test

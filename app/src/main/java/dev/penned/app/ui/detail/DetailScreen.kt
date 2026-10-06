@@ -33,6 +33,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.penned.app.PennedApplication
 import dev.penned.app.data.db.entity.TransactionEntity
 import dev.penned.app.domain.Money
+import dev.penned.app.domain.ReimburseState
 import dev.penned.app.domain.TxType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -177,9 +178,18 @@ fun DetailContent(
                 DetailRow("账单日期", formatMinute(d.tx.dateEpochMinute))
                 DetailRow("备注", d.tx.note ?: "无")
                 DetailRow("账户", d.accountName ?: "无账户")
+                if (d.tx.reimburseState != ReimburseState.NONE) DetailRow("报销", reimburseLabel(d.tx.reimburseState))
                 DetailRow("所属账本", d.bookName)
                 DetailRow("记录方式", sourceLabel(d.tx))
                 DetailRow("记录时间", formatMinute(d.tx.createdAt / 60_000))
+                if (!d.tx.address.isNullOrBlank()) DetailRow("地点", d.tx.address!!)
+                val rate = d.tx.rate
+                if (!d.tx.currencyCode.isNullOrBlank()) {
+                    DetailRow(
+                        "原币种",
+                        d.tx.currencyCode!! + (rate?.let { " · 汇率 $it" } ?: ""),
+                    )
+                }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 ToggleRow("不计入收支", d.tx.excludeFromStats) { onToggleStats(it) }
                 ToggleRow("不计入预算", d.tx.excludeFromBudget) { onToggleBudget(it) }
@@ -209,6 +219,12 @@ private fun RefundBadge(fullRefund: Boolean) {
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
         )
     }
+}
+
+private fun reimburseLabel(state: ReimburseState): String = when (state) {
+    ReimburseState.PENDING -> "待报销"
+    ReimburseState.DONE -> "已报销"
+    ReimburseState.NONE -> "不报销"
 }
 
 private fun sourceLabel(tx: TransactionEntity): String = when (tx.source.name) {

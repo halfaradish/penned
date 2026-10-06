@@ -89,6 +89,31 @@ class DetailScreenScreenshotTest {
     }
 
     @Test
+    fun captureDetailWithAddressCurrencyAndReimburse() {
+        // 全字段展示补齐：地点/原币种+汇率/报销状态（有值才显示）
+        composeRule.setContent {
+            PennedTheme {
+                content(
+                    row(amountCents = 2200, note = "机场免税店").copy(
+                        address = "上海市浦东新区",
+                        currencyCode = "JPY",
+                        rate = 0.048,
+                        reimburseState = ReimburseState.PENDING,
+                        reimburseAccountId = "acc-9",
+                    )
+                )
+            }
+        }
+        composeRule.onNodeWithText("地点").assertIsDisplayed()
+        composeRule.onNodeWithText("上海市浦东新区").assertIsDisplayed()
+        composeRule.onNodeWithText("原币种").assertIsDisplayed()
+        composeRule.onNodeWithText("JPY · 汇率 0.048").assertIsDisplayed()
+        composeRule.onNodeWithText("报销").assertIsDisplayed()
+        composeRule.onNodeWithText("待报销").assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_detail_full_fields.png")
+    }
+
+    @Test
     fun capturePlainDetailHasNoRefundRows() {
         composeRule.setContent { PennedTheme { content(row(amountCents = 1600, note = "北苑餐厅")) } }
         composeRule.onNodeWithText("退款").assertDoesNotExist()
