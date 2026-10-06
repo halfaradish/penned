@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -107,7 +108,29 @@ fun DetailScreen(
         initializer = { DetailViewModel(app, txId) },
     )
     val detail by viewModel.state.collectAsStateWithLifecycle()
+    val d = detail ?: return
+    DetailContent(
+        detail = d,
+        onEdit = { onEdit(d.tx.id) },
+        onDelete = { viewModel.delete(onBack) },
+        onToggleStats = viewModel::setExcludeStats,
+        onToggleBudget = viewModel::setExcludeBudget,
+        onBack = onBack,
+    )
+}
 
+/** 无状态入口：截图测试/预览用（不碰 DB 与 DataStore）。 */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+fun DetailContent(
+    detail: DetailUi,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onToggleStats: (Boolean) -> Unit,
+    onToggleBudget: (Boolean) -> Unit,
+    onBack: () -> Unit,
+) {
+    val d = detail
     Scaffold(
         topBar = {
             TopAppBar(
@@ -116,7 +139,6 @@ fun DetailScreen(
             )
         },
     ) { padding ->
-        val d = detail ?: return@Scaffold
         Surface(modifier = Modifier.padding(padding).fillMaxSize()) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 8.dp)) {
@@ -124,6 +146,11 @@ fun DetailScreen(
                         d.categoryName ?: if (d.tx.type == TxType.TRANSFER) "转账" else "未分类",
                         style = MaterialTheme.typography.titleMedium,
                     )
+                    // 退款是流水属性而非独立流水（一木导出反分析）：全额退款行金额为 0，靠退款列才能看懂
+                    if (d.tx.refundCents > 0) {
+                        Spacer(Modifier.size(8.dp))
+                        RefundBadge(fullRefund = d.tx.amountCents == 0L)
+                    }
                     Spacer(Modifier.weight(1f))
                     val prefix = when (d.tx.type) {
                         TxType.EXPENSE -> "-"
@@ -145,6 +172,8 @@ fun DetailScreen(
                     DetailRow("转入账户", d.targetAccountName ?: "无")
                     if (d.tx.feeCents > 0) DetailRow("手续费", Money.format(d.tx.feeCents))
                 }
+                if (d.tx.refundCents > 0) DetailRow("退款", Money.format(d.tx.refundCents))
+                if (d.tx.discountCents > 0) DetailRow("优惠", Money.format(d.tx.discountCents))
                 DetailRow("账单日期", formatMinute(d.tx.dateEpochMinute))
                 DetailRow("备注", d.tx.note ?: "无")
                 DetailRow("账户", d.accountName ?: "无账户")
@@ -152,17 +181,33 @@ fun DetailScreen(
                 DetailRow("记录方式", sourceLabel(d.tx))
                 DetailRow("记录时间", formatMinute(d.tx.createdAt / 60_000))
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                ToggleRow("不计入收支", d.tx.excludeFromStats) { viewModel.setExcludeStats(it) }
-                ToggleRow("不计入预算", d.tx.excludeFromBudget) { viewModel.setExcludeBudget(it) }
+                ToggleRow("不计入收支", d.tx.excludeFromStats) { onToggleStats(it) }
+                ToggleRow("不计入预算", d.tx.excludeFromBudget) { onToggleBudget(it) }
                 Spacer(Modifier.height(16.dp))
                 Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = { onEdit(d.tx.id) }, modifier = Modifier.weight(1f)) { Text("编辑") }
-                    OutlinedButton(onClick = { viewModel.delete(onBack) }, modifier = Modifier.weight(1f)) {
+                    Button(onClick = onEdit, modifier = Modifier.weight(1f)) { Text("编辑") }
+                    OutlinedButton(onClick = onDelete, modifier = Modifier.weight(1f)) {
                         Text("删除", color = expenseColor())
                     }
                 }
             }
         }
+    }
+}
+
+/** 退款标记（M1 只读展示；退款交互留 M3）。 */
+@Composable
+private fun RefundBadge(fullRefund: Boolean) {
+    Surface(
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+    ) {
+        Text(
+            text = if (fullRefund) "已全额退款" else "部分退款",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+        )
     }
 }
 
