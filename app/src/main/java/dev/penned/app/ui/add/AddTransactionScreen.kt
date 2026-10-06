@@ -480,7 +480,6 @@ fun AccountPickerSheet(
         if (includeNone) {
             PennedListRow(
                 title = "无账户",
-                leadingIcon = PennedIcons.Close,
                 trailing = if (selectedId == null) "已选" else null,
                 showChevron = false,
                 onClick = { onPick(null) },

@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -27,12 +28,20 @@ class HomeViewModel(private val app: PennedApplication) : ViewModel() {
         list.firstOrNull { it.id == id } ?: list.firstOrNull()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /**
+     * 首页流水。初值与"账本还没读到"都是 null——用来区分"确实没有记账"，
+     * 否则冷启动首帧会先闪一下"还没有记账"空态（看板待办）。
+     */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val rows: StateFlow<List<TxWithCategory>> = currentBook
+    val rows: StateFlow<List<TxWithCategory>?> = currentBook
         .flatMapLatest { book ->
-            if (book == null) flowOf(emptyList()) else db.transactionDao().observeRecentWithCategory(book.id, limit = 500)
+            if (book == null) {
+                flowOf(null)
+            } else {
+                db.transactionDao().observeRecentWithCategory(book.id, limit = 500).map { it }
+            }
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** 首页「剩余预算」：总预算（分类预算不进首页汇总）。 */
     data class BudgetSummary(val totalCents: Long, val spentCents: Long) {

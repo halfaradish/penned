@@ -119,7 +119,8 @@ fun HomeScreen(
 
     HomeContent(
         bookName = currentBook?.name ?: "账本",
-        rows = rows,
+        rows = rows.orEmpty(),
+        loading = rows == null,
         onAdd = onAdd,
         budgetSummary = budgetSummary,
         onOpenBudgets = onManageBudgets,
@@ -192,6 +193,7 @@ fun HomeContent(
     bookName: String,
     rows: List<TxWithCategory>,
     onAdd: () -> Unit,
+    loading: Boolean = false,
     budgetSummary: HomeViewModel.BudgetSummary? = null,
     onOpenBudgets: () -> Unit = {},
     onSearch: () -> Unit = {},
@@ -270,7 +272,8 @@ fun HomeContent(
                         }
                     }
 
-                    if (rows.isEmpty()) {
+                    // loading：账本/流水还没读到——不渲染空态，避免冷启动闪"还没有记账"
+                    if (rows.isEmpty() && !loading) {
                         item(key = "empty") {
                             EmptyState(
                                 title = "还没有记账",
