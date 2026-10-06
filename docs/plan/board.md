@@ -8,7 +8,6 @@
 
 ## 待办
 
-- **M1 验收缺项：Roborazzi 截图「记一笔转账/资产页」**（specs/M1.md 第一批验收标准明确列出）——当前 8 张 M1 截图覆盖记一笔支出/日期/分类、我的、数据管理、批次、预算、分类、统计、锁屏、深色 8 页，但没有转账 Tab 与资产页。补 2 个截图测试即可
 - **M1 收尾**：账单详情「退款」流程（specs/M1.md 第二批最后一项；第一批 S6 只写了"退款占位（M3）"，实际 DetailScreen 连占位都没有）。当前导入数据里 7 条退款流水在 UI 上完全不可见（含 5 条全额退款 amount=0）。建议 M1 收尾做只读展示（退款/优惠行），交互留 M3
 - 记一笔顶栏「编辑」是 disabled 死 UI（占位注释还写着"M1 第二批：分类管理"，该功能已做但未接通）；「不报销」chip 同为占位（M3）——接通分类管理或移除
 - 日历 Tab 占位文案 "M1 第二批" 已过时：日历页未分配任何冻结里程碑（总方案 M0~M6 未列），需在 M2 规格时明确归属
@@ -36,6 +35,12 @@
 （无）
 
 ## 已完成
+
+### M1 收尾 2/3：转账 Tab / 资产页 Roborazzi 截图（2026-10-06）
+- 补齐 M1 第一批验收标准缺的 2 页截图（共 5 张）：`m1_add_transfer.png`（支付宝→储蓄卡 + 手续费）、`m1_add_transfer_empty.png`（两个账户位 + ⇅ 互换键）、`m1_add_transfer_picker.png`（账户选择弹窗）、`m1_assets_screen.png`（净资产/总资产/负资产 + 分组 + 负数红显）、`m1_assets_empty.png`
+- `AssetsScreen` 抽出无状态 `AssetsContent(state, onAddAccount)`（截图测试与预览不碰 DB/DataStore），`AssetsScreen` 只做 ViewModel 接线
+- 断言：转账面板四要素（转出/转入/⇅/手续费）、选择弹窗回传账户 id、资产汇总数字与分组标题
+- 资产页添加账户弹窗无法截图（AlertDialog + OutlinedTextField 在 Robolectric 不 idle，同已知怪癖）；截图产物人工过目通过
 
 ### M1 收尾 1/3：编辑丢字段 P0 + 日期时区 bug（2026-10-06）
 - **P0 编辑丢字段**：抽出纯函数 `TxEdit`（`applyEdit` = 原记录 copy 覆盖「记一笔页能改的字段」白名单；`newTransaction` = 手记默认值），`AddViewModel.saveInternal` 两个分支改为调用它。退款/优惠/不计收支/不计预算/导入批次/报销/币种/汇率/地址/来源/创建者/软删全部原样保留

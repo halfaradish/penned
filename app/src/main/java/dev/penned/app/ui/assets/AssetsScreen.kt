@@ -138,6 +138,16 @@ fun AssetsScreen(modifier: Modifier = Modifier) {
     val app = dev.penned.app.ui.LocalApp.current
     val viewModel: AssetsViewModel = viewModel(initializer = { AssetsViewModel(app) })
     val state by viewModel.state.collectAsStateWithLifecycle()
+    AssetsContent(state = state, onAddAccount = viewModel::addAccount, modifier = modifier)
+}
+
+/** 无状态入口：截图测试/预览用（不碰 DB 与 DataStore）。 */
+@Composable
+fun AssetsContent(
+    state: AssetsUiState,
+    onAddAccount: (AccountType, String, Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     var showAdd by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -257,7 +267,7 @@ fun AssetsScreen(modifier: Modifier = Modifier) {
     if (showAdd) {
         AddAccountDialog(
             onConfirm = { type, name, initial ->
-                viewModel.addAccount(type, name, initial)
+                onAddAccount(type, name, initial)
                 showAdd = false
             },
             onDismiss = { showAdd = false },

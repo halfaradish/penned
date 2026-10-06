@@ -7,6 +7,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import com.github.takahirom.roborazzi.captureRoboImage
+import dev.penned.app.data.db.entity.AccountEntity
+import dev.penned.app.domain.AccountType
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.theme.PennedTheme
 import org.junit.Rule
@@ -105,6 +107,90 @@ class AddScreenScreenshotTest {
         // Robolectric 下点击后 AlertDialog 内无法 idle，见 board 遗留问题）
         composeRule.onNodeWithText("新增").assertIsDisplayed()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_add_category_entry.png")
+    }
+
+    // ---- M1 第一批验收缺项：转账 Tab ----
+
+    private val transferAccounts = listOf(
+        AccountEntity("a1", "b1", "支付宝", AccountType.DEBIT, createdAt = 0, updatedAt = 0, deviceId = "d"),
+        AccountEntity("a2", "b1", "储蓄卡", AccountType.DEBIT, createdAt = 0, updatedAt = 0, deviceId = "d"),
+    )
+
+    @androidx.compose.runtime.Composable
+    private fun transferContent(fromId: String? = null, toId: String? = null, feeText: String = "") =
+        AddTransactionContent(
+            type = TxType.TRANSFER,
+            amountText = "8200",
+            note = "还信用卡",
+            selectedId = null,
+            expandedId = null,
+            canSave = true,
+            showEquals = false,
+            accountId = null,
+            fromId = fromId,
+            toId = toId,
+            feeText = feeText,
+            accounts = transferAccounts,
+            parents = emptyList(),
+            expandedSubs = emptyList(),
+            onSelectType = {}, onKey = {}, onSelectParent = {}, onSelectSub = {},
+            onNoteChange = {}, onPickAccount = {}, onPickFrom = {}, onPickTo = {},
+            onSwap = {}, onFeeChange = {}, onEvaluate = {}, onSave = {}, onSaveAgain = {},
+            onBack = {}, onEdit = {},
+        )
+
+    @Test
+    fun captureTransferTabEmpty() {
+        composeRule.setContent { PennedTheme { transferContent() } }
+        // 规格断言：转账面板两个账户位 + 互换键 + 手续费 chip
+        composeRule.onNodeWithText("转出账户").assertIsDisplayed()
+        composeRule.onNodeWithText("转入账户").assertIsDisplayed()
+        composeRule.onNodeWithText("⇅").assertIsDisplayed()
+        composeRule.onNodeWithText("手续费").assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_add_transfer_empty.png")
+    }
+
+    @Test
+    fun captureTransferTabWithAccounts() {
+        composeRule.setContent { PennedTheme { transferContent(fromId = "a1", toId = "a2", feeText = "2.00") } }
+        composeRule.onNodeWithText("支付宝").assertIsDisplayed()
+        composeRule.onNodeWithText("储蓄卡").assertIsDisplayed()
+        composeRule.onNodeWithText("手续费 2.00").assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_add_transfer.png")
+    }
+
+    @Test
+    fun captureTransferAccountPicker() {
+        var from: String? = null
+        composeRule.setContent {
+            PennedTheme {
+                AddTransactionContent(
+                    type = TxType.TRANSFER,
+                    amountText = "8200",
+                    note = "",
+                    selectedId = null,
+                    expandedId = null,
+                    canSave = false,
+                    showEquals = false,
+                    accountId = null,
+                    fromId = from,
+                    toId = null,
+                    feeText = "",
+                    accounts = transferAccounts,
+                    parents = emptyList(),
+                    expandedSubs = emptyList(),
+                    onSelectType = {}, onKey = {}, onSelectParent = {}, onSelectSub = {},
+                    onNoteChange = {}, onPickAccount = {}, onPickFrom = { from = it }, onPickTo = {},
+                    onSwap = {}, onFeeChange = {}, onEvaluate = {}, onSave = {}, onSaveAgain = {},
+                    onBack = {}, onEdit = {},
+                )
+            }
+        }
+        composeRule.onNodeWithText("转出账户").performClick()
+        composeRule.onNodeWithText("选择账户").assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_add_transfer_picker.png")
+        composeRule.onNodeWithText("储蓄卡").performClick()
+        org.junit.Assert.assertEquals("a2", from)
     }
 }
 
