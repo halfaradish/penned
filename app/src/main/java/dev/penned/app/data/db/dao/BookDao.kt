@@ -70,6 +70,14 @@ interface AccountDao {
     @Upsert
     suspend fun upsert(account: AccountEntity)
 
+    /** 单个账户软删（资产页左滑删除）。有流水的账户由 ViewModel 先拦下，不会走到这里。 */
+    @Query("UPDATE accounts SET deleted = 1, updatedAt = :now WHERE id = :id")
+    suspend fun softDelete(id: String, now: Long)
+
+    /** 反软删：左滑删除后 Snackbar「撤销」用（同一批 id 原样恢复）。 */
+    @Query("UPDATE accounts SET deleted = 0, updatedAt = :now WHERE id IN (:ids)")
+    suspend fun restoreAll(ids: List<String>, now: Long)
+
     @Query("UPDATE accounts SET deleted = 1, updatedAt = :now WHERE bookId = :bookId")
     suspend fun softDeleteByBook(bookId: String, now: Long)
 }

@@ -3,7 +3,9 @@ package dev.penned.app.data.db
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import dev.penned.app.data.seed.DefaultSeed
+import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.data.db.entity.TransactionEntity
+import dev.penned.app.domain.AccountType
 import dev.penned.app.domain.CategoryType
 import dev.penned.app.domain.TxType
 import androidx.room.withTransaction
@@ -107,6 +109,50 @@ class PennedDatabaseTest {
         val rows = db.transactionDao().observeRecentWithCategory(book.id, 100).first()
         assertEquals(setOf("counted", "excluded"), rows.map { it.id }.toSet())
         assertEquals(listOf("excluded"), rows.filter { it.excludeFromStats }.map { it.id })
+    }
+
+    @Test
+    fun `account soft delete hides it and undo restores it`() = runTest {
+        val book = DefaultSeed.seedIfEmpty(db, "device-a", now = 1000L)!!
+        fun account(id: String, name: String, type: AccountType, cents: Long = 0) = AccountEntity(
+            id = id, bookId = book.id, name = name, type = type, initialBalanceCents = cents,
+            createdAt = 1000L, updatedAt = 1000L, deviceId = "device-a",
+        )
+        db.accountDao().upsert(account("acc-keep", "现金", AccountType.CASH, 10_000))
+        db.accountDao().upsert(account("acc-del", "信用卡", AccountType.CREDIT, -5_000))
+
+        assertEquals(2, db.accountDao().observeWithBalance(book.id).first().size)
+
+        db.accountDao().softDelete("acc-del", now = 2000L)
+        // 净资产口径 = 账户余额之和，删掉的账户不再参与
+        val kept = db.accountDao().observeWithBalance(book.id).first().single()
+        assertEquals("acc-keep", kept.id)
+        assertEquals(10_000L, kept.balanceCents)
+
+        db.accountDao().restoreAll(listOf("acc-del"), now = 3000L)
+        assertEquals(2, db.accountDao().observeWithBalance(book.id).first().size)
+        // 软删不是物理删除，原始行仍在（同步需要）
+        assertNotNull(db.accountDao().get("acc-del"))
+    }
+
+    @Test
+    fun `account transaction count covers both transfer legs and ignores deleted rows`() = runTest {
+        val book = DefaultSeed.seedIfEmpty(db, "device-a", now = 1000L)!!
+        fun tx(id: String, type: TxType, accountId: String?, targetAccountId: String? = null) = TransactionEntity(
+            id = id, bookId = book.id, type = type, amountCents = 500,
+            accountId = accountId, targetAccountId = targetAccountId, dateEpochMinute = 10,
+            creatorDeviceId = "d", createdAt = 1000L, updatedAt = 1000L, deviceId = "d",
+        )
+        db.transactionDao().upsert(tx("t-out", TxType.EXPENSE, "acc-out"))
+        db.transactionDao().upsert(tx("t-in", TxType.INCOME, "acc-in"))
+        db.transactionDao().upsert(tx("t-move", TxType.TRANSFER, "acc-out", "acc-in"))
+
+        assertEquals(2, db.transactionDao().countByAccount("acc-out")) // 支出 + 转出
+        assertEquals(2, db.transactionDao().countByAccount("acc-in")) // 收入 + 转入
+        assertEquals(0, db.transactionDao().countByAccount("acc-none"))
+
+        db.transactionDao().softDelete("t-out", now = 2000L)
+        assertEquals(1, db.transactionDao().countByAccount("acc-out"))
     }
 
     @Test

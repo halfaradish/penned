@@ -57,6 +57,7 @@ import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.categoryColor
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -119,6 +120,45 @@ class AssetsViewModel(private val app: PennedApplication) : ViewModel() {
                 )
             )
         }
+    }
+
+    /** 待撤销的软删 id（左滑删除后进 Snackbar「撤销」，撤销条消失即失效）。 */
+    private val _deletedIds = MutableStateFlow<List<String>>(emptyList())
+    val deletedIds: StateFlow<List<String>> = _deletedIds
+
+    /** 一次性提示：账户被拦下不让删时说明原因。 */
+    private val _message = MutableStateFlow<String?>(null)
+    val message: StateFlow<String?> = _message
+
+    fun consumeMessage() {
+        _message.value = null
+    }
+
+    /** 行左滑删除（单个账户）；有流水会被 [deleteAccountIfEmpty] 拦下并提示。 */
+    fun deleteAccount(account: AccountWithBalance) {
+        viewModelScope.launch {
+            val blocked = deleteAccountIfEmpty(db, account.id, account.name)
+            if (blocked != null) {
+                _message.value = blocked
+                return@launch
+            }
+            _deletedIds.value = _deletedIds.value + account.id
+        }
+    }
+
+    /** 撤销删除：把累计待撤销的 id 一次恢复。 */
+    fun undoDelete() {
+        val ids = _deletedIds.value
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            db.accountDao().restoreAll(ids, System.currentTimeMillis())
+            _deletedIds.value = emptyList()
+        }
+    }
+
+    /** 撤销条消失后调用：过期的撤销不能再生效。 */
+    fun clearUndo() {
+        _deletedIds.value = emptyList()
     }
 }
 

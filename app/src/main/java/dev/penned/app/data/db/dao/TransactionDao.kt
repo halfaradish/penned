@@ -178,6 +178,15 @@ interface TransactionDao {
     @Query("SELECT COUNT(*) FROM transactions WHERE deleted = 0 AND bookId = :bookId")
     suspend fun countInBook(bookId: String): Int
 
+    /** 账户名下流水数（转出算 accountId、转入算 targetAccountId）：有流水就不给删账户。 */
+    @Query(
+        """
+        SELECT COUNT(*) FROM transactions
+        WHERE deleted = 0 AND (accountId = :accountId OR targetAccountId = :accountId)
+        """
+    )
+    suspend fun countByAccount(accountId: String): Int
+
     @Query("UPDATE transactions SET deleted = 1, updatedAt = :now WHERE bookId = :bookId")
     suspend fun softDeleteByBook(bookId: String, now: Long)
 }
