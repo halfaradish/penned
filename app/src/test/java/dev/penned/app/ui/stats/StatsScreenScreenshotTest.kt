@@ -1,7 +1,9 @@
 package dev.penned.app.ui.stats
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -43,7 +45,8 @@ class StatsScreenScreenshotTest {
             }
         }
         composeRule.onNodeWithText("支出构成").assertIsDisplayed()
-        composeRule.onNodeWithText("食品餐饮").assertIsDisplayed()
+        // 图例与排行各一处（同一分类名出现两次是设计使然）
+        composeRule.onAllNodesWithText("食品餐饮").assertCountEquals(2)
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_stats_screen.png")
     }
 

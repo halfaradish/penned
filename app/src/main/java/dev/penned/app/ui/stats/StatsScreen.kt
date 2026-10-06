@@ -2,7 +2,6 @@ package dev.penned.app.ui.stats
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,10 +13,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,16 +36,24 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.penned.app.domain.Money
-import dev.penned.app.ui.home.HomeGroups
 import dev.penned.app.ui.components.CategoryAvatar
+import dev.penned.app.ui.components.EmptyState
+import dev.penned.app.ui.components.MoneyText
+import dev.penned.app.ui.components.PennedCard
+import dev.penned.app.ui.components.PennedDivider
+import dev.penned.app.ui.components.SectionLabel
+import dev.penned.app.ui.home.HomeGroups
+import dev.penned.app.ui.icons.PennedIcons
+import dev.penned.app.ui.theme.PennedDimens
+import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.categoryColor
 import dev.penned.app.ui.theme.expenseColor
 import dev.penned.app.ui.theme.incomeColor
 import java.time.YearMonth
 
 /**
- * 统计页第一版（specs/M1.md 第二批）：月汇总卡 + 支出/收入分类占比环形图 + 分类排行。
- * 桑基图后置（M6 打磨阶段评估）。
+ * 统计页（specs/M1.md 第二批）：月汇总卡 + 支出/收入分类占比环形图 + 分类排行。
+ * 图表配色与首页头像共用一套分类颜料（D024），不再各画各的。
  */
 @Composable
 fun StatsScreen(
@@ -76,56 +85,61 @@ fun StatsContent(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = PennedSpacing.xxl),
     ) {
-        // 月份切换
+        // Tab 页页头：大标题 + 月份切换（图标按钮，替代 ‹ › 字形）
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            Modifier.fillMaxWidth().padding(
+                start = PennedSpacing.lg,
+                end = PennedSpacing.sm,
+                top = PennedSpacing.md,
+                bottom = PennedSpacing.sm,
+            ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("统计", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            Text("‹", style = MaterialTheme.typography.titleLarge, modifier = Modifier
-                .clip(MaterialTheme.shapes.small)
-                .clickable(onClick = onPrevMonth)
-                .padding(horizontal = 10.dp))
+            Text("统计", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            IconButton(onClick = onPrevMonth, modifier = Modifier.size(PennedDimens.iconButton)) {
+                Icon(PennedIcons.Back, contentDescription = "上个月", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             Text(
                 "${month.year}年${month.monthValue}月",
                 style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = 4.dp),
+                modifier = Modifier.padding(horizontal = PennedSpacing.xs),
             )
-            Text("›", style = MaterialTheme.typography.titleLarge, modifier = Modifier
-                .clip(MaterialTheme.shapes.small)
-                .clickable(onClick = onNextMonth)
-                .padding(horizontal = 10.dp))
+            IconButton(onClick = onNextMonth, modifier = Modifier.size(PennedDimens.iconButton)) {
+                Icon(
+                    PennedIcons.ChevronRight,
+                    contentDescription = "下个月",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
         // 月汇总卡
-        Card(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                SummaryCell("支出", Money.format(totals.expenseCents), expenseColor())
-                SummaryCell("收入", Money.format(totals.incomeCents), incomeColor())
-                SummaryCell("结余", Money.format(totals.incomeCents - totals.expenseCents), MaterialTheme.colorScheme.onSurface)
+        PennedCard(modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg)) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                SummaryCell("支出", Money.format(totals.expenseCents), expenseColor(), Modifier.weight(1f))
+                SummaryCell("收入", Money.format(totals.incomeCents), incomeColor(), Modifier.weight(1f))
+                SummaryCell(
+                    "结余",
+                    Money.format(totals.incomeCents - totals.expenseCents),
+                    MaterialTheme.colorScheme.onSurface,
+                    Modifier.weight(1f),
+                )
             }
         }
 
         if (expenseCategories.isEmpty() && incomeCategories.isEmpty()) {
-            Column(
-                Modifier.fillMaxWidth().padding(vertical = 64.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text("本月没有收支记录", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(4.dp))
-                Text("记几笔之后回来看统计", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            EmptyState(
+                title = "本月没有收支记录",
+                hint = "记几笔之后回来看统计",
+                icon = PennedIcons.Pie,
+                modifier = Modifier.padding(top = PennedSpacing.xxl),
+            )
             return@Column
         }
 
-        // 支出环形图 + 排行
         if (expenseCategories.isNotEmpty()) {
             DonutSection(
                 title = "支出构成",
@@ -142,15 +156,17 @@ fun StatsContent(
                 totalColor = incomeColor(),
             )
         }
-        Spacer(Modifier.height(24.dp))
     }
 }
 
 @Composable
-private fun SummaryCell(label: String, value: String, valueColor: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(4.dp))
+private fun SummaryCell(label: String, value: String, valueColor: Color, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.titleMedium, color = valueColor)
     }
 }
@@ -162,80 +178,108 @@ private fun DonutSection(
     totalCents: Long,
     totalColor: Color,
 ) {
-    Text(
-        title,
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-    )
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    SectionLabel(title)
+    PennedCard(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg),
     ) {
-        DonutChart(
-            categories = categories,
-            modifier = Modifier.size(150.dp),
-        )
-        Spacer(Modifier.width(20.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("合计", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(Money.format(totalCents), style = MaterialTheme.typography.titleLarge, color = totalColor)
-            categories.take(3).forEach { cat ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(10.dp).background(categoryColor(cat.name), CircleShape))
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "${cat.name} ${(cat.fraction * 100).toInt()}%",
-                        style = MaterialTheme.typography.labelMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(PennedDimens.donut), contentAlignment = Alignment.Center) {
+                DonutChart(categories = categories, modifier = Modifier.fillMaxSize())
+                // 合计放环心，右侧腾给图例
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("合计", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(Money.format(totalCents), style = MaterialTheme.typography.titleMedium, color = totalColor)
                 }
             }
-        }
-    }
-    // 排行列表
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-        categories.forEachIndexed { index, cat ->
-            Row(
-                Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            Spacer(Modifier.width(PennedSpacing.lg))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(PennedSpacing.sm),
             ) {
-                Text(
-                    "${index + 1}",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.width(20.dp),
-                    textAlign = TextAlign.Center,
-                )
-                CategoryAvatar(cat.name, size = 28.dp)
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
+                categories.take(4).forEach { cat ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(cat.name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Box(Modifier.size(10.dp).background(categoryColor(cat.name), CircleShape))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            cat.name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
                         Text(
                             "${(cat.fraction * 100).toInt()}%",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Spacer(Modifier.height(4.dp))
-                    // 占比条
-                    Box(Modifier.fillMaxWidth().height(4.dp).background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.small)) {
+                }
+            }
+        }
+    }
+
+    // 排行
+    PennedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.sm),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = PennedSpacing.xs),
+    ) {
+        categories.forEachIndexed { index, cat ->
+            if (index > 0) PennedDivider()
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "${index + 1}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(18.dp),
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.width(PennedSpacing.sm))
+                CategoryAvatar(cat.name, size = 28.dp)
+                Spacer(Modifier.width(PennedSpacing.md))
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            cat.name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            "${(cat.fraction * 100).toInt()}%",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.height(PennedSpacing.xs))
+                    // 占比条：用该分类自己的颜料，和环图/头像对得上
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(percent = 50))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                    ) {
                         Box(
                             Modifier
                                 .fillMaxWidth(cat.fraction.coerceIn(0.02f, 1f))
                                 .height(4.dp)
-                                .background(categoryColor(cat.name), MaterialTheme.shapes.small),
+                                .background(categoryColor(cat.name), RoundedCornerShape(percent = 50)),
                         )
                     }
                 }
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    Money.format(cat.cents),
+                Spacer(Modifier.width(PennedSpacing.md))
+                MoneyText(
+                    cents = cat.cents,
                     style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    signed = false,
                     modifier = Modifier.width(84.dp),
-                    textAlign = TextAlign.End,
                 )
             }
         }
@@ -248,12 +292,13 @@ private fun DonutChart(categories: List<HomeGroups.CategoryTotal>, modifier: Mod
     // 颜色先在 composable 上下文里解析：Canvas 的 DrawScope lambda 不是 composable，读不了主题
     val colors = categories.map { categoryColor(it.name) }
     Canvas(modifier = modifier) {
-        val stroke = 26.dp.toPx()
+        val stroke = PennedDimens.donutStroke.toPx()
         val inset = stroke / 2 + 1.dp.toPx()
         val arcSize = Size(size.width - inset * 2, size.height - inset * 2)
         val topLeft = Offset(inset, inset)
         var start = -90f
-        val gap = 2f
+        // 端头用 Butt：圆头会在 2° 缝隙上互相盖住（圆头半径 ≈ 11°）
+        val gap = 3f
         categories.forEachIndexed { index, cat ->
             val sweep = (cat.fraction.coerceIn(0f, 1f) * 360f).coerceAtLeast(0.5f)
             drawArc(

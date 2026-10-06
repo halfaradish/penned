@@ -13,14 +13,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -48,6 +49,12 @@ import dev.penned.app.domain.AccountType
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.MoneyInput
 import dev.penned.app.ui.components.CategoryAvatar
+import dev.penned.app.ui.components.EmptyState
+import dev.penned.app.ui.components.MoneyText
+import dev.penned.app.ui.components.PennedCard
+import dev.penned.app.ui.components.PennedChip
+import dev.penned.app.ui.icons.PennedIcons
+import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.categoryColor
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
@@ -160,72 +167,76 @@ fun AssetsContent(
     var showAdd by remember { mutableStateOf(false) }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAdd = true }) { Text("+", style = MaterialTheme.typography.titleLarge) }
+            FloatingActionButton(
+                onClick = { showAdd = true },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ) {
+                Icon(PennedIcons.Plus, contentDescription = "添加账户")
+            }
         },
     ) { padding ->
         Column(modifier = modifier.fillMaxSize().padding(padding)) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column {
-                        Text("净资产(元)", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(
-                            Money.format(state.netCents),
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = if (state.netCents < 0) expenseColor() else MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Row {
-                            Text("总资产 ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(Money.format(state.assetCents), style = MaterialTheme.typography.labelLarge)
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        Row {
-                            Text("负资产 ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(Money.format(state.liabilityCents), style = MaterialTheme.typography.labelLarge)
-                        }
-                    }
+            Text(
+                "资产",
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(
+                    start = PennedSpacing.lg,
+                    end = PennedSpacing.lg,
+                    top = PennedSpacing.md,
+                    bottom = PennedSpacing.sm,
+                ),
+            )
+
+            // 净资产 hero：一个主数字 + 两个分列
+            PennedCard(modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg)) {
+                Text(
+                    "净资产(元)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(PennedSpacing.xs))
+                Text(
+                    Money.format(state.netCents),
+                    style = MaterialTheme.typography.displaySmall,
+                    color = if (state.netCents < 0) expenseColor() else MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.height(PennedSpacing.md))
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    AmountColumn("总资产", Money.format(state.assetCents), Modifier.weight(1f))
+                    AmountColumn("负资产", Money.format(state.liabilityCents), Modifier.weight(1f))
                 }
             }
 
-            Row(
+            // 报销 / 债务 / 理财：三列一张卡（原来三张卡各塞两行小字，读不动）
+            PennedCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
             ) {
-                SummaryCell("报销", "可报", Money.format(state.reimbursePendingCents), "已报", Money.format(state.reimburseDoneCents), Modifier.weight(1f))
-                SummaryCell("债务", "应付", "0.00", "应收", "0.00", Modifier.weight(1f))
-                SummaryCell("理财", "总额", "0.00", "盈亏", "0.00", Modifier.weight(1f))
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    SummaryCell(
+                        "报销",
+                        "可报",
+                        Money.format(state.reimbursePendingCents),
+                        "已报",
+                        Money.format(state.reimburseDoneCents),
+                        Modifier.weight(1f),
+                    )
+                    SummaryCell("债务", "应付", "0.00", "应收", "0.00", Modifier.weight(1f))
+                    SummaryCell("理财", "总额", "0.00", "盈亏", "0.00", Modifier.weight(1f))
+                }
             }
 
             if (state.accounts.isEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text("你还没有任何账户", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "点击右下角 + 添加你的第一个账户",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                EmptyState(
+                    title = "你还没有任何账户",
+                    hint = "点击右下角 + 添加你的第一个账户",
+                    icon = PennedIcons.Wallet,
+                    modifier = Modifier.padding(top = PennedSpacing.xxl),
+                )
             } else {
                 LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
                     val groups = state.accounts.groupBy { it.groupName }
@@ -235,27 +246,41 @@ fun AssetsContent(
                                 text = group ?: "默认分组",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                                modifier = Modifier.padding(
+                                    start = PennedSpacing.lg,
+                                    end = PennedSpacing.lg,
+                                    top = PennedSpacing.md,
+                                    bottom = PennedSpacing.sm,
+                                ),
                             )
                         }
                         items(list, key = { it.id }) { account ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                                    .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.sm),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                CategoryAvatar(account.name)
-                                Spacer(Modifier.size(12.dp))
+                                // 账户颜色按账户类型固定（信用卡一律朱砂、现金一律赭石…），比按名字哈希好认
+                                CategoryAvatar(account.name, slot = accountPigmentSlot(account.type))
+                                Spacer(Modifier.width(PennedSpacing.md))
                                 Column(Modifier.weight(1f)) {
                                     Text(account.name, style = MaterialTheme.typography.bodyLarge)
-                                    Text(accountTypeLabel(account.type), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(
+                                        accountTypeLabel(account.type),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
                                 }
-                                Text(
-                                    Money.format(account.balanceCents),
+                                MoneyText(
+                                    cents = account.balanceCents,
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = if (account.balanceCents < 0) expenseColor() else MaterialTheme.colorScheme.onSurface,
-                                    textAlign = TextAlign.End,
+                                    color = if (account.balanceCents < 0) {
+                                        expenseColor()
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    },
+                                    signed = false,
                                 )
                             }
                         }
@@ -276,6 +301,24 @@ fun AssetsContent(
     }
 }
 
+/** 账户类型的固定颜料槽：信用卡/负债红系、现金赭石、储蓄卡石青、理财石绿。 */
+private fun accountPigmentSlot(type: AccountType): Int = when (type) {
+    AccountType.DEBT -> 6
+    AccountType.CREDIT -> 0
+    AccountType.CASH -> 1
+    AccountType.INVEST -> 3
+    AccountType.DEBIT -> 4
+}
+
+@Composable
+private fun AmountColumn(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(2.dp))
+        Text(value, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
 @Composable
 private fun SummaryCell(
     title: String,
@@ -285,13 +328,12 @@ private fun SummaryCell(
     value2: String,
     modifier: Modifier = Modifier,
 ) {
-    Card(modifier = modifier, shape = RoundedCornerShape(12.dp)) {
-        Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(title, style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(6.dp))
-            Text("$label1: $value1", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("$label2: $value2", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+    Column(modifier) {
+        Text(title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(PennedSpacing.xs))
+        Text("$label1 ${value1}", style = MaterialTheme.typography.bodySmall)
+        Spacer(Modifier.height(2.dp))
+        Text("$label2 ${value2}", style = MaterialTheme.typography.bodySmall)
     }
 }
 
@@ -323,16 +365,16 @@ private fun AddAccountDialog(
                         modifier = Modifier.padding(vertical = 4.dp),
                     )
                     presets.forEach { preset ->
-                        FilterChip(
+                        PennedChip(
+                            label = preset.label,
                             selected = selectedLabel == preset.label,
                             onClick = {
+                                // 只记类型与预设：不再覆盖用户已输入的名称（预设名留作默认显示值）
                                 selectedLabel = preset.label
                                 selectedType = preset.type
-                                name = preset.label
                             },
-                            label = { Text(preset.label) },
-                            modifier = Modifier.padding(vertical = 2.dp),
                         )
+                        Spacer(Modifier.height(2.dp))
                     }
                 }
                 OutlinedTextField(

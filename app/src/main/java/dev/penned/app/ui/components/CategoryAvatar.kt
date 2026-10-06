@@ -16,11 +16,14 @@ import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedPigment
 import dev.penned.app.ui.theme.isDarkTheme
 import dev.penned.app.ui.theme.pigmentInk
+import dev.penned.app.ui.theme.pigmentInkAt
 import dev.penned.app.ui.theme.pigmentTint
+import dev.penned.app.ui.theme.pigmentTintAt
 
 /**
  * 分类头像：颜料 tint 底 + 颜料 ink 首字。
  * 取代首页/统计/资产/分类管理四处各画一遍的"哈希实心圆 + 白字"。
+ * [slot] 给账户这类"按类型固定上色"的场景用；不传则按名字哈希取色。
  */
 @Composable
 fun CategoryAvatar(
@@ -29,9 +32,10 @@ fun CategoryAvatar(
     size: Dp = PennedDimens.avatar,
     selected: Boolean = false,
     glyph: String? = null,
+    slot: Int? = null,
 ) {
-    val ink = pigmentInk(name)
-    val bg = if (selected) ink else pigmentTint(name)
+    val ink = if (slot != null) pigmentInkAt(slot) else pigmentInk(name)
+    val bg = if (selected) ink else if (slot != null) pigmentTintAt(slot) else pigmentTint(name)
     val fg = when {
         !selected -> ink
         isDarkTheme() -> Color(0xFF0E1211)

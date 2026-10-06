@@ -1,5 +1,6 @@
 package dev.penned.app.ui.detail
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -7,19 +8,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -44,7 +39,18 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
+import androidx.compose.ui.text.style.TextAlign
+import dev.penned.app.ui.components.CategoryAvatar
+import dev.penned.app.ui.components.MoneyText
+import dev.penned.app.ui.components.PennedButton
+import dev.penned.app.ui.components.PennedButtonVariant
+import dev.penned.app.ui.components.PennedCard
+import dev.penned.app.ui.components.PennedDivider
+import dev.penned.app.ui.components.PennedSwitchRow
 import dev.penned.app.ui.components.PennedTopBar
+import dev.penned.app.ui.components.SectionCard
+import dev.penned.app.ui.icons.PennedIcons
+import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.expenseColor
 
 data class DetailUi(
@@ -135,71 +141,108 @@ fun DetailContent(
     val d = detail
     Scaffold(
         topBar = { PennedTopBar(title = "账单详情", onBack = onBack) },
+        containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        Surface(modifier = Modifier.padding(padding).fillMaxSize()) {
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 8.dp)) {
-                    Text(
-                        d.categoryName ?: if (d.tx.type == TxType.TRANSFER) "转账" else "未分类",
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    // 退款是流水属性而非独立流水（一木导出反分析）：全额退款行金额为 0，靠退款列才能看懂
+        Column(
+            Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(PennedSpacing.lg),
+            verticalArrangement = Arrangement.spacedBy(PennedSpacing.md),
+        ) {
+            // 金额 hero：分类头像 + 分类路径 + 日期 + 大金额
+            PennedCard(modifier = Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CategoryAvatar(categoryLabel(d), size = 44.dp)
+                    Spacer(Modifier.width(PennedSpacing.md))
+                    Column(Modifier.weight(1f)) {
+                        Text(categoryLabel(d), style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            formatMinute(d.tx.dateEpochMinute),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     if (d.tx.refundCents > 0) {
-                        Spacer(Modifier.size(8.dp))
                         RefundBadge(fullRefund = d.tx.amountCents == 0L)
                     }
-                    Spacer(Modifier.weight(1f))
-                    val prefix = when (d.tx.type) {
-                        TxType.EXPENSE -> "-"
-                        TxType.INCOME -> "+"
-                        TxType.TRANSFER -> ""
-                    }
-                    Text(
-                        prefix + Money.format(d.tx.amountCents),
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = when (d.tx.type) {
-                            TxType.EXPENSE -> expenseColor()
-                            TxType.INCOME -> MaterialTheme.colorScheme.primary
-                            TxType.TRANSFER -> MaterialTheme.colorScheme.onSurface
-                        },
-                    )
                 }
+                Spacer(Modifier.height(PennedSpacing.md))
+                MoneyText(
+                    cents = d.tx.amountCents,
+                    type = d.tx.type,
+                    style = MaterialTheme.typography.displaySmall,
+                    textAlign = TextAlign.Start,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            SectionCard(title = "明细") {
                 if (d.tx.type == TxType.TRANSFER) {
                     DetailRow("转出账户", d.accountName ?: "无")
+                    PennedDivider()
                     DetailRow("转入账户", d.targetAccountName ?: "无")
-                    if (d.tx.feeCents > 0) DetailRow("手续费", Money.format(d.tx.feeCents))
-                }
-                if (d.tx.refundCents > 0) DetailRow("退款", Money.format(d.tx.refundCents))
-                if (d.tx.discountCents > 0) DetailRow("优惠", Money.format(d.tx.discountCents))
-                DetailRow("账单日期", formatMinute(d.tx.dateEpochMinute))
-                DetailRow("备注", d.tx.note ?: "无")
-                DetailRow("账户", d.accountName ?: "无账户")
-                if (d.tx.reimburseState != ReimburseState.NONE) DetailRow("报销", reimburseLabel(d.tx.reimburseState))
-                DetailRow("所属账本", d.bookName)
-                DetailRow("记录方式", sourceLabel(d.tx))
-                DetailRow("记录时间", formatMinute(d.tx.createdAt / 60_000))
-                if (!d.tx.address.isNullOrBlank()) DetailRow("地点", d.tx.address!!)
-                val rate = d.tx.rate
-                if (!d.tx.currencyCode.isNullOrBlank()) {
-                    DetailRow(
-                        "原币种",
-                        d.tx.currencyCode!! + (rate?.let { " · 汇率 $it" } ?: ""),
-                    )
-                }
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                ToggleRow("不计入收支", d.tx.excludeFromStats) { onToggleStats(it) }
-                ToggleRow("不计入预算", d.tx.excludeFromBudget) { onToggleBudget(it) }
-                Spacer(Modifier.height(16.dp))
-                Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = onEdit, modifier = Modifier.weight(1f)) { Text("编辑") }
-                    OutlinedButton(onClick = onDelete, modifier = Modifier.weight(1f)) {
-                        Text("删除", color = expenseColor())
+                    PennedDivider()
+                    if (d.tx.feeCents > 0) {
+                        DetailRow("手续费", Money.format(d.tx.feeCents))
+                        PennedDivider()
                     }
                 }
+                if (d.tx.refundCents > 0) {
+                    DetailRow("退款", Money.format(d.tx.refundCents))
+                    PennedDivider()
+                }
+                if (d.tx.discountCents > 0) {
+                    DetailRow("优惠", Money.format(d.tx.discountCents))
+                    PennedDivider()
+                }
+                DetailRow("账单日期", formatMinute(d.tx.dateEpochMinute))
+                PennedDivider()
+                DetailRow("备注", d.tx.note ?: "无")
+                if (d.tx.type != TxType.TRANSFER) {
+                    PennedDivider()
+                    DetailRow("账户", d.accountName ?: "无账户")
+                }
+                if (d.tx.reimburseState != ReimburseState.NONE) {
+                    PennedDivider()
+                    DetailRow("报销", reimburseLabel(d.tx.reimburseState))
+                }
             }
+
+            SectionCard(title = "记录信息") {
+                DetailRow("所属账本", d.bookName)
+                PennedDivider()
+                DetailRow("记录方式", sourceLabel(d.tx))
+                PennedDivider()
+                DetailRow("记录时间", formatMinute(d.tx.createdAt / 60_000))
+                if (!d.tx.address.isNullOrBlank()) {
+                    PennedDivider()
+                    DetailRow("地点", d.tx.address!!)
+                }
+                val rate = d.tx.rate
+                if (!d.tx.currencyCode.isNullOrBlank()) {
+                    PennedDivider()
+                    DetailRow("原币种", d.tx.currencyCode!! + (rate?.let { " · 汇率 $it" } ?: ""))
+                }
+            }
+
+            SectionCard(title = "统计口径") {
+                PennedSwitchRow("不计入收支", d.tx.excludeFromStats, onToggleStats)
+                PennedDivider()
+                PennedSwitchRow("不计入预算", d.tx.excludeFromBudget, onToggleBudget)
+            }
+
+            Spacer(Modifier.height(PennedSpacing.xs))
+            PennedButton("编辑", onEdit, leadingIcon = PennedIcons.Edit)
+            PennedButton("删除", onDelete, variant = PennedButtonVariant.Danger, leadingIcon = PennedIcons.Trash)
         }
     }
 }
+
+private fun categoryLabel(d: DetailUi): String =
+    listOfNotNull(d.categoryParentName, d.categoryName).joinToString(" · ")
+        .ifEmpty { if (d.tx.type == TxType.TRANSFER) "转账" else "未分类" }
 
 /** 退款标记（M1 只读展示；退款交互留 M3）。 */
 @Composable
@@ -242,24 +285,12 @@ private fun DetailRow(label: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 10.dp),
+            .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.weight(1f))
-        Text(value, style = MaterialTheme.typography.bodyMedium)
+        Text(value, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.End)
     }
 }
 
-@Composable
-private fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = onChange)
-    }
-}
+

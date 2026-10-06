@@ -57,6 +57,18 @@ fun pigmentInk(name: String): Color {
     return if (isDarkTheme()) PennedPigment.dark[slot] else PennedPigment.light[slot]
 }
 
+/** 按槽位取颜料 ink（账户按类型固定上色，不走哈希）。slot 为负＝中性。 */
+@Composable
+fun pigmentInkAt(slot: Int): Color {
+    if (slot < 0) return if (isDarkTheme()) PennedPigment.neutralDark else PennedPigment.neutralLight
+    val palette = if (isDarkTheme()) PennedPigment.dark else PennedPigment.light
+    return palette[slot % palette.size]
+}
+
+@Composable
+fun pigmentTintAt(slot: Int): Color =
+    pigmentInkAt(slot).copy(alpha = if (isDarkTheme()) 0.30f else 0.16f)
+
 /** 分类颜料淡底：ink 16%（浅）/ 30%（深）叠在卡片上，配 [pigmentInk] 字。
  *  深色下透明度要给足，否则八色都糊成灰。 */
 @Composable
