@@ -42,7 +42,7 @@ class AssetsScreenScreenshotTest {
     @Test
     fun captureAssetsScreen() {
         composeRule.setContent {
-            PennedTheme { AssetsContent(state = state(), onAddAccount = { _, _, _ -> }) }
+            PennedTheme { AssetsContent(state = state(), onAddAccount = {}) }
         }
         // 规格断言：净资产/总资产/负资产汇总、分组标题、账户余额（负数为信用卡）
         composeRule.onNodeWithText("净资产(元)").assertIsDisplayed()
@@ -59,7 +59,7 @@ class AssetsScreenScreenshotTest {
     @Test
     fun captureAssetsEmptyState() {
         composeRule.setContent {
-            PennedTheme { AssetsContent(state = AssetsUiState(), onAddAccount = { _, _, _ -> }) }
+            PennedTheme { AssetsContent(state = AssetsUiState(), onAddAccount = {}) }
         }
         composeRule.onNodeWithText("你还没有任何账户").assertIsDisplayed()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_assets_empty.png")

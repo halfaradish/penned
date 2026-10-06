@@ -28,6 +28,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import dev.penned.app.ui.add.AddTransactionScreen
+import dev.penned.app.ui.assets.AccountEditScreen
 import dev.penned.app.ui.assets.AssetsScreen
 import dev.penned.app.ui.books.BooksScreen
 import dev.penned.app.ui.budgets.BudgetScreen
@@ -234,7 +235,19 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                 )
             }
             composable("calendar") { StubScreen("日历", "日历视图还没做，先在首页按日回看流水") }
-            composable("assets") { AssetsScreen() }
+            composable("assets") {
+                AssetsScreen(onAddAccount = { navController.navigate("account") })
+            }
+            composable(
+                route = "account?editId={editId}",
+                arguments = listOf(navArgument("editId") { type = NavType.StringType; defaultValue = "" }),
+            ) { entry ->
+                AccountEditScreen(
+                    app = app,
+                    editId = entry.arguments?.getString("editId")?.ifEmpty { null },
+                    onBack = { navController.popBackStack() },
+                )
+            }
             composable("stats") {
                 val vm: StatsViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
                     initializer = { StatsViewModel(app) },

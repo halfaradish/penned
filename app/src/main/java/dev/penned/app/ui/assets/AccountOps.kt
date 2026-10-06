@@ -1,6 +1,60 @@
 package dev.penned.app.ui.assets
 
 import dev.penned.app.data.db.PennedDatabase
+import dev.penned.app.domain.AccountType
+
+/**
+ * 账户大类：资产页的分组标题、添加/编辑账户页的分段 tab 共用一套口径（M1 S4 的四类）。
+ *
+ * 大类不能直接用 [AccountType] 表达——现金与储蓄卡同属"资金账户"，
+ * 而列表行又按 [AccountType] 上色，所以两套粒度分开：大类管分组与 tab，类型管配色与副标题。
+ */
+enum class AccountGroup(val tab: String, val title: String, val defaultType: AccountType) {
+    FUNDS("资金", "资金账户", AccountType.DEBIT),
+    CREDIT("信贷", "信贷账户", AccountType.CREDIT),
+    INVEST("理财", "投资理财", AccountType.INVEST),
+    DEBT("负债", "负债", AccountType.DEBT);
+
+    companion object {
+        fun of(type: AccountType): AccountGroup = when (type) {
+            AccountType.CASH, AccountType.DEBIT -> FUNDS
+            AccountType.CREDIT -> CREDIT
+            AccountType.INVEST -> INVEST
+            AccountType.DEBT -> DEBT
+        }
+    }
+}
+
+/** 添加账户的类型预设（对标一木：每组图标格 + 自定义）。 */
+data class AccountPreset(val label: String, val type: AccountType)
+
+val ACCOUNT_PRESETS: Map<AccountGroup, List<AccountPreset>> = linkedMapOf(
+    AccountGroup.FUNDS to listOf(
+        AccountPreset("现金", AccountType.CASH),
+        AccountPreset("储蓄卡", AccountType.DEBIT),
+        AccountPreset("支付宝", AccountType.DEBIT),
+        AccountPreset("微信钱包", AccountType.DEBIT),
+    ),
+    AccountGroup.CREDIT to listOf(
+        AccountPreset("信用卡", AccountType.CREDIT),
+        AccountPreset("花呗", AccountType.CREDIT),
+    ),
+    AccountGroup.INVEST to listOf(AccountPreset("理财账户", AccountType.INVEST)),
+    AccountGroup.DEBT to listOf(AccountPreset("欠款", AccountType.DEBT)),
+)
+
+/** 账户类型的固定颜料槽：信用卡/负债红系、现金赭石、储蓄卡石青、理财石绿。 */
+internal fun accountPigmentSlot(type: AccountType): Int = when (type) {
+    AccountType.DEBT -> 6
+    AccountType.CREDIT -> 0
+    AccountType.CASH -> 1
+    AccountType.INVEST -> 3
+    AccountType.DEBIT -> 4
+}
+
+/** 资产页分组标题：groupName 有值优先（留给以后的自定义分组），否则按账户大类推导。 */
+internal fun accountGroupTitle(groupName: String?, type: AccountType): String =
+    groupName ?: AccountGroup.of(type).title
 
 /**
  * 账户删除的唯一入口（资产页左滑、账户编辑页删除共用）。

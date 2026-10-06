@@ -20,6 +20,9 @@ import dev.penned.app.ui.categories.CategoriesViewModel
 import dev.penned.app.ui.categories.CategoriesScreen
 import dev.penned.app.ui.data.DataViewModel
 import dev.penned.app.ui.data.DataManagementScreen
+import dev.penned.app.ui.assets.AccountEditContent
+import dev.penned.app.ui.assets.AccountEditUiState
+import dev.penned.app.ui.assets.AccountGroup
 import dev.penned.app.ui.assets.AssetsContent
 import dev.penned.app.ui.assets.AssetsUiState
 import dev.penned.app.ui.books.BooksContent
@@ -219,11 +222,33 @@ class DarkThemeScreensTest {
                     ),
                     netCents = 69_550L, assetCents = 128_450L, liabilityCents = 58_900L,
                 ),
-                onAddAccount = { _, _, _ -> },
+                onAddAccount = {},
             )
         }
         composeRule.onNodeWithText("净资产(元)").assertIsDisplayed()
         capture("assets")
+    }
+
+    @Test
+    fun darkAccountEdit() {
+        dark {
+            AccountEditContent(
+                state = AccountEditUiState(
+                    accountId = "a1",
+                    group = AccountGroup.CREDIT,
+                    type = dev.penned.app.domain.AccountType.CREDIT,
+                    presetLabel = "信用卡",
+                    name = "招行信用卡",
+                    initialText = "0.00",
+                ),
+                onBack = {},
+                onSelectGroup = {}, onSelectPreset = {}, onSelectCustom = {},
+                onNameChange = {}, onInitialChange = {}, onSave = {},
+                onDelete = {},
+            )
+        }
+        composeRule.onNodeWithText("编辑账户").assertIsDisplayed()
+        capture("account_edit")
     }
 
     @Test
