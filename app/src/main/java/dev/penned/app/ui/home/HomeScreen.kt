@@ -175,11 +175,6 @@ fun HomeContent(
                     bookMenu()
                 }
                 Spacer(Modifier.weight(1f))
-                Text(
-                    text = "搜索",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
             }
         }
 

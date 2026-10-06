@@ -47,11 +47,12 @@ fun MineScreen(
             Spacer(Modifier.height(16.dp))
             SectionLabel("数据")
             MenuRow("数据管理", "导入一木 xls / CSV 备份 · 导出 · 导入批次", onOpenDataManagement)
-            MenuRow("分类管理", "新增 / 重命名 / 隐藏支出与收入分类", onOpenCategories)
+            MenuRow("分类管理", "新增 / 重命名 / 删除支出与收入分类", onOpenCategories)
             HorizontalDivider()
             SectionLabel("其他")
             MenuRow("密码锁", "启动与回到应用时需输入 4 位密码", onOpenPinLock)
-            MenuRow("关于", "版本 0.1.0（M1）", onClick = {})
+            // 纯信息行：不做成可点条目（关于页/更新检查随 M2）
+            InfoRow("关于", "版本 0.1.0（M1）")
             HorizontalDivider()
         }
     }
@@ -85,5 +86,25 @@ private fun MenuRow(title: String, subtitle: String, onClick: () -> Unit) {
             )
         }
         Text("›", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** 不可点的信息行（无涟漪、无 ›，避免做成"看着能点其实没反应"的死 UI）。 */
+@Composable
+private fun InfoRow(title: String, subtitle: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }

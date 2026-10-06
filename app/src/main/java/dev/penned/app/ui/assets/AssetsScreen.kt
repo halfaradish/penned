@@ -1,7 +1,6 @@
 package dev.penned.app.ui.assets
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -233,7 +232,6 @@ fun AssetsContent(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable {}
                                     .padding(horizontal = 20.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
