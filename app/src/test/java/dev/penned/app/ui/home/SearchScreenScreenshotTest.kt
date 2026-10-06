@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -105,8 +106,8 @@ class SearchScreenScreenshotTest {
         composeRule.onNodeWithText("找到 1 条").assertIsDisplayed()
         composeRule.onNodeWithText("+3500.00").assertIsDisplayed()
 
-        // 清除 → 回到初始提示
-        composeRule.onNodeWithText("清除").performClick()
+        // 清除（图标按钮，按 contentDescription 定位）→ 回到初始提示
+        composeRule.onNodeWithContentDescription("清除").performClick()
         composeRule.onNodeWithText("输入备注、分类名或金额开始搜索").assertIsDisplayed()
     }
 }

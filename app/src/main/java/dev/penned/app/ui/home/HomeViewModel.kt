@@ -62,6 +62,10 @@ class HomeViewModel(private val app: PennedApplication) : ViewModel() {
     val selectionMode = MutableStateFlow(false)
     val selectedIds = MutableStateFlow<Set<String>>(emptySet())
 
+    /** 待撤销的软删 id（左滑删除/批量删除后进 Snackbar「撤销」，撤销条消失即失效）。 */
+    private val _deletedIds = MutableStateFlow<List<String>>(emptyList())
+    val deletedIds: StateFlow<List<String>> = _deletedIds
+
     fun switchBook(id: String) {
         viewModelScope.launch { app.settings.setCurrentBook(id) }
     }
@@ -105,9 +109,34 @@ class HomeViewModel(private val app: PennedApplication) : ViewModel() {
     }
 
     fun deleteSelected() {
+        val ids = selectedIds.value.toList()
         viewModelScope.launch {
-            db.transactionDao().softDeleteAll(selectedIds.value.toList(), System.currentTimeMillis())
+            db.transactionDao().softDeleteAll(ids, System.currentTimeMillis())
+            _deletedIds.value = _deletedIds.value + ids
             exitSelection()
         }
+    }
+
+    /** 行左滑删除（单条）。 */
+    fun deleteRow(id: String) {
+        viewModelScope.launch {
+            db.transactionDao().softDeleteAll(listOf(id), System.currentTimeMillis())
+            _deletedIds.value = _deletedIds.value + id
+        }
+    }
+
+    /** 撤销删除：把累计待撤销的 id 一次恢复。 */
+    fun undoDelete() {
+        val ids = _deletedIds.value
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            db.transactionDao().restoreAll(ids, System.currentTimeMillis())
+            _deletedIds.value = emptyList()
+        }
+    }
+
+    /** 撤销条消失后调用：过期的撤销不能再生效。 */
+    fun clearUndo() {
+        _deletedIds.value = emptyList()
     }
 }

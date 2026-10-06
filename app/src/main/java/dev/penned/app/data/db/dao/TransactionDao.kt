@@ -131,6 +131,10 @@ interface TransactionDao {
     @Query("UPDATE transactions SET deleted = 1, updatedAt = :now WHERE id IN (:ids)")
     suspend fun softDeleteAll(ids: List<String>, now: Long)
 
+    /** 反软删：左滑删除后 Snackbar「撤销」用（同一批 id 原样恢复）。 */
+    @Query("UPDATE transactions SET deleted = 0, updatedAt = :now WHERE id IN (:ids)")
+    suspend fun restoreAll(ids: List<String>, now: Long)
+
     /** 按导入批次整体软删（导入批次管理页）。 */
     @Query("UPDATE transactions SET deleted = 1, updatedAt = :now WHERE importBatchId = :batchId")
     suspend fun softDeleteByBatch(batchId: String, now: Long)

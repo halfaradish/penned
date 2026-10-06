@@ -57,11 +57,11 @@ fun pigmentInk(name: String): Color {
     return if (isDarkTheme()) PennedPigment.dark[slot] else PennedPigment.light[slot]
 }
 
-/** 分类颜料淡底：ink 14%（浅）/ 30%（深）叠在卡片上，配 [pigmentInk] 字。
+/** 分类颜料淡底：ink 16%（浅）/ 30%（深）叠在卡片上，配 [pigmentInk] 字。
  *  深色下透明度要给足，否则八色都糊成灰。 */
 @Composable
 fun pigmentTint(name: String): Color =
-    pigmentInk(name).copy(alpha = if (isDarkTheme()) 0.30f else 0.14f)
+    pigmentInk(name).copy(alpha = if (isDarkTheme()) 0.30f else 0.16f)
 
 /**
  * 兼容入口：给"实心圆 + 白字"的旧头像用（白字在八色上均 ≥ 5:1）。

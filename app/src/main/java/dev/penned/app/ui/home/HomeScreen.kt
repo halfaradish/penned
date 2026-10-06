@@ -1,9 +1,11 @@
 package dev.penned.app.ui.home
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,24 +17,23 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -40,12 +41,13 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -53,11 +55,22 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.penned.app.data.db.dao.TxWithCategory
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.TxType
+import dev.penned.app.ui.components.DayHeaderRow
+import dev.penned.app.ui.components.EmptyState
+import dev.penned.app.ui.components.PennedButton
+import dev.penned.app.ui.components.PennedCard
+import dev.penned.app.ui.components.PennedDialog
+import dev.penned.app.ui.components.SwipeToDeleteRow
+import dev.penned.app.ui.icons.PennedIcons
+import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.PennedTheme
-import java.time.LocalDate
-import java.time.ZoneId
 import dev.penned.app.ui.theme.expenseColor
 import dev.penned.app.ui.theme.incomeColor
+import dev.penned.app.ui.theme.primaryInkColor
+import java.time.LocalDate
+import java.time.ZoneId
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 /** 列表项 key：FAB 显隐判断靠它（"添加一条新记账"滚出视野后 FAB 接管）。 */
 private const val ADD_BUTTON_KEY = "add-button"
@@ -85,6 +98,24 @@ fun HomeScreen(
 
     var showBookMenu by remember { mutableStateOf(false) }
     var showAddBook by remember { mutableStateOf(false) }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    var undoJob by remember { mutableStateOf<Job?>(null) }
+
+    // 删除后给一次「撤销」机会（D024 交互范式二）；连续删除时后一条顶掉前一条
+    fun showUndo(message: String) {
+        undoJob?.cancel()
+        undoJob = scope.launch {
+            val result = snackbarHostState.showSnackbar(
+                message = message,
+                actionLabel = "撤销",
+                // 带动作的 Snackbar 按 M3 给足 10s：撤销窗口太短等于没有
+                duration = SnackbarDuration.Long,
+            )
+            if (result == SnackbarResult.ActionPerformed) viewModel.undoDelete() else viewModel.clearUndo()
+        }
+    }
 
     HomeContent(
         bookName = currentBook?.name ?: "账本",
@@ -130,8 +161,17 @@ fun HomeScreen(
         onToggleSelect = viewModel::toggleSelect,
         onLongPressRow = viewModel::enterSelection,
         onOpenRow = onOpenDetail,
-        onDeleteSelected = viewModel::deleteSelected,
+        onDeleteRow = { id ->
+            viewModel.deleteRow(id)
+            showUndo("已删除 1 条")
+        },
+        onDeleteSelected = {
+            val count = selectedIds.size
+            viewModel.deleteSelected()
+            showUndo("已删除 $count 条")
+        },
         onExitSelection = viewModel::exitSelection,
+        snackbarHostState = snackbarHostState,
         modifier = modifier,
     )
 
@@ -146,6 +186,7 @@ fun HomeScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeContent(
     bookName: String,
@@ -161,150 +202,199 @@ fun HomeContent(
     onToggleSelect: (String) -> Unit = {},
     onLongPressRow: (String) -> Unit = {},
     onOpenRow: (String) -> Unit = {},
+    onDeleteRow: (String) -> Unit = {},
     onDeleteSelected: () -> Unit = {},
     onExitSelection: () -> Unit = {},
+    snackbarHostState: SnackbarHostState? = null,
     modifier: Modifier = Modifier,
     zone: ZoneId = ZoneId.systemDefault(),
 ) {
-    Column(modifier = modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (selectionMode) {
-                TextButton(onClick = onExitSelection) { Text("取消") }
-                Text(
-                    "已选 ${selectedIds.size} 条",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center,
-                )
-                TextButton(onClick = onDeleteSelected, enabled = selectedIds.isNotEmpty()) {
-                    Text("删除", color = expenseColor())
+    Box(modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            HomeHeader(
+                bookName = bookName,
+                selectionMode = selectionMode,
+                selectedCount = selectedIds.size,
+                onBookClick = onBookClick,
+                bookMenu = bookMenu,
+                onSearch = onSearch,
+                onExitSelection = onExitSelection,
+                onDeleteSelected = onDeleteSelected,
+                canDelete = selectedIds.isNotEmpty(),
+            )
+
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                val listState = rememberLazyListState()
+                // 月汇总/预算/添加按钮都是列表项：随内容滚走，滚走后由右下角 FAB 接管"记一笔"
+                val addButtonVisible by remember {
+                    derivedStateOf { listState.layoutInfo.visibleItemsInfo.any { it.key == ADD_BUTTON_KEY } }
                 }
-            } else {
-                Box {
-                    Text(
-                        text = bookName,
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.clickable(onClick = onBookClick),
-                    )
-                    bookMenu()
+                val showFab = !selectionMode &&
+                    listState.layoutInfo.totalItemsCount > 0 && // 首帧尚未布局时不闪现
+                    !addButtonVisible
+
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize().testTag(HOME_LIST_TAG),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                        top = PennedSpacing.sm,
+                        bottom = PennedSpacing.xxl,
+                    ),
+                ) {
+                    if (!selectionMode) {
+                        item(key = SUMMARY_CARD_KEY) {
+                            val today = LocalDate.now(zone)
+                            HomeSummaryCard(
+                                totals = HomeGroups.monthTotals(rows, today.year, today.monthValue, zone),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.xs),
+                            )
+                        }
+                        item(key = BUDGET_CARD_KEY) {
+                            HomeBudgetCard(
+                                budgetSummary = budgetSummary,
+                                onOpenBudgets = onOpenBudgets,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.xs),
+                            )
+                        }
+                        item(key = ADD_BUTTON_KEY) {
+                            PennedButton(
+                                text = "添加一条新记账",
+                                onClick = onAdd,
+                                leadingIcon = PennedIcons.Plus,
+                                modifier = Modifier.padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
+                            )
+                        }
+                    }
+
+                    if (rows.isEmpty()) {
+                        item(key = "empty") {
+                            EmptyState(
+                                title = "还没有记账",
+                                hint = "点上方按钮记下第一笔",
+                                icon = PennedIcons.Edit,
+                            )
+                        }
+                    } else {
+                        HomeGroups.groupByDay(rows, zone).forEach { group ->
+                            stickyHeader(key = "day-${group.epochDay}") {
+                                DayHeaderRow(
+                                    label = HomeGroups.dayLabel(group.epochDay, zone),
+                                    incomeCents = group.incomeCents,
+                                    expenseCents = group.expenseCents,
+                                    background = true,
+                                )
+                            }
+                            items(group.items, key = { it.id }) { row ->
+                                if (selectionMode) {
+                                    TransactionRow(
+                                        row = row,
+                                        selectionMode = true,
+                                        selected = row.id in selectedIds,
+                                        onClick = { onToggleSelect(row.id) },
+                                        onLongClick = { onLongPressRow(row.id) },
+                                    )
+                                } else {
+                                    SwipeToDeleteRow(onDelete = { onDeleteRow(row.id) }) {
+                                        TransactionRow(
+                                            row = row,
+                                            selectionMode = false,
+                                            selected = false,
+                                            onClick = { onOpenRow(row.id) },
+                                            onLongClick = { onLongPressRow(row.id) },
+                                        )
+                                    }
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(horizontal = PennedSpacing.lg),
+                                        color = MaterialTheme.colorScheme.outlineVariant,
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = "搜索",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable(onClick = onSearch)
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
+
+                val snackbarVisible = snackbarHostState?.currentSnackbarData != null
+                HomeAddFab(
+                    visible = showFab && !snackbarVisible,
+                    onClick = onAdd,
+                    modifier = Modifier.align(Alignment.BottomEnd),
                 )
             }
         }
 
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            val listState = rememberLazyListState()
-            // 月汇总/预算/添加按钮都是列表项：随内容滚走，滚走后由右下角 FAB 接管"记一笔"
-            val addButtonVisible by remember {
-                derivedStateOf { listState.layoutInfo.visibleItemsInfo.any { it.key == ADD_BUTTON_KEY } }
-            }
-            val showFab = !selectionMode &&
-                listState.layoutInfo.totalItemsCount > 0 &&  // 首帧尚未布局时不闪现
-                !addButtonVisible
-
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize().testTag(HOME_LIST_TAG),
-            ) {
-                if (!selectionMode) {
-                    item(key = SUMMARY_CARD_KEY) {
-                        val today = LocalDate.now(zone)
-                        HomeSummaryCard(
-                            totals = HomeGroups.monthTotals(rows, today.year, today.monthValue, zone),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 6.dp),
-                        )
-                    }
-                    item(key = BUDGET_CARD_KEY) {
-                        HomeBudgetCard(
-                            budgetSummary = budgetSummary,
-                            onOpenBudgets = onOpenBudgets,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 6.dp),
-                        )
-                    }
-                    item(key = ADD_BUTTON_KEY) {
-                        Button(
-                            onClick = onAdd,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                        ) {
-                            Text("添加一条新记账")
-                        }
-                    }
-                }
-
-                if (rows.isEmpty()) {
-                    item(key = "empty") {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Text("还没有记账", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(Modifier.height(4.dp))
-                            Text("点上方按钮记下第一笔", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                } else {
-                    HomeGroups.groupByDay(rows, zone).forEach { group ->
-                        item(key = "day-${group.epochDay}") {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Text(
-                                    text = HomeGroups.dayLabel(group.epochDay, zone),
-                                    style = MaterialTheme.typography.titleSmall,
-                                )
-                                Text(
-                                    text = "收 ${Money.format(group.incomeCents)}  支 ${Money.format(group.expenseCents)}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                        items(group.items, key = { it.id }) { row ->
-                            TransactionRow(
-                                row = row,
-                                selectionMode = selectionMode,
-                                selected = row.id in selectedIds,
-                                onClick = {
-                                    if (selectionMode) onToggleSelect(row.id) else onOpenRow(row.id)
-                                },
-                                onLongClick = { onLongPressRow(row.id) },
-                            )
-                            if (!selectionMode) {
-                                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                            }
-                        }
-                    }
-                }
-            }
-
-            HomeAddFab(
-                visible = showFab,
-                onClick = onAdd,
-                modifier = Modifier.align(Alignment.BottomEnd),
+        if (snackbarHostState != null) {
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(PennedSpacing.lg),
             )
+        }
+    }
+}
+
+/** 页头：账本名（可点出账本菜单）+ 搜索入口；多选模式换成批量操作条。 */
+@Composable
+private fun HomeHeader(
+    bookName: String,
+    selectionMode: Boolean,
+    selectedCount: Int,
+    onBookClick: () -> Unit,
+    bookMenu: @Composable () -> Unit,
+    onSearch: () -> Unit,
+    onExitSelection: () -> Unit,
+    onDeleteSelected: () -> Unit,
+    canDelete: Boolean,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = PennedSpacing.md, end = PennedSpacing.sm, top = PennedSpacing.sm, bottom = PennedSpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (selectionMode) {
+            TextButton(onClick = onExitSelection) { Text("取消") }
+            Text(
+                "已选 $selectedCount 条",
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onDeleteSelected, enabled = canDelete) {
+                Text("删除", color = expenseColor())
+            }
+        } else {
+            Box {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(percent = 50))
+                        .clickable(onClick = onBookClick)
+                        .padding(horizontal = PennedSpacing.sm, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(bookName, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
+                    Spacer(Modifier.width(PennedSpacing.xs))
+                    Icon(
+                        PennedIcons.ChevronDown,
+                        contentDescription = "切换账本",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                bookMenu()
+            }
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = onSearch) {
+                Icon(
+                    PennedIcons.Search,
+                    contentDescription = "搜索",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
         }
     }
 }
@@ -318,37 +408,30 @@ private fun HomeAddFab(visible: Boolean, onClick: () -> Unit, modifier: Modifier
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
             modifier = Modifier
-                .padding(16.dp)
+                .padding(PennedSpacing.lg)
                 .testTag(HOME_FAB_TAG),
         ) {
-            Text("+", style = MaterialTheme.typography.titleLarge)
+            Icon(PennedIcons.Plus, contentDescription = "记一笔")
         }
     }
 }
 
-/**
- * 月汇总 + 预算合并成一张卡（省屏占比）：
- * 第一行 支出/收入/结余，第二行 剩余预算 + 预算明细（可点进预算管理），第三行 4dp 进度条。
- * 没设预算时第二行换成"设置本月预算"入口。
- */
 /** 月汇总卡：支出/收入/结余三列（标签一行 + 数值一行）。 */
 @Composable
 private fun HomeSummaryCard(
     totals: HomeGroups.MonthTotals,
     modifier: Modifier = Modifier,
 ) {
-    Card(modifier = modifier) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
-            Row(modifier = Modifier.fillMaxWidth()) {
-                SummaryColumn("支出", Money.format(totals.expenseCents), expenseColor(), Modifier.weight(1f))
-                SummaryColumn("收入", Money.format(totals.incomeCents), incomeColor(), Modifier.weight(1f))
-                SummaryColumn(
-                    "结余",
-                    Money.format(totals.incomeCents - totals.expenseCents),
-                    MaterialTheme.colorScheme.onSurface,
-                    Modifier.weight(1f),
-                )
-            }
+    PennedCard(modifier = modifier) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            SummaryColumn("支出", Money.format(totals.expenseCents), expenseColor(), Modifier.weight(1f))
+            SummaryColumn("收入", Money.format(totals.incomeCents), incomeColor(), Modifier.weight(1f))
+            SummaryColumn(
+                "结余",
+                Money.format(totals.incomeCents - totals.expenseCents),
+                MaterialTheme.colorScheme.onSurface,
+                Modifier.weight(1f),
+            )
         }
     }
 }
@@ -364,68 +447,67 @@ private fun HomeBudgetCard(
     modifier: Modifier = Modifier,
 ) {
     if (budgetSummary == null) {
-        Card(modifier = modifier.clickable(onClick = onOpenBudgets)) {
+        PennedCard(modifier = modifier, onClick = onOpenBudgets) {
             Text(
                 "设置本月预算，控制花销 →",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 14.dp),
+                color = primaryInkColor(),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
             )
         }
         return
     }
     val state = dev.penned.app.domain.BudgetMath.state(budgetSummary.totalCents, budgetSummary.spentCents)
-    val remainColor = if (state.overspent) expenseColor() else MaterialTheme.colorScheme.primary
-    Card(modifier = modifier.clickable(onClick = onOpenBudgets)) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
-            Row(modifier = Modifier.fillMaxWidth()) {
-                SummaryColumn("预算", Money.format(budgetSummary.totalCents), MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
-                SummaryColumn("已用", Money.format(budgetSummary.spentCents), MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
-                // 超支时 remainingCents 为负，红字直接读出超了多少
-                SummaryColumn("剩余", Money.format(state.remainingCents), remainColor, Modifier.weight(1f))
-            }
-            Spacer(Modifier.height(6.dp))
-            LinearProgressIndicator(
-                progress = { state.usedFraction },
-                modifier = Modifier.fillMaxWidth().height(4.dp),
-                color = remainColor,
-            )
+    val remainColor = if (state.overspent) expenseColor() else MaterialTheme.colorScheme.onSurface
+    PennedCard(modifier = modifier, onClick = onOpenBudgets) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            SummaryColumn("预算", Money.format(budgetSummary.totalCents), MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
+            SummaryColumn("已用", Money.format(budgetSummary.spentCents), MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
+            // 超支时 remainingCents 为负，红字直接读出超了多少
+            SummaryColumn("剩余", Money.format(state.remainingCents), remainColor, Modifier.weight(1f))
         }
+        Spacer(Modifier.height(PennedSpacing.sm))
+        LinearProgressIndicator(
+            progress = { state.usedFraction },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .clip(RoundedCornerShape(percent = 50)),
+            color = if (state.overspent) expenseColor() else MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        )
     }
 }
 
 /** 卡片里的三列：标签一行、数值一行（等宽三列，居中）。 */
 @Composable
 private fun SummaryColumn(label: String, value: String, valueColor: Color, modifier: Modifier = Modifier) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(2.dp))
-        Text(value, style = MaterialTheme.typography.titleSmall, color = valueColor)
+        Text(value, style = MaterialTheme.typography.titleMedium, color = valueColor)
     }
 }
-
 
 @Composable
 fun AddBookDialog(onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
     var name by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("新增账本") },
-        text = {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                placeholder = { Text("账本名称") },
-                singleLine = true,
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(name) }, enabled = name.isNotBlank()) { Text("保存") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-    )
+    PennedDialog(
+        onDismiss = onDismiss,
+        title = "新增账本",
+        onConfirm = { onConfirm(name) },
+        confirmEnabled = name.isNotBlank(),
+    ) {
+        OutlinedTextField(
+            value = name,
+            onValueChange = { name = it },
+            placeholder = { Text("账本名称") },
+            singleLine = true,
+        )
+    }
 }
 
 @Preview(showBackground = true, name = "首页-有数据", widthDp = 400, heightDp = 780)
