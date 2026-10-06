@@ -160,7 +160,7 @@ fun accountTypeLabel(type: AccountType): String = when (type) {
 
 @Composable
 fun AssetsScreen(
-    onAddAccount: () -> Unit = {},
+    onAddAccount: (AccountGroup, String?) -> Unit = { _, _ -> },
     onOpenAccount: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -204,7 +204,7 @@ fun AssetsScreen(
 @Composable
 fun AssetsContent(
     state: AssetsUiState,
-    onAddAccount: () -> Unit,
+    onAddAccount: (AccountGroup, String?) -> Unit,
     modifier: Modifier = Modifier,
     onOpenAccount: (String) -> Unit = {},
     onDeleteAccount: (AccountWithBalance) -> Unit = {},
@@ -213,13 +213,24 @@ fun AssetsContent(
     // 眼睛藏金额：切 Tab 回来还在（rememberSaveable），重启重置
     var masked by rememberSaveable { mutableStateOf(false) }
     var collapsedGroups by remember { mutableStateOf(emptySet<String>()) }
+    var showTypeSheet by remember { mutableStateOf(false) }
+
+    if (showTypeSheet) {
+        AccountTypeSheet(
+            onPick = { group, preset ->
+                showTypeSheet = false
+                onAddAccount(group, preset?.label)
+            },
+            onDismiss = { showTypeSheet = false },
+        )
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { if (snackbarHostState != null) SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = onAddAccount,
+                onClick = { showTypeSheet = true },
                 modifier = Modifier.size(60.dp),
                 shape = CircleShape,
                 containerColor = MaterialTheme.colorScheme.primary,
@@ -525,7 +536,7 @@ private fun AssetsPreview() {
                 assetCents = accounts.filter { it.balanceCents > 0 }.sumOf { it.balanceCents },
                 liabilityCents = -accounts.filter { it.balanceCents < 0 }.sumOf { it.balanceCents },
             ),
-            onAddAccount = {},
+            onAddAccount = { _, _ -> },
         )
     }
 }

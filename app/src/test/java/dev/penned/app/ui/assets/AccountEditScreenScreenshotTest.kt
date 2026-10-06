@@ -1,13 +1,8 @@
 package dev.penned.app.ui.assets
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -22,7 +17,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * 添加/编辑账户页截图与版面断言。
+ * 添加/编辑账户表单页（对标参考图：两张卡片 + 所属分组选择行）。
  *
  * 页面化之前这里是 AlertDialog + 文本输入，Robolectric 下不 idle，只能做"入口存在"断言；
  * 改成独立页后可以正常截图（看板待办里那条的资产页部分随之关闭）。
@@ -40,66 +35,61 @@ class AccountEditScreenScreenshotTest {
     }
 
     @Test
-    fun captureAddAccountFundsGroup() {
+    fun captureAddAccountFromPreset() {
         composeRule.setContent {
             PennedTheme {
                 AccountEditContent(
-                    state = AccountEditUiState(),
+                    state = AccountEditUiState(group = AccountGroup.FUNDS, presetLabel = "现金"),
                     onBack = {},
-                    onSelectGroup = {}, onSelectPreset = {}, onSelectCustom = {},
-                    onNameChange = {}, onInitialChange = {}, onSave = {},
+                    onSelectGroup = {}, onNameChange = {}, onInitialChange = {}, onSave = {},
                 )
             }
         }
         composeRule.onNodeWithText("添加账户").assertIsDisplayed()
-        // 四个大类分段 + 资金组预设格 + 自定义格
-        listOf("资金", "信贷", "理财", "负债").forEach { composeRule.onNodeWithText(it).assertIsDisplayed() }
-        listOf("储蓄卡", "支付宝", "微信钱包", "自定义").forEach { composeRule.onNodeWithText(it).assertIsDisplayed() }
-        // 预设名既在格子上也在名称占位里
-        composeRule.onAllNodesWithText("现金").assertCountEquals(2)
-        composeRule.onNodeWithText("初始余额").assertIsDisplayed()
-        composeRule.onNodeWithText("0.00").assertIsDisplayed()
+        composeRule.onNodeWithText("名称").assertIsDisplayed()
+        composeRule.onNodeWithText("余额").assertIsDisplayed()
+        composeRule.onNodeWithText("所属分组").assertIsDisplayed()
+        composeRule.onNodeWithText("资金账户").assertIsDisplayed()
+        composeRule.onNodeWithText("元").assertIsDisplayed()
         composeRule.onNodeWithText("保存").assertIsDisplayed()
         // 新增页没有删除入口
         composeRule.onNodeWithText("删除账户").assertDoesNotExist()
-        capture("account_add_funds")
+        capture("account_add_preset")
     }
 
     @Test
-    fun switchGroupAndPickCustom() {
-        var state by mutableStateOf(AccountEditUiState())
+    fun captureAddAccountCustom() {
         composeRule.setContent {
             PennedTheme {
                 AccountEditContent(
-                    state = state,
+                    // 自定义格进来：名称没有预设兜底
+                    state = AccountEditUiState(group = AccountGroup.FUNDS, presetLabel = null),
                     onBack = {},
-                    onSelectGroup = { group ->
-                        val first = ACCOUNT_PRESETS[group].orEmpty().firstOrNull()
-                        state = state.copy(
-                            group = group,
-                            type = first?.type ?: group.defaultType,
-                            presetLabel = first?.label,
-                        )
-                    },
-                    onSelectPreset = { state = state.copy(type = it.type, presetLabel = it.label) },
-                    onSelectCustom = { state = state.copy(type = state.group.defaultType, presetLabel = null) },
-                    onNameChange = { state = state.copy(name = it) },
-                    onInitialChange = { state = state.copy(initialText = it) },
-                    onSave = {},
+                    onSelectGroup = {}, onNameChange = {}, onInitialChange = {}, onSave = {},
                 )
             }
         }
-        composeRule.onNodeWithText("信贷").performClick()
-        // 切到信贷组：信用卡同时出现在格子和名称占位里
-        composeRule.onAllNodesWithText("信用卡").assertCountEquals(2)
-        composeRule.onNodeWithText("花呗").assertIsDisplayed()
-        composeRule.onNodeWithText("自定义").assertIsDisplayed()
-        capture("account_add_credit")
-
-        // 自定义格：名称不再有预设兜底（占位改回通用提示），且本组默认类型生效
-        composeRule.onNodeWithText("自定义").performClick()
         composeRule.onNodeWithText("账户名称").assertIsDisplayed()
         capture("account_add_custom")
+    }
+
+    @Test
+    fun groupPickerRowChangesGroup() {
+        composeRule.setContent {
+            PennedTheme {
+                AccountEditContent(
+                    state = AccountEditUiState(group = AccountGroup.FUNDS, presetLabel = "现金"),
+                    onBack = {},
+                    onSelectGroup = {},
+                    onNameChange = {}, onInitialChange = {}, onSave = {},
+                )
+            }
+        }
+        composeRule.onNodeWithText("所属分组").performClick()
+        // 抽屉里四个大类，选中项标「已选」
+        composeRule.onNodeWithText("信贷账户").assertIsDisplayed()
+        composeRule.onNodeWithText("已选").assertIsDisplayed()
+        capture("account_group_picker")
     }
 
     @Test
@@ -116,8 +106,7 @@ class AccountEditScreenScreenshotTest {
                         initialText = "1284.50",
                     ),
                     onBack = {},
-                    onSelectGroup = {}, onSelectPreset = {}, onSelectCustom = {},
-                    onNameChange = {}, onInitialChange = {}, onSave = {},
+                    onSelectGroup = {}, onNameChange = {}, onInitialChange = {}, onSave = {},
                     onDelete = {},
                 )
             }
@@ -141,8 +130,7 @@ class AccountEditScreenScreenshotTest {
                         pendingTxCount = 3,
                     ),
                     onBack = {},
-                    onSelectGroup = {}, onSelectPreset = {}, onSelectCustom = {},
-                    onNameChange = {}, onInitialChange = {}, onSave = {},
+                    onSelectGroup = {}, onNameChange = {}, onInitialChange = {}, onSave = {},
                     onDelete = {},
                 )
             }

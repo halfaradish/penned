@@ -1,8 +1,6 @@
 package dev.penned.app.ui.assets
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -38,7 +35,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -54,15 +50,12 @@ import dev.penned.app.ui.components.ConfirmDialog
 import dev.penned.app.ui.components.PennedButton
 import dev.penned.app.ui.components.PennedButtonVariant
 import dev.penned.app.ui.components.PennedCard
-import dev.penned.app.ui.components.PennedDivider
-import dev.penned.app.ui.components.PennedSegmentedTabs
+import dev.penned.app.ui.components.PennedSheet
 import dev.penned.app.ui.components.PennedTopBar
-import dev.penned.app.ui.components.SectionLabel
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.PennedTheme
-import dev.penned.app.ui.theme.primaryInkColor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.firstOrNull
@@ -72,15 +65,15 @@ import java.util.UUID
 /**
  * 添加/编辑账户页状态。
  *
- * [presetLabel] 为 null 表示选中了「自定义」格（此时名称不再有预设兜底）；
- * [type] 是真正落库的账户类型，跟随预设或所属大类的默认类型。
+ * [presetLabel] 为 null 表示走的是「自定义」格（名称不再有预设兜底）；
+ * [type] 是真正落库的账户类型，由所属大类的默认类型或所选预设决定。
  */
 data class AccountEditUiState(
     val loading: Boolean = false,
     val accountId: String? = null,
     val group: AccountGroup = AccountGroup.FUNDS,
-    val type: AccountType = AccountType.CASH,
-    val presetLabel: String? = DEFAULT_PRESET.label,
+    val type: AccountType = AccountGroup.FUNDS.defaultType,
+    val presetLabel: String? = null,
     val name: String = "",
     val initialText: String = "",
     /** 编辑已有账户时：其名下流水数（>0 不给删，删除键置灰并说明原因）。 */
@@ -101,21 +94,25 @@ data class AccountEditUiState(
     fun resolvedName(): String = name.trim().ifBlank { presetLabel ?: accountTypeLabel(type) }
 }
 
-private val DEFAULT_PRESET = ACCOUNT_PRESETS.getValue(AccountGroup.FUNDS).first()
-
 class AccountEditViewModel(
     private val app: PennedApplication,
     private val editId: String?,
+    presetLabel: String?,
+    group: AccountGroup?,
 ) : ViewModel() {
 
     private val db = app.database
+    private val startGroup = group ?: AccountGroup.FUNDS
 
-    private val _state = MutableStateFlow(AccountEditUiState(accountId = editId))
+    private val _state = MutableStateFlow(
+        AccountEditUiState(
+            accountId = editId,
+            group = startGroup,
+            type = accountTypeFor(startGroup, presetLabel),
+            presetLabel = presetLabel,
+        )
+    )
     val state: StateFlow<AccountEditUiState> = _state
-
-    /** 点「自定义」格的次数：>0 时把焦点送进名称输入（用户下一步必然是起名字）。 */
-    private val _focusName = MutableStateFlow(0)
-    val focusName: StateFlow<Int> = _focusName
 
     init {
         if (editId != null) viewModelScope.launch { load(editId) }
@@ -124,7 +121,7 @@ class AccountEditViewModel(
     private suspend fun load(id: String) {
         val account = db.accountDao().get(id) ?: return
         val group = AccountGroup.of(account.type)
-        // 名字与预设完全一致才高亮预设格，否则按「自定义」呈现（导入的账户也叫现金，能对上）
+        // 名字与预设完全一致才当作预设（导入的账户也叫现金，能对上）
         val preset = ACCOUNT_PRESETS[group].orEmpty().firstOrNull { it.label == account.name }
         _state.value = AccountEditUiState(
             accountId = account.id,
@@ -132,24 +129,18 @@ class AccountEditViewModel(
             type = account.type,
             presetLabel = preset?.label,
             name = account.name,
-            initialText = if (account.initialBalanceCents == 0L) "" else Money.format(account.initialBalanceCents, grouped = false),
+            initialText = if (account.initialBalanceCents == 0L) {
+                ""
+            } else {
+                Money.format(account.initialBalanceCents, grouped = false)
+            },
             pendingTxCount = db.transactionDao().countByAccount(id),
         )
     }
 
+    /** 换大类：类型跟着大类的默认类型走，预设名不再适用。 */
     fun selectGroup(group: AccountGroup) {
-        val first = ACCOUNT_PRESETS[group].orEmpty().firstOrNull()
-        update { it.copy(group = group, type = first?.type ?: group.defaultType, presetLabel = first?.label) }
-    }
-
-    /** 选预设只记类型与预设名，不覆盖用户已经输入的名称（看板待办）。 */
-    fun selectPreset(preset: AccountPreset) {
-        update { it.copy(type = preset.type, presetLabel = preset.label) }
-    }
-
-    fun selectCustom() {
-        update { it.copy(type = it.group.defaultType, presetLabel = null) }
-        _focusName.value += 1
+        update { it.copy(group = group, type = group.defaultType, presetLabel = null) }
     }
 
     fun setName(name: String) {
@@ -221,22 +212,20 @@ fun AccountEditScreen(
     editId: String?,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    presetLabel: String? = null,
+    group: AccountGroup? = null,
 ) {
     val viewModel: AccountEditViewModel = viewModel(
-        key = "account-edit-${editId.orEmpty()}",
-        initializer = { AccountEditViewModel(app, editId) },
+        key = "account-edit-${editId.orEmpty()}-${group?.name.orEmpty()}-${presetLabel.orEmpty()}",
+        initializer = { AccountEditViewModel(app, editId, presetLabel, group) },
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val focusName by viewModel.focusName.collectAsStateWithLifecycle()
     var confirmDelete by remember { mutableStateOf(false) }
 
     AccountEditContent(
         state = state,
-        focusNameTick = focusName,
         onBack = onBack,
         onSelectGroup = viewModel::selectGroup,
-        onSelectPreset = viewModel::selectPreset,
-        onSelectCustom = viewModel::selectCustom,
         onNameChange = viewModel::setName,
         onInitialChange = viewModel::setInitial,
         onSave = { viewModel.save(onDone = onBack) },
@@ -263,22 +252,33 @@ fun AccountEditContent(
     state: AccountEditUiState,
     onBack: () -> Unit,
     onSelectGroup: (AccountGroup) -> Unit,
-    onSelectPreset: (AccountPreset) -> Unit,
-    onSelectCustom: () -> Unit,
     onNameChange: (String) -> Unit,
     onInitialChange: (String) -> Unit,
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
-    focusNameTick: Int = 0,
     onDelete: (() -> Unit)? = null,
 ) {
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
-    LaunchedEffect(focusNameTick) {
-        if (focusNameTick > 0) {
+    var showGroupPicker by remember { mutableStateOf(false) }
+
+    // 从「自定义」格进来时名称没有预设兜底，直接把光标送进名称输入
+    LaunchedEffect(Unit) {
+        if (!state.isEdit && state.presetLabel == null) {
             focusRequester.requestFocus()
             keyboard?.show()
         }
+    }
+
+    if (showGroupPicker) {
+        GroupPickerSheet(
+            selected = state.group,
+            onPick = {
+                onSelectGroup(it)
+                showGroupPicker = false
+            },
+            onDismiss = { showGroupPicker = false },
+        )
     }
 
     Scaffold(
@@ -294,22 +294,7 @@ fun AccountEditContent(
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
             ) {
-                SectionLabel("类型")
-                PennedSegmentedTabs(
-                    options = AccountGroup.entries,
-                    selected = state.group,
-                    onSelect = onSelectGroup,
-                    label = { it.tab },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg),
-                )
-                AccountTypeGrid(
-                    group = state.group,
-                    selectedLabel = state.presetLabel,
-                    onSelectPreset = onSelectPreset,
-                    onSelectCustom = onSelectCustom,
-                )
-
-                SectionLabel("详情")
+                // 卡片一：名称 / 余额
                 PennedCard(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg),
                     contentPadding = PaddingValues(0.dp),
@@ -321,14 +306,27 @@ fun AccountEditContent(
                         onValueChange = onNameChange,
                         focusRequester = focusRequester,
                     )
-                    PennedDivider()
                     EditFieldRow(
-                        label = "初始余额",
+                        label = "余额",
                         value = state.initialText,
                         placeholder = "0.00",
                         suffix = "元",
                         money = true,
                         onValueChange = onInitialChange,
+                    )
+                }
+
+                // 卡片二：归属
+                PennedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
+                    contentPadding = PaddingValues(0.dp),
+                ) {
+                    GroupPickerRow(
+                        group = state.group,
+                        type = state.type,
+                        onClick = { showGroupPicker = true },
                     )
                 }
                 Spacer(Modifier.height(PennedSpacing.xxl))
@@ -362,98 +360,70 @@ fun AccountEditContent(
     }
 }
 
-/**
- * 类型网格：4 列固定，预设格在前、「自定义」格收尾。
- * 末行不足 4 个补空位（weight 会把落单的那格拉宽）。
- */
+/** 所属分组行：右边是账户头像预览（颜色跟着类型走）+ 分组名 + 右箭头。 */
 @Composable
-private fun AccountTypeGrid(
-    group: AccountGroup,
-    selectedLabel: String?,
-    onSelectPreset: (AccountPreset) -> Unit,
-    onSelectCustom: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val presets = ACCOUNT_PRESETS[group].orEmpty()
-    val customSelected = selectedLabel == null
-    val tiles = presets.size + 1
-    Column(modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg)) {
-        (0 until tiles).chunked(4).forEach { row ->
-            Row(
-                Modifier.fillMaxWidth().padding(top = PennedSpacing.md),
-                horizontalArrangement = Arrangement.spacedBy(PennedSpacing.sm),
-            ) {
-                row.forEach { index ->
-                    val preset = presets.getOrNull(index)
-                    if (preset == null) {
-                        TypeTile(
-                            label = "自定义",
-                            selected = customSelected,
-                            slot = null,
-                            onClick = onSelectCustom,
-                            modifier = Modifier.weight(1f),
-                        )
-                    } else {
-                        TypeTile(
-                            label = preset.label,
-                            selected = !customSelected && preset.label == selectedLabel,
-                            slot = accountPigmentSlot(preset.type),
-                            onClick = { onSelectPreset(preset) },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                }
-                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
-            }
-        }
+private fun GroupPickerRow(group: AccountGroup, type: AccountType, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = PennedDimens.rowMinHeight)
+            .clickable(onClick = onClick)
+            .padding(horizontal = PennedSpacing.lg),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "所属分组",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.width(72.dp),
+        )
+        Spacer(Modifier.weight(1f))
+        CategoryAvatar(group.title, size = PennedDimens.avatar, slot = accountPigmentSlot(type))
+        Spacer(Modifier.width(PennedSpacing.sm))
+        Text(group.title, style = MaterialTheme.typography.bodyLarge)
+        Spacer(Modifier.width(PennedSpacing.sm))
+        Icon(
+            PennedIcons.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 
-/** 一个类型格：颜料头像（或自定义的加号圆）+ 名称，选中 = 实心圆 + 主色墨字。 */
+/** 分组选择：四个大类，头像色即该组账户会用的颜色。 */
 @Composable
-private fun TypeTile(
-    label: String,
-    selected: Boolean,
-    slot: Int?,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
+private fun GroupPickerSheet(
+    selected: AccountGroup,
+    onPick: (AccountGroup) -> Unit,
+    onDismiss: () -> Unit,
 ) {
-    Column(
-        modifier = modifier
-            .heightIn(min = 72.dp)
-            .clickable(onClick = onClick)
-            .padding(vertical = PennedSpacing.xs),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        if (slot != null) {
-            CategoryAvatar(name = label, size = PennedDimens.categoryBubble, selected = selected, slot = slot)
-        } else {
-            Box(
+    PennedSheet(onDismiss = onDismiss, title = "所属分组") {
+        AccountGroup.entries.forEach { group ->
+            Row(
                 Modifier
-                    .size(PennedDimens.categoryBubble)
-                    .background(
-                        if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer,
-                        CircleShape,
-                    ),
-                contentAlignment = Alignment.Center,
+                    .fillMaxWidth()
+                    .heightIn(min = PennedDimens.rowMinHeight)
+                    .clickable { onPick(group) }
+                    .padding(horizontal = PennedSpacing.xl),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    PennedIcons.Plus,
-                    contentDescription = null,
-                    tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
+                CategoryAvatar(
+                    name = group.title,
+                    size = PennedDimens.avatar,
+                    slot = accountPigmentSlot(group.defaultType),
                 )
+                Spacer(Modifier.width(PennedSpacing.md))
+                Text(group.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                if (group == selected) {
+                    Text(
+                        "已选",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
-        Spacer(Modifier.height(PennedSpacing.xs))
-        Text(
-            label,
-            style = MaterialTheme.typography.labelSmall,
-            color = if (selected) primaryInkColor() else MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-        )
     }
 }
 
@@ -479,7 +449,7 @@ private fun EditFieldRow(
         Text(
             label,
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.width(72.dp),
         )
         BasicTextField(
@@ -523,10 +493,9 @@ private fun EditFieldRow(
 private fun AddAccountPreview() {
     PennedTheme {
         AccountEditContent(
-            state = AccountEditUiState(),
+            state = AccountEditUiState(presetLabel = "现金"),
             onBack = {},
-            onSelectGroup = {}, onSelectPreset = {}, onSelectCustom = {},
-            onNameChange = {}, onInitialChange = {}, onSave = {},
+            onSelectGroup = {}, onNameChange = {}, onInitialChange = {}, onSave = {},
         )
     }
 }
@@ -546,8 +515,7 @@ private fun EditAccountPreview() {
                 pendingTxCount = 2,
             ),
             onBack = {},
-            onSelectGroup = {}, onSelectPreset = {}, onSelectCustom = {},
-            onNameChange = {}, onInitialChange = {}, onSave = {},
+            onSelectGroup = {}, onNameChange = {}, onInitialChange = {}, onSave = {},
             onDelete = {},
         )
     }

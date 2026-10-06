@@ -29,6 +29,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import dev.penned.app.ui.add.AddTransactionScreen
 import dev.penned.app.ui.assets.AccountEditScreen
+import dev.penned.app.ui.assets.AccountGroup
 import dev.penned.app.ui.assets.AssetsScreen
 import dev.penned.app.ui.books.BooksScreen
 import dev.penned.app.ui.budgets.BudgetScreen
@@ -237,17 +238,28 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
             composable("calendar") { StubScreen("日历", "日历视图还没做，先在首页按日回看流水") }
             composable("assets") {
                 AssetsScreen(
-                    onAddAccount = { navController.navigate("account") },
+                    onAddAccount = { group, preset ->
+                        navController.navigate(
+                            "account?group=${group.name}&preset=${android.net.Uri.encode(preset.orEmpty())}"
+                        )
+                    },
                     onOpenAccount = { id -> navController.navigate("account?editId=$id") },
                 )
             }
             composable(
-                route = "account?editId={editId}",
-                arguments = listOf(navArgument("editId") { type = NavType.StringType; defaultValue = "" }),
+                route = "account?editId={editId}&group={group}&preset={preset}",
+                arguments = listOf(
+                    navArgument("editId") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("group") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("preset") { type = NavType.StringType; defaultValue = "" },
+                ),
             ) { entry ->
+                val groupName = entry.arguments?.getString("group").orEmpty()
                 AccountEditScreen(
                     app = app,
                     editId = entry.arguments?.getString("editId")?.ifEmpty { null },
+                    presetLabel = entry.arguments?.getString("preset")?.ifEmpty { null },
+                    group = AccountGroup.entries.firstOrNull { it.name == groupName },
                     onBack = { navController.popBackStack() },
                 )
             }

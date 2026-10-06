@@ -57,6 +57,12 @@ internal fun accountPigmentSlot(type: AccountType): Int = when (type) {
 internal fun accountGroupTitle(groupName: String?, type: AccountType): String =
     groupName ?: AccountGroup.of(type).title
 
+/** 从「大类 + 预设名」得到落库类型：预设匹配不上（自定义格）就用该大类的默认类型。 */
+internal fun accountTypeFor(group: AccountGroup, presetLabel: String?): AccountType =
+    presetLabel
+        ?.let { label -> ACCOUNT_PRESETS[group].orEmpty().firstOrNull { it.label == label }?.type }
+        ?: group.defaultType
+
 /** 资产页分组顺序：资金 → 信贷 → 理财 → 负债；groupName 自定义分组排在已知大类之后。 */
 internal fun groupAccounts(
     accounts: List<AccountWithBalance>,

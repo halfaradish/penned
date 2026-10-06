@@ -52,7 +52,7 @@ class AssetsScreenScreenshotTest {
     @Test
     fun captureAssetsScreen() {
         composeRule.setContent {
-            PennedTheme { AssetsContent(state = state(), onAddAccount = {}) }
+            PennedTheme { AssetsContent(state = state(), onAddAccount = { _, _ -> }) }
         }
         // 规格断言：净资产/总资产/负资产汇总、分组标题、账户余额（负数为信用卡）
         composeRule.onNodeWithText("净资产(元)").assertIsDisplayed()
@@ -77,7 +77,7 @@ class AssetsScreenScreenshotTest {
     @Test
     fun captureAssetsEmptyState() {
         composeRule.setContent {
-            PennedTheme { AssetsContent(state = AssetsUiState(), onAddAccount = {}) }
+            PennedTheme { AssetsContent(state = AssetsUiState(), onAddAccount = { _, _ -> }) }
         }
         composeRule.onNodeWithText("你还没有任何账户").assertIsDisplayed()
         capture("m1_assets_empty")
@@ -86,7 +86,7 @@ class AssetsScreenScreenshotTest {
     @Test
     fun collapseGroupAndMaskAmounts() {
         composeRule.setContent {
-            PennedTheme { AssetsContent(state = state(), onAddAccount = {}) }
+            PennedTheme { AssetsContent(state = state(), onAddAccount = { _, _ -> }) }
         }
         // 折叠资金账户：组内两行收起，组小计与标题还在
         composeRule.onNodeWithText("资金账户").performClick()

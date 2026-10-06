@@ -81,7 +81,7 @@ class AssetsDeleteTest {
         composeRule.setContent {
             PennedTheme {
                 CompositionLocalProvider(LocalApp provides app) {
-                    AssetsScreen(onAddAccount = {}, onOpenAccount = onOpenAccount)
+                    AssetsScreen(onAddAccount = { _, _ -> }, onOpenAccount = onOpenAccount)
                 }
             }
         }

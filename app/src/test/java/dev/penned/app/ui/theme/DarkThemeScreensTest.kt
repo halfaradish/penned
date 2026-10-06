@@ -222,7 +222,7 @@ class DarkThemeScreensTest {
                     ),
                     netCents = 69_550L, assetCents = 128_450L, liabilityCents = 58_900L,
                 ),
-                onAddAccount = {},
+                onAddAccount = { _, _ -> },
             )
         }
         composeRule.onNodeWithText("净资产(元)").assertIsDisplayed()
@@ -242,7 +242,7 @@ class DarkThemeScreensTest {
                     initialText = "0.00",
                 ),
                 onBack = {},
-                onSelectGroup = {}, onSelectPreset = {}, onSelectCustom = {},
+                onSelectGroup = {},
                 onNameChange = {}, onInitialChange = {}, onSave = {},
                 onDelete = {},
             )
