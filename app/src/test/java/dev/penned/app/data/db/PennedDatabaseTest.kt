@@ -80,6 +80,35 @@ class PennedDatabaseTest {
     }
 
     @Test
+    fun `exclude from stats keeps the money in the account balance`() = runTest {
+        // D020：不计入收支只影响收支统计，钱实际动了，余额必须照算
+        val book = DefaultSeed.seedIfEmpty(db, "device-a", now = 1000L)!!
+        val lunch = db.categoryDao().observeByBook(book.id).first().first { it.name == "午餐" }
+        db.accountDao().upsert(
+            dev.penned.app.data.db.entity.AccountEntity(
+                id = "acc-1", bookId = book.id, name = "现金", type = dev.penned.app.domain.AccountType.CASH,
+                createdAt = 1000L, updatedAt = 1000L, deviceId = "device-a",
+            )
+        )
+        fun tx(id: String, cents: Long, excluded: Boolean) = TransactionEntity(
+            id = id, bookId = book.id, type = TxType.EXPENSE, amountCents = cents,
+            accountId = "acc-1", categoryId = lunch.id, dateEpochMinute = 10_000,
+            excludeFromStats = excluded,
+            creatorDeviceId = "d", createdAt = 1L, updatedAt = 1L, deviceId = "d",
+        )
+        db.transactionDao().upsert(tx("counted", 1600, excluded = false))
+        db.transactionDao().upsert(tx("excluded", 5000, excluded = true))
+
+        val account = db.accountDao().observeWithBalance(book.id).first().single()
+        assertEquals(-6600L, account.balanceCents)
+
+        // 投影里带出了标记（首页/统计靠它排除合计）
+        val rows = db.transactionDao().observeRecentWithCategory(book.id, 100).first()
+        assertEquals(setOf("counted", "excluded"), rows.map { it.id }.toSet())
+        assertEquals(listOf("excluded"), rows.filter { it.excludeFromStats }.map { it.id })
+    }
+
+    @Test
     fun `recent query joins category and orders descending`() = runTest {
         val book = DefaultSeed.seedIfEmpty(db, "device-a", now = 1000L)!!
         val lunch = db.categoryDao().observeByBook(book.id).first().first { it.name == "午餐" }

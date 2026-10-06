@@ -40,7 +40,7 @@ interface AccountDao {
             a.initialBalanceCents
             + IFNULL((SELECT SUM(CASE WHEN t.type = 'INCOME' THEN t.amountCents ELSE -t.amountCents END)
                       FROM transactions t
-                      WHERE t.deleted = 0 AND t.excludeFromStats = 0 AND t.accountId = a.id
+                      WHERE t.deleted = 0 AND t.accountId = a.id
                         AND t.type IN ('INCOME', 'EXPENSE')), 0)
             + IFNULL((SELECT SUM(-(t.amountCents + t.feeCents)) FROM transactions t
                       WHERE t.deleted = 0 AND t.accountId = a.id AND t.type = 'TRANSFER'), 0)

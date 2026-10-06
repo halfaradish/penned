@@ -450,7 +450,8 @@ private fun tx(
     note: String?,
 ) = TxWithCategory(
     id = id, type = type, amountCents = cents, accountId = null, categoryId = null,
-    dateEpochMinute = minute, note = note, categoryName = name, categoryParentName = parent, categoryIconKey = null,
+    dateEpochMinute = minute, note = note, categoryName = name, categoryParentName = parent,
+    categoryIconKey = null, excludeFromStats = false,
 )
 
 private fun minuteOf(year: Int, month: Int, day: Int, hour: Int, minute: Int): Long =

@@ -20,7 +20,8 @@ class HomeGroupsTest {
         cents: Long,
     ) = TxWithCategory(
         id = id, type = type, amountCents = cents, accountId = null, categoryId = null,
-        dateEpochMinute = minute, note = null, categoryName = "x", categoryParentName = null, categoryIconKey = null,
+        dateEpochMinute = minute, note = null, categoryName = "x", categoryParentName = null,
+        categoryIconKey = null, excludeFromStats = false,
     )
 
     @Test
@@ -59,6 +60,26 @@ class HomeGroupsTest {
         val totals = HomeGroups.monthTotals(rows, year = 2026, month = 10, zone = zone)
         assertEquals(1600L, totals.expenseCents)
         assertEquals(5000L, totals.incomeCents)
+    }
+
+    @Test
+    fun `excluded rows stay listed but never count toward totals`() {
+        // D020「不计入收支」：列表里看得见，日/月/分类合计都不算它
+        val rows = listOf(
+            row("a", minute("2026-10-04T19:30"), TxType.EXPENSE, 1600),
+            row("b", minute("2026-10-04T20:00"), TxType.EXPENSE, 5000).copy(excludeFromStats = true),
+            row("c", minute("2026-10-04T21:00"), TxType.INCOME, 8000).copy(excludeFromStats = true),
+        )
+        val day = HomeGroups.groupByDay(rows, zone).single()
+        assertEquals(3, day.items.size)          // 仍然显示
+        assertEquals(1600L, day.expenseCents)    // 5000 不计入
+        assertEquals(0L, day.incomeCents)        // 8000 不计入
+
+        val totals = HomeGroups.monthTotals(rows, year = 2026, month = 10, zone = zone)
+        assertEquals(1600L, totals.expenseCents)
+        assertEquals(0L, totals.incomeCents)
+
+        assertEquals(1600L, HomeGroups.categoryTotals(rows, TxType.EXPENSE).sumOf { it.cents })
     }
 
     @Test

@@ -173,5 +173,6 @@ class DarkThemeScreensTest {
         categoryName = name,
         categoryParentName = parent,
         categoryIconKey = null,
+        excludeFromStats = false,
     )
 }

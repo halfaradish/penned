@@ -19,6 +19,8 @@ data class TxWithCategory(
     val categoryName: String?,
     val categoryParentName: String?,
     val categoryIconKey: String?,
+    /** D020「不计入收支」：仍显示在列表里，但不计入日/月/分类合计。 */
+    val excludeFromStats: Boolean,
 )
 
 @Dao
@@ -28,7 +30,8 @@ interface TransactionDao {
         SELECT t.id AS id, t.type AS type, t.amountCents AS amountCents,
                t.accountId AS accountId, t.categoryId AS categoryId,
                t.dateEpochMinute AS dateEpochMinute, t.note AS note,
-               c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey
+               c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey,
+               t.excludeFromStats AS excludeFromStats
         FROM transactions t
         LEFT JOIN categories c ON c.id = t.categoryId
         LEFT JOIN categories p ON p.id = c.parentId
@@ -99,7 +102,8 @@ interface TransactionDao {
         SELECT t.id AS id, t.type AS type, t.amountCents AS amountCents,
                t.accountId AS accountId, t.categoryId AS categoryId,
                t.dateEpochMinute AS dateEpochMinute, t.note AS note,
-               c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey
+               c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey,
+               t.excludeFromStats AS excludeFromStats
         FROM transactions t
         LEFT JOIN categories c ON c.id = t.categoryId
         LEFT JOIN categories p ON p.id = c.parentId

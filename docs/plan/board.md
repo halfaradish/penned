@@ -8,11 +8,6 @@
 
 ## 待办
 
-- **P0 功能缺口：「不计入收支」开关两向都错**（D020 / M1 S6 交付物，2026-10-06 第三次复查实证）
-  - 该生效的地方没生效：首页月汇总（本月支出/收入/结余）、日分组收/支小计、统计页（月汇总卡/环形图/排行）全部忽略它。根因：`TxWithCategory` 投影（`observeRecentWithCategory` / `observeMonthTxsWithCategory`）没带 `excludeFromStats`，HomeGroups 纯函数无从判断
-  - 不该生效的地方生效了：`AccountDao.observeWithBalance` 收支子查询带 `t.excludeFromStats = 0` → 一勾选，这笔钱就从账户余额/净资产里消失（钱实际动了）
-  - 实证：造 10.00 支出挂现金账户 → 首页本月支出 22.00→32.00、现金 -10.00；勾选不计入收支后 → 首页仍 32.00（应回 22.00），现金变 0.00（应仍 -10.00）
-  - 待裁决：确认语义「不计入收支只影响收支统计，不影响账户余额」（与信用卡还款场景一致）；确认后修投影 + 聚合 + 余额 SQL，补表驱动单测
 - **M1 规格缺项：账本删除（软删）没做**（S3 明写「删除=软删，M1 不做合并」）——BooksScreen 只有 新增/重命名/切换，BookDao 无 softDelete。需定删除交互（账本非空时是否连流水一起软删/禁止删）
 - 死 UI 清理（可见但点不动）：首页顶栏「搜索」是纯文本无 clickable 无页面（IA 有搜索，M1 规格未列 → 摘掉或归 M3 组合筛选）；我的页「关于」`onClick = {}`；资产页账户行 `clickable {}`（有涟漪无反应）
 - 记一笔顶栏「编辑」是 disabled 死 UI（占位注释还写着"M1 第二批：分类管理"，该功能已做但未接通）；「不报销」chip 同为占位（M3）——接通分类管理或移除
@@ -62,6 +57,14 @@
 （无）
 
 ## 已完成
+
+### M1 收尾 5/8：不计入收支语义修正（P0，2026-10-06）
+- **语义定案**：「不计入收支」只影响收支统计，不影响账户余额（钱实际动了；信用卡还款场景）
+- 修「该生效没生效」：`TxWithCategory` 投影补 `excludeFromStats`（两条查询），`HomeGroups.groupByDay`/`monthTotals`/`categoryTotals` 三处合计排除该标记（列表仍显示行）
+- 修「不该生效却生效」：`AccountDao.observeWithBalance` 收支子查询去掉 `t.excludeFromStats = 0`
+- 测试：`HomeGroupsTest` 新增「excluded rows stay listed but never count toward totals」（日/月/分类三口径）+ `PennedDatabaseTest` 新增「exclude from stats keeps the money in the account balance」（余额 -66.00 = 两条都算）
+- 模拟机复验（造 10.00 支出挂现金账户）：开关=0 → 首页本月支出 32.00、现金 -10.00；开关=1 → 首页 22.00、统计页 2026年9月 支出 22.00（环形图/排行同步排除）、现金仍 -10.00、净资产 990.00
+- 验证：`./gradlew build` 全绿；探针行已删
 
 ### M1 收尾 4/4：记账键盘加减乘除（2026-10-06）
 - **问题**：`MoneyExpression` 引擎（乘除优先/分为单位/除零保护）在 M1 第一批就做了，但键盘只放了 `+ −`——×÷ 键位当时留了句"后续并入"，结果用户侧"加减乘除"只到加减

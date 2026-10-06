@@ -8,7 +8,8 @@ import java.time.ZoneId
 
 /**
  * 首页聚合纯函数：日分组 + 月汇总。D004——全部从流水重算，不落库。
- * 转账不计入收/支合计。
+ * 转账不计入收/支合计；D020「不计入收支」的行仍显示在列表里，但不进任何合计
+ * （账户余额不在此列——钱实际动了，余额照算，见 AccountDao.observeWithBalance）。
  */
 object HomeGroups {
 
@@ -25,10 +26,11 @@ object HomeGroups {
         val sorted = rows.sortedByDescending { it.dateEpochMinute }
         val byDay = sorted.groupBy { epochMinuteToLocalDate(it.dateEpochMinute, zone).toEpochDay() }
         return byDay.map { (epochDay, items) ->
+            val counted = items.filter { !it.excludeFromStats }
             DayGroup(
                 epochDay = epochDay,
-                incomeCents = items.sumOf(TxType.INCOME::takeAmount),
-                expenseCents = items.sumOf(TxType.EXPENSE::takeAmount),
+                incomeCents = counted.sumOf(TxType.INCOME::takeAmount),
+                expenseCents = counted.sumOf(TxType.EXPENSE::takeAmount),
                 items = items,
             )
         }
@@ -43,7 +45,7 @@ object HomeGroups {
         val inMonth = rows.filter {
             val d = epochMinuteToLocalDate(it.dateEpochMinute, zone)
             d.year == year && d.monthValue == month
-        }
+        }.filter { !it.excludeFromStats }
         return MonthTotals(
             incomeCents = inMonth.sumOf(TxType.INCOME::takeAmount),
             expenseCents = inMonth.sumOf(TxType.EXPENSE::takeAmount),
@@ -68,6 +70,7 @@ object HomeGroups {
     /**
      * 统计页分类聚合（specs/M1.md 第二批）：按一级分类名汇总某类型金额，降序；
      * 超出 [topN] 的合并为「其他」，fraction 相对该类型总额（含未分类）。
+     * 「不计入收支」的行不参与（与首页月汇总同口径）。
      */
     fun categoryTotals(
         rows: List<TxWithCategory>,
@@ -75,7 +78,7 @@ object HomeGroups {
         topN: Int = 6,
         zone: ZoneId = ZoneId.systemDefault(),
     ): List<CategoryTotal> {
-        val byCategory = rows.filter { it.type == type }
+        val byCategory = rows.filter { it.type == type && !it.excludeFromStats }
             .groupBy { it.categoryName ?: "未分类" }
             .mapValues { (_, items) -> items.sumOf { it.amountCents } }
             .filterValues { it > 0 }
