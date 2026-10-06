@@ -33,7 +33,7 @@ import dev.penned.app.data.db.entity.TransactionTagRefEntity
         BudgetEntity::class,
         ImportBatchEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -48,7 +48,7 @@ abstract class PennedDatabase : RoomDatabase() {
     companion object {
         fun build(context: Context): PennedDatabase =
             Room.databaseBuilder(context, PennedDatabase::class.java, "penned.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
     }
 }

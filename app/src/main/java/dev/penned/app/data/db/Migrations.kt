@@ -11,6 +11,14 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
     }
 }
 
+/** v3→v4：账户加备注与生效账本（D027：备注只作备忘；scopeAllBooks 默认 0 = 老账户仍只在自己账本可见）。 */
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE accounts ADD COLUMN remark TEXT")
+        db.execSQL("ALTER TABLE accounts ADD COLUMN scopeAllBooks INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 /** v1→v2：流水加 D020~D022 字段；新增 budgets / import_batches（specs/M1.md S1）。 */
 val MIGRATION_1_2 = object : Migration(1, 2) {
     override fun migrate(db: SupportSQLiteDatabase) {

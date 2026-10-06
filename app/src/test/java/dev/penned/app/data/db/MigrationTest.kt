@@ -9,7 +9,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -69,7 +71,7 @@ class MigrationTest {
             )
         }
         val real = Room.databaseBuilder(context, PennedDatabase::class.java, dbName)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .allowMainThreadQueries()
             .build()
         try {
@@ -110,7 +112,7 @@ class MigrationTest {
             )
         }
         val real = Room.databaseBuilder(context, PennedDatabase::class.java, dbName)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .allowMainThreadQueries()
             .build()
         try {
@@ -124,6 +126,39 @@ class MigrationTest {
                 c.moveToFirst()
                 assertTrue(c.isNull(0))
                 c.close()
+            }
+        } finally {
+            real.close()
+        }
+    }
+
+    @Test
+    fun `migrate 3 to 4 adds account remark and scope columns and keeps data`() {
+        createLegacyDatabase(3) { db ->
+            db.execSQL(
+                "INSERT INTO books (id, name, sortOrder, createdAt, updatedAt, deleted, deviceId) " +
+                    "VALUES ('b1', '测试账本', 0, 1, 1, 0, 'd')"
+            )
+            db.execSQL(
+                "INSERT INTO accounts (id, bookId, name, type, groupName, initialBalanceCents, currencyCode, " +
+                    "archived, createdAt, updatedAt, deleted, deviceId) " +
+                    "VALUES ('a1', 'b1', '现金', 'CASH', NULL, 100000, 'CNY', 0, 1, 1, 0, 'd')"
+            )
+        }
+        val real = Room.databaseBuilder(context, PennedDatabase::class.java, dbName)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            runTest {
+                // 旧数据保留，余额重算不受迁移影响
+                val account = real.accountDao().get("a1")!!
+                assertEquals("现金", account.name)
+                assertEquals(100_000L, account.initialBalanceCents)
+                assertEquals(100_000L, real.accountDao().observeWithBalance("b1").first().single().balanceCents)
+                // 新列默认值：备注空、生效账本仍是"仅本账本"（老账户行为不变）
+                assertNull(account.remark)
+                assertFalse(account.scopeAllBooks)
             }
         } finally {
             real.close()

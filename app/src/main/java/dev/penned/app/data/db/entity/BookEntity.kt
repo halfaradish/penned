@@ -28,6 +28,13 @@ data class AccountEntity(
     val initialBalanceCents: Long = 0,
     val currencyCode: String = "CNY",
     val archived: Boolean = false,
+    /** 备注（选填）。D027：只作个人备忘，不参与任何计算。 */
+    val remark: String? = null,
+    /**
+     * 生效账本（D027）：true = 每个账本都能看到该账户，余额按跨账本流水合并；
+     * false（默认，也是迁移前所有老账户的行为）= 只在 [bookId] 所属账本可见。
+     */
+    val scopeAllBooks: Boolean = false,
     val createdAt: Long,
     val updatedAt: Long,
     val deleted: Boolean = false,
