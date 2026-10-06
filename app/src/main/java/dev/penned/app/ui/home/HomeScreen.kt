@@ -62,6 +62,7 @@ import dev.penned.app.ui.theme.incomeColor
 /** 列表项 key：FAB 显隐判断靠它（"添加一条新记账"滚出视野后 FAB 接管）。 */
 private const val ADD_BUTTON_KEY = "add-button"
 private const val SUMMARY_CARD_KEY = "month-card"
+private const val BUDGET_CARD_KEY = "budget-card"
 private const val HOME_LIST_TAG = "home-list"
 private const val HOME_FAB_TAG = "home-fab"
 
@@ -224,11 +225,18 @@ fun HomeContent(
                         val today = LocalDate.now(zone)
                         HomeSummaryCard(
                             totals = HomeGroups.monthTotals(rows, today.year, today.monthValue, zone),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                        )
+                    }
+                    item(key = BUDGET_CARD_KEY) {
+                        HomeBudgetCard(
                             budgetSummary = budgetSummary,
                             onOpenBudgets = onOpenBudgets,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                                .padding(horizontal = 16.dp, vertical = 6.dp),
                         )
                     }
                     item(key = ADD_BUTTON_KEY) {
@@ -323,11 +331,10 @@ private fun HomeAddFab(visible: Boolean, onClick: () -> Unit, modifier: Modifier
  * 第一行 支出/收入/结余，第二行 剩余预算 + 预算明细（可点进预算管理），第三行 4dp 进度条。
  * 没设预算时第二行换成"设置本月预算"入口。
  */
+/** 月汇总卡：支出/收入/结余三列（标签一行 + 数值一行）。 */
 @Composable
 private fun HomeSummaryCard(
     totals: HomeGroups.MonthTotals,
-    budgetSummary: HomeViewModel.BudgetSummary?,
-    onOpenBudgets: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Card(modifier = modifier) {
@@ -342,54 +349,54 @@ private fun HomeSummaryCard(
                     Modifier.weight(1f),
                 )
             }
-            Spacer(Modifier.height(6.dp))
-            if (budgetSummary == null) {
-                Text(
-                    "设置本月预算，控制花销 →",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(6.dp))
-                        .clickable(onClick = onOpenBudgets)
-                        .padding(vertical = 2.dp),
-                )
-            } else {
-                val state = dev.penned.app.domain.BudgetMath.state(budgetSummary.totalCents, budgetSummary.spentCents)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(6.dp))
-                        .clickable(onClick = onOpenBudgets)
-                        .padding(vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("剩余预算", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        if (state.overspent) "已超支 ${Money.format(-state.remainingCents)}" else Money.format(state.remainingCents),
-                        style = MaterialTheme.typography.titleSmall,
-                        color = if (state.overspent) expenseColor() else MaterialTheme.colorScheme.primary,
-                    )
-                    Spacer(Modifier.weight(1f))
-                    Text(
-                        "预算 ${Money.format(budgetSummary.totalCents)} · 已用 ${Money.format(budgetSummary.spentCents)}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Spacer(Modifier.height(4.dp))
-                LinearProgressIndicator(
-                    progress = { state.usedFraction },
-                    modifier = Modifier.fillMaxWidth().height(4.dp),
-                    color = if (state.overspent) expenseColor() else MaterialTheme.colorScheme.primary,
-                )
-            }
         }
     }
 }
 
-/** 合并卡第一行的三列：标签一行、数值一行（等宽三列，居中）。 */
+/**
+ * 预算卡：与月汇总卡同款三列布局（预算/已用/剩余），只多一条进度条；整卡可点进预算管理。
+ * 未设预算时是"设置本月预算"入口。
+ */
+@Composable
+private fun HomeBudgetCard(
+    budgetSummary: HomeViewModel.BudgetSummary?,
+    onOpenBudgets: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (budgetSummary == null) {
+        Card(modifier = modifier.clickable(onClick = onOpenBudgets)) {
+            Text(
+                "设置本月预算，控制花销 →",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 14.dp),
+            )
+        }
+        return
+    }
+    val state = dev.penned.app.domain.BudgetMath.state(budgetSummary.totalCents, budgetSummary.spentCents)
+    val remainColor = if (state.overspent) expenseColor() else MaterialTheme.colorScheme.primary
+    Card(modifier = modifier.clickable(onClick = onOpenBudgets)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                SummaryColumn("预算", Money.format(budgetSummary.totalCents), MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
+                SummaryColumn("已用", Money.format(budgetSummary.spentCents), MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
+                // 超支时 remainingCents 为负，红字直接读出超了多少
+                SummaryColumn("剩余", Money.format(state.remainingCents), remainColor, Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(6.dp))
+            LinearProgressIndicator(
+                progress = { state.usedFraction },
+                modifier = Modifier.fillMaxWidth().height(4.dp),
+                color = remainColor,
+            )
+        }
+    }
+}
+
+/** 卡片里的三列：标签一行、数值一行（等宽三列，居中）。 */
 @Composable
 private fun SummaryColumn(label: String, value: String, valueColor: Color, modifier: Modifier = Modifier) {
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {

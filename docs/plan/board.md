@@ -8,6 +8,7 @@
 
 ## 待办
 
+- 首页冷启动首帧会闪一下"还没有记账"空态（Room 流首帧未到，`rows` 初值是空表）——可用 `loaded` 标志在首帧前不渲染空态（小 UX，复查时发现）
 - 记一笔顶栏「编辑」是 disabled 死 UI（占位注释还写着"M1 第二批：分类管理"，该功能已做但未接通）；「不报销」chip 同为占位（M3）——接通分类管理或移除
 - 一木 xls 导入器不解析 地址/多币种/报销 列（真实 751 行文件这些列全空，无数据损失）——等真出现带这些列的文件再补解析（报销列还涉及 M3 的报销语义）
 - 日历 Tab 占位文案 "M1 第二批" 已过时：日历页未分配任何冻结里程碑（总方案 M0~M6 未列），需在 M2 规格时明确归属
@@ -53,8 +54,11 @@
 
 ### 首页布局改造：合并卡随列表滚动 + 右下角 FAB（2026-10-06）
 - 问题：月汇总卡 + 预算行 + "添加一条新记账"三块固定占顶部约 200dp，且不随内容滚动（列表只有剩余空间能滚）
-- **月汇总与预算合并成一张卡**（约 110dp）：第一行三列两行——`支出 / 收入 / 结余` 标签一行（labelSmall，等宽居中）+ 数值一行（titleSmall）；第二行 `剩余预算 2978.00` + 右侧 `预算 3000.00 · 已用 22.00`（可点 → 预算管理；未设预算时换成"设置本月预算，控制花销 →"）；第三行 4dp 进度条（超支红）。删除 `SummaryCell`/`BudgetSummaryRow`，新增 `HomeSummaryCard`/`SummaryColumn`
-- **布局骨架**：固定区只剩标题栏（账本名 + 搜索）；合并卡、添加按钮改为 LazyColumn 的头部 item（`key = month-card` / `add-button`），空态也从"整屏居中"改成列表项 —— 全部随内容滚走
+- **月汇总卡 + 预算卡两张**（同款三列布局：标签一行 labelSmall 等宽居中 + 数值一行 titleSmall）：
+  - 月汇总卡：`支出 / 收入 / 结余`（不可点）
+  - 预算卡：`预算 / 已用 / 剩余`（剩余正常绿、超支红负数）+ 只多一条 4dp 进度条；整卡可点 → 预算管理；未设预算时该槽位是瘦卡"设置本月预算，控制花销 →"
+  - 删除旧 `SummaryCell`/`BudgetSummaryRow`，新增 `HomeSummaryCard`/`HomeBudgetCard`/`SummaryColumn`；超支态截图 `m1_home_budget_overspent.png`
+- **布局骨架**：固定区只剩标题栏（账本名 + 搜索）；两张卡、添加按钮改为 LazyColumn 的头部 item（`key = month-card` / `budget-card` / `add-button`），空态也从"整屏居中"改成列表项 —— 全部随内容滚走
 - **右下角 FAB**：`AnimatedVisibility(fadeIn/fadeOut)` 包裹的绿色圆按钮（`containerColor = primary`，白 "+"），落在底部导航栏正上方；显隐靠 `derivedStateOf { listState.layoutInfo.visibleItemsInfo.any { it.key == "add-button" } }`，即"添加一条新记账"滚出视野后接管；`totalItemsCount > 0` 防首帧闪现；多选模式不显示
 - 测试：新增 `HomeScreenScreenshotTest`（首页首次有浅色截图）——`m1_home_top.png`（合并卡 + 无 FAB）、`m1_home_scrolled.png`（滚动后卡片/按钮消失 + FAB 出现 + 点 FAB 触发 onAdd）、多选模式无 FAB/卡片/按钮；`DarkThemeScreensTest.darkHome` 断言随文案更新（本月支出 → 支出）
 - 模拟机实测：顶部（合并卡、按钮在、无 FAB）→ 上滑（卡片与按钮滚走、绿色 FAB 出现）→ 点 FAB 进入记一笔 → 长按进多选（FAB 消失）→ 退出多选仍在下滑位置（FAB 正确复现）

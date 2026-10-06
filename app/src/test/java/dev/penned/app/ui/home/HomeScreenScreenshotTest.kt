@@ -77,7 +77,10 @@ class HomeScreenScreenshotTest {
         composeRule.onNodeWithText("支出").assertIsDisplayed()
         composeRule.onNodeWithText("收入").assertIsDisplayed()
         composeRule.onNodeWithText("结余").assertIsDisplayed()
-        composeRule.onNodeWithText("剩余预算").assertIsDisplayed()
+        // 预算卡：与月汇总同款三列 + 进度条
+        composeRule.onNodeWithText("预算").assertIsDisplayed()
+        composeRule.onNodeWithText("已用").assertIsDisplayed()
+        composeRule.onNodeWithText("剩余").assertIsDisplayed()
         composeRule.onNodeWithText("添加一条新记账").assertIsDisplayed()
         // 按钮还在视野里 → FAB 不出现
         composeRule.onNodeWithTag("home-fab").assertDoesNotExist()
@@ -91,12 +94,29 @@ class HomeScreenScreenshotTest {
         // 往下滚：卡片与"添加一条新记账"滚出视野
         composeRule.onNodeWithTag("home-list").performScrollToIndex(6)
         composeRule.onNodeWithText("添加一条新记账").assertDoesNotExist()
-        composeRule.onNodeWithText("剩余预算").assertDoesNotExist()
+        composeRule.onNodeWithText("剩余").assertDoesNotExist()
         // FAB 接管
         composeRule.onNodeWithTag("home-fab").assertIsDisplayed()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_home_scrolled.png")
         composeRule.onNodeWithTag("home-fab").performClick()
         org.junit.Assert.assertEquals(1, added)
+    }
+
+    @Test
+    fun captureBudgetOverspent() {
+        composeRule.setContent {
+            PennedTheme {
+                HomeContent(
+                    bookName = "日常账本",
+                    rows = rows,
+                    onAdd = {},
+                    // 已用 > 预算：剩余显示红色负数、进度条转红
+                    budgetSummary = HomeViewModel.BudgetSummary(totalCents = 100000, spentCents = 123456),
+                )
+            }
+        }
+        composeRule.onNodeWithText("-234.56").assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_home_budget_overspent.png")
     }
 
     @Test
@@ -117,6 +137,6 @@ class HomeScreenScreenshotTest {
         composeRule.onNodeWithText("已选 1 条").assertIsDisplayed()
         composeRule.onNodeWithTag("home-fab").assertDoesNotExist()
         composeRule.onNodeWithText("添加一条新记账").assertDoesNotExist()
-        composeRule.onNodeWithText("剩余预算").assertDoesNotExist()
+        composeRule.onNodeWithText("剩余").assertDoesNotExist()
     }
 }
