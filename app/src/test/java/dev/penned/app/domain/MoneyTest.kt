@@ -13,8 +13,18 @@ class MoneyTest {
         assertEquals("16.50", Money.format(1650))
         assertEquals("16.55", Money.format(1655))
         assertEquals("-16.00", Money.format(-1600))
-        assertEquals("8499.00", Money.format(849900))
         assertEquals("0.05", Money.format(5))
+    }
+
+    @Test
+    fun `format - thousand separators by default`() {
+        assertEquals("999.99", Money.format(99_999))
+        assertEquals("1,000.00", Money.format(100_000))
+        assertEquals("3,500.00", Money.format(350_000))
+        assertEquals("-8,499.00", Money.format(-849_900))
+        assertEquals("1,234,567.89", Money.format(123_456_789))
+        // 输入框回填：不带千分位，parseToCents 直接吃
+        assertEquals("8499.00", Money.format(849_900, grouped = false))
     }
 
     @Test
@@ -43,8 +53,8 @@ class MoneyTest {
 
     @Test
     fun `round trip`() {
-        listOf(0L, 5L, 1650L, 1655L, 849900L).forEach { cents ->
-            assertEquals(cents, Money.parseToCents(Money.format(cents)))
+        listOf(0L, 5L, 1650L, 1655L, 849_900L, 123_456_789L).forEach { cents ->
+            assertEquals(cents, Money.parseToCents(Money.format(cents, grouped = false)))
         }
     }
 }

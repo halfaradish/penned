@@ -104,7 +104,7 @@ class SearchScreenScreenshotTest {
 
         composeRule.onNodeWithText("搜索备注 / 分类 / 金额").performTextInput("工资")
         composeRule.onNodeWithText("找到 1 条").assertIsDisplayed()
-        composeRule.onNodeWithText("+3500.00").assertIsDisplayed()
+        composeRule.onNodeWithText("+3,500.00").assertIsDisplayed()
 
         // 清除（图标按钮，按 contentDescription 定位）→ 回到初始提示
         composeRule.onNodeWithContentDescription("清除").performClick()

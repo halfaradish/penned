@@ -5,13 +5,22 @@ package dev.penned.app.domain
  */
 object Money {
 
-    fun format(cents: Long): String {
+    /**
+     * 分 → 元字符串。默认带千分位（"3,500.00"）：大额更好扫读，与同类记账 App 一致。
+     * 输入框回填一律传 `grouped = false`——光标与 [parseToCents] 都不吃逗号。
+     */
+    fun format(cents: Long, grouped: Boolean = true): String {
         val sign = if (cents < 0) "-" else ""
         val abs = kotlin.math.abs(cents)
         val whole = abs / 100
         val frac = (abs % 100).toString().padStart(2, '0')
-        return "$sign$whole.$frac"
+        val digits = if (grouped) groupDigits(whole) else whole.toString()
+        return "$sign$digits.$frac"
     }
+
+    /** 千分位：按 3 位一组（3500 → "3,500"）。 */
+    private fun groupDigits(value: Long): String =
+        value.toString().reversed().chunked(3).joinToString(",").reversed()
 
     /** 金额输入框文本 → 分。空/非法/0 位返回 null。整数部分上限 9 位（约千万级）。 */
     fun parseToCents(input: String): Long? {

@@ -59,7 +59,7 @@ class ImportBatchDetailScreenshotTest {
         composeRule.onNodeWithText("3 条流水 · 导入于 2023-11-15 06:13").assertIsDisplayed()
         composeRule.onNodeWithText("北苑餐厅").assertIsDisplayed()
         composeRule.onNodeWithText("-16.00").assertIsDisplayed()
-        composeRule.onNodeWithText("+3500.00").assertIsDisplayed()
+        composeRule.onNodeWithText("+3,500.00").assertIsDisplayed()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_import_batch_detail.png")
     }
 

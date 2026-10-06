@@ -95,7 +95,7 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
         viewModelScope.launch {
             val tx = db.transactionDao().get(id) ?: return@launch
             type.value = tx.type
-            amountText.value = Money.format(tx.amountCents)
+            amountText.value = Money.format(tx.amountCents, grouped = false)
             selectedCategoryId.value = tx.categoryId
             expandedParentId.value = tx.categoryId?.let { cid ->
                 categories.value.firstOrNull { c -> c.id == cid }?.parentId ?: cid
@@ -103,7 +103,7 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
             accountId.value = tx.accountId
             transferFromId.value = tx.accountId
             transferToId.value = tx.targetAccountId
-            feeText.value = if (tx.feeCents > 0) Money.format(tx.feeCents) else ""
+            feeText.value = if (tx.feeCents > 0) Money.format(tx.feeCents, grouped = false) else ""
             note.value = tx.note.orEmpty()
             dateEpochDay.value = AddDate.dayFromMinute(tx.dateEpochMinute)
         }
@@ -188,7 +188,7 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
         val expr = amountText.value
         if (!MoneyExpression.hasPendingOperator(expr)) return
         val cents = MoneyExpression.evaluate(expr) ?: return
-        amountText.value = Money.format(cents)
+        amountText.value = Money.format(cents, grouped = false)
     }
 
     fun setNote(text: String) {

@@ -132,7 +132,7 @@ class AccountEditViewModel(
             type = account.type,
             presetLabel = preset?.label,
             name = account.name,
-            initialText = if (account.initialBalanceCents == 0L) "" else Money.format(account.initialBalanceCents),
+            initialText = if (account.initialBalanceCents == 0L) "" else Money.format(account.initialBalanceCents, grouped = false),
             pendingTxCount = db.transactionDao().countByAccount(id),
         )
     }

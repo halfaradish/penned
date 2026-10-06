@@ -147,7 +147,7 @@ fun BudgetScreen(
     editRow?.let { row ->
         BudgetAmountDialog(
             title = if (row.budget.categoryId == null) "编辑总预算" else "编辑「${row.categoryName}」预算",
-            initialAmount = Money.format(row.budget.amountCents),
+            initialAmount = Money.format(row.budget.amountCents, grouped = false),
             categoryLabel = row.categoryName,
             onConfirm = { cents ->
                 viewModel.setBudget(row.budget.categoryId, cents)
