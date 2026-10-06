@@ -116,4 +116,10 @@ interface TransactionDao {
 
     @Query("SELECT COUNT(*) FROM transactions")
     suspend fun count(): Int
+
+    @Query("SELECT COUNT(*) FROM transactions WHERE deleted = 0 AND bookId = :bookId")
+    suspend fun countInBook(bookId: String): Int
+
+    @Query("UPDATE transactions SET deleted = 1, updatedAt = :now WHERE bookId = :bookId")
+    suspend fun softDeleteByBook(bookId: String, now: Long)
 }

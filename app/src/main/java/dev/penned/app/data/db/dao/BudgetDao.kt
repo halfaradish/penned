@@ -20,4 +20,7 @@ interface BudgetDao {
 
     @Query("UPDATE budgets SET deleted = 1, updatedAt = :now WHERE id = :id")
     suspend fun softDelete(id: String, now: Long)
+
+    @Query("UPDATE budgets SET deleted = 1, updatedAt = :now WHERE bookId = :bookId")
+    suspend fun softDeleteByBook(bookId: String, now: Long)
 }

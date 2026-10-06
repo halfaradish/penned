@@ -6,6 +6,7 @@ import dev.penned.app.data.seed.DefaultSeed
 import dev.penned.app.data.db.entity.TransactionEntity
 import dev.penned.app.domain.CategoryType
 import dev.penned.app.domain.TxType
+import androidx.room.withTransaction
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -122,6 +123,78 @@ class PennedDatabaseTest {
 
         val rows = db.transactionDao().observeRecentWithCategory(book.id, 10).first()
         assertEquals(listOf("new", "old"), rows.map { it.id })
+    }
+
+    @Test
+    fun `book soft delete cascades to its data and keeps other books`() = runTest {
+        // M1 S3：删除=软删（账本 + 其流水/账户/分类/预算/导入批次）
+        val bookA = DefaultSeed.seedIfEmpty(db, "device-a", now = 1000L)!!
+        val bookB = dev.penned.app.data.db.entity.BookEntity(
+            id = "book-b", name = "旅行账本", createdAt = 2000L, updatedAt = 2000L, deviceId = "device-a",
+        )
+        db.bookDao().upsert(bookB)
+        val categoryA = db.categoryDao().observeByBook(bookA.id).first().first { it.name == "午餐" }
+        val categoryB = dev.penned.app.data.db.entity.CategoryEntity(
+            id = "cat-b", bookId = bookB.id, parentId = null, name = "旅行支出",
+            type = CategoryType.EXPENSE, createdAt = 2000L, updatedAt = 2000L, deviceId = "device-a",
+        )
+        db.categoryDao().upsert(categoryB)
+        db.accountDao().upsert(
+            dev.penned.app.data.db.entity.AccountEntity(
+                id = "acc-a", bookId = bookA.id, name = "现金", type = dev.penned.app.domain.AccountType.CASH,
+                createdAt = 2000L, updatedAt = 2000L, deviceId = "device-a",
+            )
+        )
+        db.accountDao().upsert(
+            dev.penned.app.data.db.entity.AccountEntity(
+                id = "acc-b", bookId = bookB.id, name = "旅费卡", type = dev.penned.app.domain.AccountType.DEBIT,
+                createdAt = 2000L, updatedAt = 2000L, deviceId = "device-a",
+            )
+        )
+        fun tx(id: String, bookId: String, categoryId: String) = TransactionEntity(
+            id = id, bookId = bookId, type = TxType.EXPENSE, amountCents = 1600,
+            categoryId = categoryId, dateEpochMinute = 10_000,
+            creatorDeviceId = "d", createdAt = 1L, updatedAt = 1L, deviceId = "d",
+        )
+        db.transactionDao().upsert(tx("tx-a", bookA.id, categoryA.id))
+        db.transactionDao().upsert(tx("tx-b", bookB.id, categoryB.id))
+        db.budgetDao().upsert(
+            dev.penned.app.data.db.entity.BudgetEntity(
+                id = "budget-a", bookId = bookA.id, categoryId = null, amountCents = 100000,
+                startEpochDay = 0, createdAt = 1L, updatedAt = 1L, deviceId = "d",
+            )
+        )
+        db.importBatchDao().upsert(
+            dev.penned.app.data.db.entity.ImportBatchEntity(
+                id = "batch-a", bookId = bookA.id, fileName = "a.xls", count = 1, importedAt = 1L,
+                createdAt = 1L, updatedAt = 1L, deviceId = "d",
+            )
+        )
+        assertEquals(1, db.transactionDao().countInBook(bookA.id))
+
+        val now = 5000L
+        db.withTransaction {
+            db.bookDao().softDelete(bookA.id, now)
+            db.transactionDao().softDeleteByBook(bookA.id, now)
+            db.accountDao().softDeleteByBook(bookA.id, now)
+            db.categoryDao().softDeleteByBook(bookA.id, now)
+            db.budgetDao().softDeleteByBook(bookA.id, now)
+            db.importBatchDao().softDeleteByBook(bookA.id, now)
+        }
+
+        // A 全部隐藏
+        assertEquals(listOf("book-b"), db.bookDao().observeAll().first().map { it.id })
+        assertTrue(db.transactionDao().allInBook(bookA.id).isEmpty())
+        assertTrue(db.accountDao().allInBook(bookA.id).isEmpty())
+        assertTrue(db.categoryDao().allInBook(bookA.id).isEmpty())
+        assertTrue(db.budgetDao().observeByBook(bookA.id).first().isEmpty())
+        assertTrue(db.importBatchDao().observeAll().first().isEmpty())
+        // B 不受影响
+        assertEquals(1, db.transactionDao().allInBook(bookB.id).size)
+        assertEquals(1, db.accountDao().allInBook(bookB.id).size)
+        assertEquals(1, db.categoryDao().allInBook(bookB.id).size)
+        // 软删不是物理删除（同步需要）
+        assertEquals(2, db.bookDao().count())
     }
 
     @Test

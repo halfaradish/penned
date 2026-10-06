@@ -21,6 +21,10 @@ interface BookDao {
 
     @Upsert
     suspend fun upsert(book: BookEntity)
+
+    /** 账本软删（M1 S3）；其下数据由 BooksViewModel 在同一事务里级联软删。 */
+    @Query("UPDATE books SET deleted = 1, updatedAt = :now WHERE id = :id")
+    suspend fun softDelete(id: String, now: Long)
 }
 
 /** 列表行：账户 + 重算余额（D004：初始余额 + 收支 ± 转账，手续费记转出方）。 */
@@ -65,4 +69,7 @@ interface AccountDao {
 
     @Upsert
     suspend fun upsert(account: AccountEntity)
+
+    @Query("UPDATE accounts SET deleted = 1, updatedAt = :now WHERE bookId = :bookId")
+    suspend fun softDeleteByBook(bookId: String, now: Long)
 }

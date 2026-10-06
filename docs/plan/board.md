@@ -8,7 +8,6 @@
 
 ## 待办
 
-- **M1 规格缺项：账本删除（软删）没做**（S3 明写「删除=软删，M1 不做合并」）——BooksScreen 只有 新增/重命名/切换，BookDao 无 softDelete。需定删除交互（账本非空时是否连流水一起软删/禁止删）
 - 死 UI 清理（可见但点不动）：首页顶栏「搜索」是纯文本无 clickable 无页面（IA 有搜索，M1 规格未列 → 摘掉或归 M3 组合筛选）；我的页「关于」`onClick = {}`；资产页账户行 `clickable {}`（有涟漪无反应）
 - 记一笔顶栏「编辑」是 disabled 死 UI（占位注释还写着"M1 第二批：分类管理"，该功能已做但未接通）；「不报销」chip 同为占位（M3）——接通分类管理或移除
 - 文案/行为不一致：我的页「分类管理」副标题写"隐藏支出与收入分类"，实际是软删除；`CategoryEntity.hidden` 全仓库无人使用（死字段）
@@ -57,6 +56,14 @@
 （无）
 
 ## 已完成
+
+### M1 收尾 6/8：账本删除（软删，M1 S3 缺项）（2026-10-06）
+- **删除交互定案**：账本连同其流水/账户/分类/预算/导入批次**级联软删**（同一事务）；至少保留一个账本（只剩一个时删除键置灰）；删的是当前账本时先把当前账本切到别的本
+- DAO：`BookDao.softDelete`、`TransactionDao.softDeleteByBook/countInBook`、`AccountDao/CategoryDao/BudgetDao/ImportBatchDao.softDeleteByBook`
+- UI：`BooksScreen` 抽出无状态 `BooksContent`，每行加「删除」+ 确认弹窗（显示该账本流水条数）
+- 测试：`PennedDatabaseTest`「book soft delete cascades to its data and keeps other books」（A 全隐藏/B 不受影响/软删非物理删）+ `BooksScreenScreenshotTest`（列表截图 + 只剩一本时删除键不可点）
+- 模拟机实测：新增 TestBook（自动成当前账本）→ 塞 1 条流水 → 管理账本删除 → 弹窗显示「1 条流水」→ 确认后 books/transactions 均 deleted=1、列表只剩日常账本且已切回当前账本、首页数据回归（本月支出 22.00）
+- 验证：`./gradlew build` 全绿
 
 ### M1 收尾 5/8：不计入收支语义修正（P0，2026-10-06）
 - **语义定案**：「不计入收支」只影响收支统计，不影响账户余额（钱实际动了；信用卡还款场景）
