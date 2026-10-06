@@ -50,7 +50,8 @@ class AccountEditScreenScreenshotTest {
         composeRule.onNodeWithText("余额").assertIsDisplayed()
         composeRule.onNodeWithText("所属分组").assertIsDisplayed()
         composeRule.onNodeWithText("资金账户").assertIsDisplayed()
-        composeRule.onNodeWithText("元").assertIsDisplayed()
+        // 金额不带单位（全 App 一致），余额行与其它行一样左对齐
+        composeRule.onNodeWithText("0.00").assertIsDisplayed()
         composeRule.onNodeWithText("保存").assertIsDisplayed()
         // 新增页没有删除入口
         composeRule.onNodeWithText("删除账户").assertDoesNotExist()

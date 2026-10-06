@@ -32,10 +32,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -348,7 +346,6 @@ fun AccountEditContent(
                         label = "余额",
                         value = state.initialText,
                         placeholder = "0.00",
-                        suffix = "元",
                         money = true,
                         onValueChange = onInitialChange,
                     )
@@ -537,7 +534,7 @@ private fun GroupPickerSheet(
     }
 }
 
-/** 表单行：左标签 + 紧跟其后的输入，行高与列表行一致（金额也左对齐，「元」跟在数字后面）。 */
+/** 表单行：左标签 + 紧跟其后的输入，行高与列表行一致（金额也左对齐，不带单位）。 */
 @Composable
 private fun EditFieldRow(
     label: String,
@@ -545,7 +542,6 @@ private fun EditFieldRow(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     placeholder: String = "",
-    suffix: String? = null,
     money: Boolean = false,
     focusRequester: FocusRequester? = null,
 ) {
@@ -562,45 +558,28 @@ private fun EditFieldRow(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.width(72.dp),
         )
-        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-            // BasicTextField 空值时自身会撑到一百多 dp（与内容无关），后缀（元）就会被推远；
-            // 按实际文本量一次宽度，让输入框跟着内容走。
-            val measurer = rememberTextMeasurer()
-            val density = LocalDensity.current
-            val textStyle = MaterialTheme.typography.bodyLarge
-            val shown = value.ifEmpty { placeholder }
-            val fieldWidth = with(density) { measurer.measure(shown, textStyle).size.width.toDp() } + 20.dp
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                singleLine = true,
-                textStyle = textStyle.copy(color = MaterialTheme.colorScheme.onSurface),
-                keyboardOptions = KeyboardOptions(keyboardType = if (money) KeyboardType.Decimal else KeyboardType.Text),
-                modifier = Modifier
-                    .width(fieldWidth)
-                    .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
-                decorationBox = { inner ->
-                    Box(contentAlignment = Alignment.CenterStart) {
-                        if (value.isEmpty()) {
-                            Text(
-                                placeholder,
-                                style = textStyle,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        inner()
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+            keyboardOptions = KeyboardOptions(keyboardType = if (money) KeyboardType.Decimal else KeyboardType.Text),
+            modifier = Modifier
+                .weight(1f)
+                .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
+            decorationBox = { inner ->
+                Box(contentAlignment = Alignment.CenterStart) {
+                    if (value.isEmpty()) {
+                        Text(
+                            placeholder,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
-                },
-            )
-            if (suffix != null) {
-                Spacer(Modifier.width(PennedSpacing.xs))
-                Text(
-                    suffix,
-                    style = textStyle,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+                    inner()
+                }
+            },
+        )
     }
 }
 
