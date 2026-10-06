@@ -20,8 +20,15 @@ import dev.penned.app.ui.categories.CategoriesViewModel
 import dev.penned.app.ui.categories.CategoriesScreen
 import dev.penned.app.ui.data.DataViewModel
 import dev.penned.app.ui.data.DataManagementScreen
+import dev.penned.app.ui.assets.AssetsContent
+import dev.penned.app.ui.assets.AssetsUiState
+import dev.penned.app.ui.books.BooksContent
 import dev.penned.app.ui.data.ImportBatchesScreen
+import dev.penned.app.ui.detail.DetailContent
+import dev.penned.app.ui.detail.DetailUi
 import dev.penned.app.ui.home.HomeContent
+import dev.penned.app.ui.home.HomeGroups
+import dev.penned.app.ui.stats.StatsContent
 import dev.penned.app.ui.lock.LockScreen
 import dev.penned.app.ui.mine.MineScreen
 import org.junit.Rule
@@ -154,6 +161,124 @@ class DarkThemeScreensTest {
         dark { LockScreen(storedHash = "salt:abcd", onUnlock = {}) }
         composeRule.onNodeWithText("一笔一记已锁定").assertIsDisplayed()
         capture("lock")
+    }
+
+    @Test
+    fun darkDetail() {
+        dark {
+            DetailContent(
+                detail = DetailUi(
+                    tx = dev.penned.app.data.db.entity.TransactionEntity(
+                        id = "t1", bookId = "b1", type = TxType.EXPENSE, amountCents = 0,
+                        categoryId = null, dateEpochMinute = 28_800_000L, note = "遮光布",
+                        refundCents = 1454, source = dev.penned.app.domain.TxSource.IMPORT,
+                        creatorDeviceId = "d", createdAt = 1_700_000_000_000L, updatedAt = 1_700_000_000_000L,
+                        deviceId = "d",
+                    ),
+                    categoryName = "购物消费", categoryParentName = null,
+                    accountName = null, targetAccountName = null, bookName = "日常账本",
+                ),
+                onEdit = {}, onDelete = {}, onToggleStats = {}, onToggleBudget = {}, onBack = {},
+            )
+        }
+        composeRule.onNodeWithText("已全额退款").assertIsDisplayed()
+        capture("detail")
+    }
+
+    @Test
+    fun darkStats() {
+        dark {
+            StatsContent(
+                month = java.time.YearMonth.of(2026, 9),
+                totals = HomeGroups.MonthTotals(incomeCents = 350000, expenseCents = 295570),
+                expenseCategories = listOf(
+                    HomeGroups.CategoryTotal("食品餐饮", 180000, 0.61f),
+                    HomeGroups.CategoryTotal("购物消费", 80000, 0.27f),
+                    HomeGroups.CategoryTotal("其他", 35570, 0.12f),
+                ),
+                incomeCategories = listOf(HomeGroups.CategoryTotal("工资", 350000, 1f)),
+            )
+        }
+        composeRule.onNodeWithText("支出构成").assertIsDisplayed()
+        capture("stats")
+    }
+
+    @Test
+    fun darkAssets() {
+        dark {
+            AssetsContent(
+                state = AssetsUiState(
+                    accounts = listOf(
+                        dev.penned.app.data.db.dao.AccountWithBalance("a1", "支付宝", dev.penned.app.domain.AccountType.DEBIT, "资金账户", 128_450L),
+                        dev.penned.app.data.db.dao.AccountWithBalance("a2", "招行信用卡", dev.penned.app.domain.AccountType.CREDIT, "信贷账户", -58_900L),
+                    ),
+                    netCents = 69_550L, assetCents = 128_450L, liabilityCents = 58_900L,
+                ),
+                onAddAccount = { _, _, _ -> },
+            )
+        }
+        composeRule.onNodeWithText("净资产(元)").assertIsDisplayed()
+        capture("assets")
+    }
+
+    @Test
+    fun darkTransferTab() {
+        dark {
+            AddTransactionContent(
+                type = TxType.TRANSFER,
+                amountText = "8200", note = "还信用卡",
+                selectedId = null, expandedId = null, canSave = true, showEquals = false,
+                accountId = null, fromId = "a1", toId = "a2", feeText = "2.00",
+                accounts = listOf(
+                    dev.penned.app.data.db.entity.AccountEntity("a1", "b1", "支付宝", dev.penned.app.domain.AccountType.DEBIT, createdAt = 0, updatedAt = 0, deviceId = "d"),
+                    dev.penned.app.data.db.entity.AccountEntity("a2", "b1", "储蓄卡", dev.penned.app.domain.AccountType.DEBIT, createdAt = 0, updatedAt = 0, deviceId = "d"),
+                ),
+                parents = emptyList(), expandedSubs = emptyList(),
+                onSelectType = {}, onKey = {}, onSelectParent = {}, onSelectSub = {},
+                onNoteChange = {}, onPickAccount = {}, onPickFrom = {}, onPickTo = {},
+                onSwap = {}, onFeeChange = {}, onEvaluate = {}, onSave = {}, onSaveAgain = {},
+                onBack = {}, onEdit = {},
+            )
+        }
+        composeRule.onNodeWithText("支付宝").assertIsDisplayed()
+        composeRule.onNodeWithText("手续费 2.00").assertIsDisplayed()
+        capture("add_transfer")
+    }
+
+    @Test
+    fun darkCalculator() {
+        dark {
+            AddTransactionContent(
+                type = TxType.EXPENSE,
+                amountText = "12×3÷4", note = "",
+                selectedId = "p0", expandedId = null, canSave = true, showEquals = true,
+                accountId = null, fromId = null, toId = null, feeText = "",
+                accounts = emptyList(),
+                parents = listOf(CategoryUi("p0", "其他", hasSubs = false)), expandedSubs = emptyList(),
+                onSelectType = {}, onKey = {}, onSelectParent = {}, onSelectSub = {},
+                onNoteChange = {}, onPickAccount = {}, onPickFrom = {}, onPickTo = {},
+                onSwap = {}, onFeeChange = {}, onEvaluate = {}, onSave = {}, onSaveAgain = {},
+                onBack = {}, onEdit = {},
+            )
+        }
+        composeRule.onNodeWithText("12×3÷4").assertIsDisplayed()
+        composeRule.onNodeWithText("=").assertIsDisplayed()
+        capture("add_calculator")
+    }
+
+    @Test
+    fun darkBooks() {
+        dark {
+            BooksContent(
+                books = listOf(
+                    dev.penned.app.data.db.entity.BookEntity("b1", "日常账本", 0, 1L, 1L, deviceId = "d"),
+                    dev.penned.app.data.db.entity.BookEntity("b2", "旅行账本", 1, 1L, 1L, deviceId = "d"),
+                ),
+                currentId = "b2",
+            )
+        }
+        composeRule.onNodeWithText("当前账本").assertIsDisplayed()
+        capture("books")
     }
 
     private fun txRow(
