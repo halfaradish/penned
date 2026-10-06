@@ -6,10 +6,10 @@ import dev.penned.app.PennedApplication
 import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.data.db.entity.CategoryEntity
 import dev.penned.app.data.db.entity.TransactionEntity
+import dev.penned.app.domain.AddDate
 import dev.penned.app.domain.CategoryType
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.MoneyExpression
-import dev.penned.app.domain.TxSource
 import dev.penned.app.domain.TxType
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.ZonedDateTime
 import java.util.UUID
 
 class AddViewModel(private val app: PennedApplication, private val editId: String? = null) : ViewModel() {
@@ -104,7 +105,7 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
             transferToId.value = tx.targetAccountId
             feeText.value = if (tx.feeCents > 0) Money.format(tx.feeCents) else ""
             note.value = tx.note.orEmpty()
-            dateEpochDay.value = dev.penned.app.domain.AddDate.dayFromMinute(tx.dateEpochMinute)
+            dateEpochDay.value = AddDate.dayFromMinute(tx.dateEpochMinute)
         }
     }
 
@@ -220,60 +221,62 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
         }
     }
 
+    /**
+     * 记一笔页能改的字段；编辑时只覆盖这些，其余字段由 [TxEdit.applyEdit] 从原记录带过来。
+     */
+    private typealias EditableTx = TxEdit.Editable
+
     private suspend fun saveInternal(): Boolean {
         val cents = effectiveCents(amountText.value) ?: return false
         val now = System.currentTimeMillis()
         val book = currentBook.value ?: db.bookDao().observeAll().first().firstOrNull() ?: return false
-
         val original = editId?.let { db.transactionDao().get(it) }
-        val tx = when (type.value) {
+
+        val editable = when (type.value) {
             TxType.TRANSFER -> {
                 val from = transferFromId.value ?: return false
                 val to = transferToId.value ?: return false
                 if (from == to) return false
-                TransactionEntity(
-                    id = original?.id ?: UUID.randomUUID().toString(),
-                    bookId = original?.bookId ?: book.id,
+                EditableTx(
                     type = TxType.TRANSFER,
                     amountCents = cents,
                     accountId = from,
                     targetAccountId = to,
                     categoryId = null,
-                    dateEpochMinute = original?.dateEpochMinute
-                        ?: dev.penned.app.domain.AddDate.epochMinuteFor(dateEpochDay.value, java.time.ZonedDateTime.now()),
+                    dateEpochMinute = dateMinuteForSave(original),
                     note = note.value.trim().ifEmpty { null },
                     feeCents = Money.parseToCents(feeText.value) ?: 0L,
-                    source = original?.source ?: TxSource.MANUAL,
-                    creatorDeviceId = original?.creatorDeviceId ?: app.deviceId,
-                    createdAt = original?.createdAt ?: now,
-                    updatedAt = now,
-                    deviceId = app.deviceId,
                 )
             }
             else -> {
                 val categoryId = selectedCategoryId.value ?: return false
                 val category = categories.value.firstOrNull { it.id == categoryId } ?: return false
-                TransactionEntity(
-                    id = original?.id ?: UUID.randomUUID().toString(),
-                    bookId = original?.bookId ?: book.id,
+                EditableTx(
                     type = if (category.type == CategoryType.INCOME) TxType.INCOME else TxType.EXPENSE,
                     amountCents = cents,
                     accountId = accountId.value,
                     targetAccountId = null,
                     categoryId = category.id,
-                    dateEpochMinute = original?.dateEpochMinute
-                        ?: dev.penned.app.domain.AddDate.epochMinuteFor(dateEpochDay.value, java.time.ZonedDateTime.now()),
+                    dateEpochMinute = dateMinuteForSave(original),
                     note = note.value.trim().ifEmpty { null },
-                    source = original?.source ?: TxSource.MANUAL,
-                    creatorDeviceId = original?.creatorDeviceId ?: app.deviceId,
-                    createdAt = original?.createdAt ?: now,
-                    updatedAt = now,
-                    deviceId = app.deviceId,
+                    feeCents = 0L,
                 )
             }
         }
+
+        // 编辑走 TxEdit.applyEdit：退款/优惠/不计收支/不计预算/导入批次/报销等
+        // 本页管不着的字段一律原样保留（重建实体曾把它们全部重置——复查 P0 bug）。
+        val tx = original?.let { TxEdit.applyEdit(it, editable, now, app.deviceId) }
+            ?: TxEdit.newTransaction(book.id, editable, now, app.deviceId)
         db.transactionDao().upsert(tx)
         return true
+    }
+
+    /** 保存用时间：新建 = 今天/所选日 + 当前时分；编辑 = 原时间点（换日期则只挪天）。 */
+    private fun dateMinuteForSave(original: TransactionEntity?): Long = if (original == null) {
+        AddDate.epochMinuteFor(dateEpochDay.value, ZonedDateTime.now())
+    } else {
+        AddDate.epochMinuteForEdit(original.dateEpochMinute, dateEpochDay.value)
     }
 
     companion object {

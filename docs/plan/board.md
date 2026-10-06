@@ -8,14 +8,14 @@
 
 ## 待办
 
-- **P0 修复：编辑流水丢字段（2026-10-06 复查实证）**——AddViewModel.saveInternal 未从 original 复制 `refundCents/discountCents/excludeFromStats/excludeFromBudget/importBatchId/reimburse*`，编辑任意流水（哪怕只改备注）会把它们重置为默认值。实证：退款 2000→0、优惠 100→0、两个开关 true→false、批次归属 batch-x→null。影响：导入的 7 条退款流水编辑后退款归零；详情页开关一编辑就复位；编辑后流水脱离导入批次（批次计数失真、按批次删除漏删）。修复：saveInternal 两个分支补复制未编辑字段 + Robolectric 回归测试（编辑只改备注，其余字段不变）
 - **M1 验收缺项：Roborazzi 截图「记一笔转账/资产页」**（specs/M1.md 第一批验收标准明确列出）——当前 8 张 M1 截图覆盖记一笔支出/日期/分类、我的、数据管理、批次、预算、分类、统计、锁屏、深色 8 页，但没有转账 Tab 与资产页。补 2 个截图测试即可
 - **M1 收尾**：账单详情「退款」流程（specs/M1.md 第二批最后一项；第一批 S6 只写了"退款占位（M3）"，实际 DetailScreen 连占位都没有）。当前导入数据里 7 条退款流水在 UI 上完全不可见（含 5 条全额退款 amount=0）。建议 M1 收尾做只读展示（退款/优惠行），交互留 M3
 - 记一笔顶栏「编辑」是 disabled 死 UI（占位注释还写着"M1 第二批：分类管理"，该功能已做但未接通）；「不报销」chip 同为占位（M3）——接通分类管理或移除
 - 日历 Tab 占位文案 "M1 第二批" 已过时：日历页未分配任何冻结里程碑（总方案 M0~M6 未列），需在 M2 规格时明确归属
 - 首页流水行的转账记录显示「未分类？」——应显示「转账 → 账户」样式（polish，改 HomeGroups/HomeScreen 行渲染）
+- 资产页账户行第二行显示英文枚举（DEBIT/CASH/CREDIT）——应显示中文类型名（polish，AccountType 加 label 映射）
 - 添加账户弹窗：点预设 chip 会覆盖已输入的名称（小 UX，与一木对齐时可改为仅作 placeholder）
-- Robolectric 怪癖：AlertDialog 内含文本输入时 Compose 不 idle（分类新增弹窗无法截图测试，入口仅做存在性断言；PinPad/Budget 等用自绘输入绕开）。后续可试 Robolectric 升级或改用 compose ui-test 的 autoAdvance
+- Robolectric 怪癖：AlertDialog 内含文本输入时 Compose 不 idle（分类新增弹窗、资产页添加账户弹窗都无法截图测试，入口仅做存在性断言；PinPad/Budget 等用自绘输入绕开）。后续可试 Robolectric 升级或改用 compose ui-test 的 autoAdvance
 - M1 引入 Roborazzi gradle 插件，把"每次测试都重录截图"改为 record/verify 双任务（D018）
 - 升级 robolectric >4.17 时回归试 `@Config(sdk=[36])`（D016）
 - **M2 规格**：update.json 协议 + UpdateChecker + 签名密钥生成与离线备份（**首次发版前 applicationId 终审 D013**）+ release minify 打开（D012）
@@ -36,6 +36,14 @@
 （无）
 
 ## 已完成
+
+### M1 收尾 1/3：编辑丢字段 P0 + 日期时区 bug（2026-10-06）
+- **P0 编辑丢字段**：抽出纯函数 `TxEdit`（`applyEdit` = 原记录 copy 覆盖「记一笔页能改的字段」白名单；`newTransaction` = 手记默认值），`AddViewModel.saveInternal` 两个分支改为调用它。退款/优惠/不计收支/不计预算/导入批次/报销/币种/汇率/地址/来源/创建者/软删全部原样保留
+- 回归测试：`TxEditTest`（纯单测，含**反射白名单守卫**——applyEdit 改动的字段集必须恰好等于白名单，以后漏字段会红）+ `TxEditPersistenceTest`（Robolectric 落库往返，含 @ColumnInfo(defaultValue) 列）+ 批次归属断言
+- **顺带修掉两个同族 bug**（复查时在 saveInternal/AddDate 里发现）：
+  1. 编辑时改日期不生效（saveInternal 用 `original?.dateEpochMinute ?: ...` 把用户选的日期丢了）→ `AddDate.epochMinuteForEdit`：日期没动原值原样、换日期只挪天保留原时分
+  2. **`AddDate.epochMinuteFor` 选日期分支是"墙钟编码"（epochDay×1440+时分），与导入器/HomeGroups/统计/详情页的"真 epoch 分钟"约定不一致**——UTC+8 下选日期记的账会偏 8 小时、落到隔壁日期（如 9月2日 16:38 存成 9月3日 00:38）。改为 `LocalDate.atTime(时分).atZone(zone)` 真 epoch 分钟，并补 24 小时×2 分钟的全天候往返不变量测试（旧测试只覆盖 23:30 一个点，正好躲过）
+- 验证：`./gradlew build` 全绿（含 lint）；模拟机端到端走查见下条
 
 ### M1 第二批（2026-10-06，提交 8b95392~f671308）
 - **冒烟回归**：修复 2 个真 bug——currentBookId 从未初始化导致添加账户静默失败（启动时落盘默认账本）；添加账户弹窗内容超高且键盘盖住保存键（verticalScroll）
