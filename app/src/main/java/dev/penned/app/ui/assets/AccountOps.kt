@@ -1,6 +1,7 @@
 package dev.penned.app.ui.assets
 
 import dev.penned.app.data.db.PennedDatabase
+import dev.penned.app.data.db.dao.AccountWithBalance
 import dev.penned.app.domain.AccountType
 
 /**
@@ -55,6 +56,16 @@ internal fun accountPigmentSlot(type: AccountType): Int = when (type) {
 /** 资产页分组标题：groupName 有值优先（留给以后的自定义分组），否则按账户大类推导。 */
 internal fun accountGroupTitle(groupName: String?, type: AccountType): String =
     groupName ?: AccountGroup.of(type).title
+
+/** 资产页分组顺序：资金 → 信贷 → 理财 → 负债；groupName 自定义分组排在已知大类之后。 */
+internal fun groupAccounts(
+    accounts: List<AccountWithBalance>,
+): List<Pair<String, List<AccountWithBalance>>> {
+    val groups = accounts.groupBy { accountGroupTitle(it.groupName, it.type) }
+    val known = AccountGroup.entries.map { it.title }.filter { it in groups }
+    val custom = groups.keys.filterNot { key -> AccountGroup.entries.any { it.title == key } }
+    return (known + custom).map { title -> title to groups.getValue(title) }
+}
 
 /**
  * 账户删除的唯一入口（资产页左滑、账户编辑页删除共用）。

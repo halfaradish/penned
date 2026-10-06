@@ -1,5 +1,6 @@
 package dev.penned.app.ui.assets
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -7,19 +8,29 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -33,7 +44,9 @@ import dev.penned.app.ui.components.CategoryAvatar
 import dev.penned.app.ui.components.EmptyState
 import dev.penned.app.ui.components.MoneyText
 import dev.penned.app.ui.components.PennedCard
+import dev.penned.app.ui.components.SwipeToDeleteRow
 import dev.penned.app.ui.icons.PennedIcons
+import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.expenseColor
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -120,7 +133,7 @@ class AssetsViewModel(private val app: PennedApplication) : ViewModel() {
     }
 }
 
-/** 账户类型中文名（账户行副标题、新增页名称兜底）。 */
+/** 账户类型中文名（新增页名称兜底、导入等场景）。 */
 fun accountTypeLabel(type: AccountType): String = when (type) {
     AccountType.CASH -> "现金"
     AccountType.DEBIT -> "储蓄卡"
@@ -132,12 +145,43 @@ fun accountTypeLabel(type: AccountType): String = when (type) {
 @Composable
 fun AssetsScreen(
     onAddAccount: () -> Unit = {},
+    onOpenAccount: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val app = dev.penned.app.ui.LocalApp.current
     val viewModel: AssetsViewModel = viewModel(initializer = { AssetsViewModel(app) })
     val state by viewModel.state.collectAsStateWithLifecycle()
-    AssetsContent(state = state, onAddAccount = onAddAccount, modifier = modifier)
+    val pendingUndo by viewModel.deletedIds.collectAsStateWithLifecycle()
+    val message by viewModel.message.collectAsStateWithLifecycle()
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // 一次只显示一条提示：被拦下的说明优先，其次是「已删除 + 撤销」。
+    // key 变化会取消上一条（SnackbarHostState 在取消时自行 dismiss），连续删除时后一条顶掉前一条。
+    LaunchedEffect(pendingUndo.size, message) {
+        val blocked = message
+        if (blocked != null) {
+            snackbarHostState.showSnackbar(blocked, duration = SnackbarDuration.Short)
+            viewModel.consumeMessage()
+        } else if (pendingUndo.isNotEmpty()) {
+            val result = snackbarHostState.showSnackbar(
+                message = "已删除 ${pendingUndo.size} 个账户",
+                actionLabel = "撤销",
+                // 带动作的 Snackbar 按 M3 给足 10s：撤销窗口太短等于没有（与首页一致）
+                duration = SnackbarDuration.Long,
+            )
+            if (result == SnackbarResult.ActionPerformed) viewModel.undoDelete() else viewModel.clearUndo()
+        }
+    }
+
+    AssetsContent(
+        state = state,
+        onAddAccount = onAddAccount,
+        onOpenAccount = onOpenAccount,
+        onDeleteAccount = viewModel::deleteAccount,
+        snackbarHostState = snackbarHostState,
+        modifier = modifier,
+    )
 }
 
 /** 无状态入口：截图测试/预览用（不碰 DB 与 DataStore）。 */
@@ -146,9 +190,13 @@ fun AssetsContent(
     state: AssetsUiState,
     onAddAccount: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenAccount: (String) -> Unit = {},
+    onDeleteAccount: (AccountWithBalance) -> Unit = {},
+    snackbarHostState: SnackbarHostState? = null,
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { if (snackbarHostState != null) SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onAddAccount,
@@ -219,12 +267,12 @@ fun AssetsContent(
                     modifier = Modifier.padding(top = PennedSpacing.xxl),
                 )
             } else {
+                val grouped = groupAccounts(state.accounts)
                 LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
-                    val groups = state.accounts.groupBy { it.groupName }
-                    groups.forEach { (group, list) ->
-                        item(key = "g-${group ?: "default"}") {
+                    grouped.forEach { (group, list) ->
+                        item(key = "g-$group") {
                             Text(
-                                text = group ?: "默认分组",
+                                group,
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(
@@ -236,39 +284,53 @@ fun AssetsContent(
                             )
                         }
                         items(list, key = { it.id }) { account ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.sm),
-                                verticalAlignment = Alignment.CenterVertically,
+                            SwipeToDeleteRow(
+                                onDelete = { onDeleteAccount(account) },
+                                modifier = Modifier.animateItem(),
                             ) {
-                                // 账户颜色按账户类型固定（信用卡一律朱砂、现金一律赭石…），比按名字哈希好认
-                                CategoryAvatar(account.name, slot = accountPigmentSlot(account.type))
-                                Spacer(Modifier.width(PennedSpacing.md))
-                                Column(Modifier.weight(1f)) {
-                                    Text(account.name, style = MaterialTheme.typography.bodyLarge)
-                                    Text(
-                                        accountTypeLabel(account.type),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                                MoneyText(
-                                    cents = account.balanceCents,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = if (account.balanceCents < 0) {
-                                        expenseColor()
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurface
-                                    },
-                                    signed = false,
-                                )
+                                AccountRow(account = account, onClick = { onOpenAccount(account.id) })
                             }
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = PennedSpacing.lg),
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                            )
                         }
                     }
                 }
             }
         }
+    }
+}
+
+/**
+ * 账户行：颜料头像（按类型固定色）+ 名称 + 等宽余额。
+ * 不显示类型副标题——分组标题与头像色已经表达了类型（此前「支付宝」那行副标题写着"储蓄卡"）。
+ */
+@Composable
+private fun AccountRow(account: AccountWithBalance, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = PennedDimens.rowMinHeight)
+            .clickable(onClick = onClick)
+            .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CategoryAvatar(account.name, size = PennedDimens.avatarLarge, slot = accountPigmentSlot(account.type))
+        Spacer(Modifier.width(PennedSpacing.md))
+        Text(
+            account.name,
+            style = MaterialTheme.typography.bodyLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        MoneyText(
+            cents = account.balanceCents,
+            style = MaterialTheme.typography.titleMedium,
+            color = if (account.balanceCents < 0) expenseColor() else MaterialTheme.colorScheme.onSurface,
+            signed = false,
+        )
     }
 }
 
@@ -296,5 +358,26 @@ private fun SummaryCell(
         Text("$label1 $value1", style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(2.dp))
         Text("$label2 $value2", style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Preview(showBackground = true, name = "资产", widthDp = 400, heightDp = 800)
+@Composable
+private fun AssetsPreview() {
+    dev.penned.app.ui.theme.PennedTheme {
+        val accounts = listOf(
+            AccountWithBalance("a1", "现金", AccountType.CASH, null, 12_850L),
+            AccountWithBalance("a2", "支付宝", AccountType.DEBIT, null, 128_450L),
+            AccountWithBalance("a3", "招行信用卡", AccountType.CREDIT, null, -58_900L),
+        )
+        AssetsContent(
+            state = AssetsUiState(
+                accounts = accounts,
+                netCents = accounts.sumOf { it.balanceCents },
+                assetCents = accounts.filter { it.balanceCents > 0 }.sumOf { it.balanceCents },
+                liabilityCents = -accounts.filter { it.balanceCents < 0 }.sumOf { it.balanceCents },
+            ),
+            onAddAccount = {},
+        )
     }
 }

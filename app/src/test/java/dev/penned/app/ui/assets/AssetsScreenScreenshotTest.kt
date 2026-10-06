@@ -24,10 +24,11 @@ class AssetsScreenScreenshotTest {
     @get:Rule
     val composeRule = createComposeRule()
 
+    // groupName 故意留空：分组标题由账户大类推导（此前 groupName 从没写过值，标题永远是"默认分组"）
     private val accounts = listOf(
-        AccountWithBalance("a1", "支付宝", AccountType.DEBIT, "资金账户", 128_450L),
-        AccountWithBalance("a2", "现金", AccountType.CASH, "资金账户", 3_200L),
-        AccountWithBalance("a3", "招行信用卡", AccountType.CREDIT, "信贷账户", -58_900L),
+        AccountWithBalance("a1", "支付宝", AccountType.DEBIT, null, 128_450L),
+        AccountWithBalance("a2", "现金", AccountType.CASH, null, 3_200L),
+        AccountWithBalance("a3", "招行信用卡", AccountType.CREDIT, null, -58_900L),
     )
 
     private fun state() = AssetsUiState(
@@ -47,11 +48,12 @@ class AssetsScreenScreenshotTest {
         // 规格断言：净资产/总资产/负资产汇总、分组标题、账户余额（负数为信用卡）
         composeRule.onNodeWithText("净资产(元)").assertIsDisplayed()
         composeRule.onNodeWithText("727.50").assertIsDisplayed()
+        // 分组标题按账户大类推导：现金/支付宝 → 资金账户，信用卡 → 信贷账户
         composeRule.onNodeWithText("资金账户").assertIsDisplayed()
-        // 账户类型显示中文（此前是 DEBIT/CASH 英文枚举）
-        composeRule.onNodeWithText("储蓄卡").assertIsDisplayed()
-        composeRule.onNodeWithText("信用卡").assertIsDisplayed()
         composeRule.onNodeWithText("信贷账户").assertIsDisplayed()
+        composeRule.onNodeWithText("支付宝").assertIsDisplayed()
+        composeRule.onNodeWithText("现金").assertIsDisplayed()
+        composeRule.onNodeWithText("招行信用卡").assertIsDisplayed()
         composeRule.onNodeWithText("-589.00").assertIsDisplayed()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_assets_screen.png")
     }

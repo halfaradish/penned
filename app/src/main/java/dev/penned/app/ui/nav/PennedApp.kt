@@ -236,7 +236,10 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
             }
             composable("calendar") { StubScreen("日历", "日历视图还没做，先在首页按日回看流水") }
             composable("assets") {
-                AssetsScreen(onAddAccount = { navController.navigate("account") })
+                AssetsScreen(
+                    onAddAccount = { navController.navigate("account") },
+                    onOpenAccount = { id -> navController.navigate("account?editId=$id") },
+                )
             }
             composable(
                 route = "account?editId={editId}",
