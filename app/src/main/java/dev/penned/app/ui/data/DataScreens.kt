@@ -40,6 +40,11 @@ import dev.penned.app.data.db.entity.ImportBatchEntity
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import androidx.compose.foundation.layout.PaddingValues
+import dev.penned.app.ui.components.PennedCard
+import dev.penned.app.ui.components.PennedListRow
+import dev.penned.app.ui.components.SectionLabel
+import dev.penned.app.ui.theme.PennedSpacing
 
 /**
  * 数据管理页：一木 xls 导入 / CSV 导入导出 / 导入批次管理。
@@ -118,38 +123,29 @@ fun DataManagementScreen(
 
 @Composable
 private fun SectionCard(title: String, content: @Composable () -> Unit) {
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Text(
-            title,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(6.dp))
-        Card {
-            Column { content() }
+    Column(Modifier.padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.xs)) {
+        SectionLabel(title)
+        PennedCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(0.dp)) {
+            content()
         }
     }
 }
 
 @Composable
-private fun MenuRow(title: String, subtitle: String, enabled: Boolean = true, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = enabled) { onClick() }
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Text("›", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
+private fun MenuRow(
+    title: String,
+    subtitle: String,
+    enabled: Boolean = true,
+    leadingIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    onClick: () -> Unit,
+) {
+    PennedListRow(
+        title = title,
+        subtitle = subtitle,
+        leadingIcon = leadingIcon,
+        onClick = if (enabled) onClick else null,
+        showChevron = enabled,
+    )
 }
 
 /** 导入批次管理页：查看 + 按批次整体删除（软删）。 */

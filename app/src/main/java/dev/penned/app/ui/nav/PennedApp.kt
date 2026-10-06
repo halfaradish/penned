@@ -198,7 +198,7 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable("calendar") { StubScreen("日历", "M1 第二批") }
+            composable("calendar") { StubScreen("日历", "日历视图还没做，先在首页按日回看流水") }
             composable("assets") { AssetsScreen() }
             composable("stats") {
                 val vm: StatsViewModel = androidx.lifecycle.viewmodel.compose.viewModel(

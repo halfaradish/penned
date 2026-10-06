@@ -41,6 +41,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import dev.penned.app.ui.theme.expenseColor
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Icon
+import dev.penned.app.ui.components.PennedCard
+import dev.penned.app.ui.components.PennedDivider
+import dev.penned.app.ui.icons.PennedIcons
+import dev.penned.app.ui.theme.PennedSpacing
 
 /**
  * 分类管理页：支出/收入两域树形列表，支持新增（一级/子级）、重命名、软删除。
@@ -69,16 +76,27 @@ fun CategoriesScreen(
             listOf(CategoryType.EXPENSE to "支出分类", CategoryType.INCOME to "收入分类").forEach { (domain, title) ->
                 val parents = list.filter { it.type == domain && it.parentId == null }.sortedBy { it.sortOrder }
                 SectionHeader(title) {
-                    Button(onClick = { addDomain = domain }, modifier = Modifier.padding(horizontal = 16.dp)) {
-                        Text("+ 新增")
+                    TextButton(onClick = { addDomain = domain }) { Text("+ 新增") }
+                }
+                PennedCard(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg),
+                    contentPadding = PaddingValues(0.dp),
+                ) {
+                    if (parents.isEmpty()) {
+                        Text(
+                            "还没有分类",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(PennedSpacing.lg),
+                        )
+                    }
+                    parents.forEachIndexed { index, parent ->
+                        if (index > 0) PennedDivider(startIndent = 60.dp)
+                        val subs = list.filter { it.parentId == parent.id }.sortedBy { it.sortOrder }
+                        CategoryRow(parent = parent, subs = subs, onClick = { editTarget = parent })
                     }
                 }
-                parents.forEach { parent ->
-                    val subs = list.filter { it.parentId == parent.id }.sortedBy { it.sortOrder }
-                    CategoryRow(parent = parent, subs = subs, onClick = { editTarget = parent })
-                    HorizontalDivider(Modifier.padding(horizontal = 16.dp))
-                }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(PennedSpacing.xs))
             }
         }
     }
@@ -113,14 +131,16 @@ fun CategoriesScreen(
 @Composable
 private fun SectionHeader(title: String, actions: @Composable () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        Modifier
+            .fillMaxWidth()
+            .padding(start = PennedSpacing.xl, end = PennedSpacing.sm, top = PennedSpacing.md, bottom = PennedSpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             title,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f).padding(horizontal = 20.dp),
+            modifier = Modifier.weight(1f),
         )
         actions()
     }
@@ -129,11 +149,14 @@ private fun SectionHeader(title: String, actions: @Composable () -> Unit) {
 @Composable
 private fun CategoryRow(parent: CategoryEntity, subs: List<CategoryEntity>, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 10.dp),
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         CategoryAvatar(parent.name, size = 32.dp)
-        Spacer(Modifier.size(12.dp))
+        Spacer(Modifier.width(PennedSpacing.md))
         Text(parent.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
         if (subs.isEmpty()) {
             Text(
@@ -143,7 +166,7 @@ private fun CategoryRow(parent: CategoryEntity, subs: List<CategoryEntity>, onCl
             )
         } else {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(3f), verticalAlignment = Alignment.CenterVertically) {
-                subs.take(4).forEach { sub ->
+                subs.take(3).forEach { sub ->
                     Text(
                         sub.name,
                         style = MaterialTheme.typography.labelSmall,
@@ -151,13 +174,19 @@ private fun CategoryRow(parent: CategoryEntity, subs: List<CategoryEntity>, onCl
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
-                            .background(MaterialTheme.colorScheme.surfaceVariant, androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainer, MaterialTheme.shapes.extraSmall)
                             .padding(horizontal = 6.dp, vertical = 3.dp),
                     )
                 }
-                if (subs.size > 4) Text("…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (subs.size > 3) Text("…", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+        Icon(
+            PennedIcons.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 

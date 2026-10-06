@@ -39,6 +39,13 @@ import dev.penned.app.domain.CategoryType
 import dev.penned.app.domain.Money
 import dev.penned.app.ui.components.PennedTopBar
 import dev.penned.app.ui.theme.expenseColor
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import dev.penned.app.ui.components.PennedCard
+import dev.penned.app.ui.components.SectionLabel
+import dev.penned.app.ui.theme.PennedSpacing
+import dev.penned.app.ui.theme.primaryInkColor
 
 /**
  * 预算管理页：总预算 + 分类预算，月度周期；支出为当月流水重算。
@@ -62,32 +69,30 @@ fun BudgetScreen(
             Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = PennedSpacing.xxl),
         ) {
-            // —— 总预算 ——
-            Text(
-                "总预算（每月）",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-            )
+            SectionLabel("总预算（每月）")
             val total = state.total
             if (total == null) {
-                OutlinedButton(
+                PennedCard(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg),
                     onClick = { showAddTotal = true },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                ) { Text("设置本月总预算") }
+                ) {
+                    Text(
+                        "设置本月总预算",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = primaryInkColor(),
+                    )
+                }
             } else {
                 BudgetCard(row = total, label = "总预算", onClick = { editRow = total })
             }
 
-            // —— 分类预算 ——
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                    .padding(start = PennedSpacing.xl, end = PennedSpacing.sm, top = PennedSpacing.md, bottom = PennedSpacing.xs),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -99,12 +104,13 @@ fun BudgetScreen(
                 TextButton(onClick = { showAddCategory = true }) { Text("+ 新增") }
             }
             if (state.categoryRows.isEmpty()) {
-                Text(
-                    "还没有分类预算",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                )
+                PennedCard(modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg)) {
+                    Text(
+                        "还没有分类预算",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             state.categoryRows.forEach { row ->
                 BudgetCard(
@@ -113,7 +119,6 @@ fun BudgetScreen(
                     onClick = { editRow = row },
                 )
             }
-            Spacer(Modifier.height(24.dp))
         }
     }
 
@@ -159,27 +164,37 @@ fun BudgetScreen(
 
 @Composable
 private fun BudgetCard(row: BudgetsViewModel.BudgetRow, label: String, onClick: () -> Unit) {
-    Column(
-        Modifier
+    PennedCard(
+        modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.xs),
+        onClick = onClick,
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Text(
                 "剩 " + Money.format(row.state.remainingCents),
                 style = MaterialTheme.typography.titleMedium,
-                color = if (row.state.overspent) expenseColor() else MaterialTheme.colorScheme.primary,
+                color = if (row.state.overspent) expenseColor() else MaterialTheme.colorScheme.onSurface,
             )
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(PennedSpacing.sm))
         LinearProgressIndicator(
             progress = { row.state.usedFraction },
-            modifier = Modifier.fillMaxWidth().height(6.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .clip(RoundedCornerShape(percent = 50)),
             color = if (row.state.overspent) expenseColor() else MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         )
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(PennedSpacing.sm))
         Text(
             "预算 ${Money.format(row.state.amountCents)} · 已用 ${Money.format(row.state.spentCents)}" +
                 if (row.state.overspent) " · 已超支" else "",
@@ -187,7 +202,6 @@ private fun BudgetCard(row: BudgetsViewModel.BudgetRow, label: String, onClick: 
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
-    HorizontalDivider(Modifier.padding(horizontal = 16.dp))
 }
 
 @Composable

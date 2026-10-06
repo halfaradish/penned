@@ -42,6 +42,18 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.width
+import dev.penned.app.ui.components.CategoryAvatar
+import dev.penned.app.ui.components.ConfirmDialog
+import dev.penned.app.ui.components.PennedButton
+import dev.penned.app.ui.components.PennedCard
+import dev.penned.app.ui.components.PennedDialog
+import dev.penned.app.ui.components.PennedDivider
+import dev.penned.app.ui.icons.PennedIcons
+import dev.penned.app.ui.theme.PennedSpacing
+import dev.penned.app.ui.theme.expenseColor
+import dev.penned.app.ui.theme.primaryInkColor
 
 class BooksViewModel(private val app: PennedApplication) : ViewModel() {
 
@@ -152,23 +164,12 @@ fun BooksScreen(onBack: () -> Unit) {
         TextDialog("重命名账本", initial = target.name, onConfirm = { viewModel.rename(target.id, it); renameTarget = null }, onDismiss = { renameTarget = null })
     }
     deleteTarget?.let { target ->
-        AlertDialog(
-            onDismissRequest = { deleteTarget = null; viewModel.cancelDelete() },
-            title = { Text("删除账本「${target.name}」？") },
-            text = {
-                Text(
-                    "该账本的 " + (deleteCount?.let { "$it 条流水与" } ?: "") +
-                        "账户、分类、预算、导入批次将一并删除，删除后不再显示。",
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { viewModel.delete(target.id); deleteTarget = null }) {
-                    Text("删除", color = dev.penned.app.ui.theme.expenseColor())
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { deleteTarget = null; viewModel.cancelDelete() }) { Text("取消") }
-            },
+        ConfirmDialog(
+            onDismiss = { deleteTarget = null; viewModel.cancelDelete() },
+            title = "删除账本「${target.name}」？",
+            text = "该账本的 " + (deleteCount?.let { "$it 条流水与" } ?: "") +
+                "账户、分类、预算、导入批次将一并删除，删除后不再显示。",
+            onConfirm = { viewModel.delete(target.id); deleteTarget = null },
         )
     }
 }
@@ -188,40 +189,57 @@ fun BooksContent(
 ) {
     Scaffold(
         topBar = { PennedTopBar(title = "管理账本", onBack = onBack) },
+        containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            Button(
+            PennedButton(
+                text = "新增账本",
                 onClick = onAdd,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-            ) { Text("新增账本") }
-            LazyColumn {
-                items(books, key = { it.id }) { book ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSwitch(book.id) }
-                            .padding(start = 20.dp, end = 8.dp, top = 14.dp, bottom = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                leadingIcon = PennedIcons.Plus,
+                modifier = Modifier.padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
+            )
+            LazyColumn(Modifier.fillMaxSize().padding(horizontal = PennedSpacing.lg)) {
+                item(key = "books") {
+                    PennedCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(0.dp),
                     ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                book.name,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = if (book.id == currentId) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                            )
-                            if (book.id == currentId) {
-                                Text("当前账本", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        books.forEachIndexed { index, book ->
+                            if (index > 0) PennedDivider(startIndent = 60.dp)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onSwitch(book.id) }
+                                    .padding(start = PennedSpacing.lg, end = PennedSpacing.xs, top = PennedSpacing.sm, bottom = PennedSpacing.sm),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                CategoryAvatar(book.name, size = 32.dp)
+                                Spacer(Modifier.width(PennedSpacing.md))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        book.name,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = if (book.id == currentId) primaryInkColor() else MaterialTheme.colorScheme.onSurface,
+                                    )
+                                    if (book.id == currentId) {
+                                        Text(
+                                            "当前账本",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = primaryInkColor(),
+                                        )
+                                    }
+                                }
+                                TextButton(onClick = { onRename(book) }) { Text("重命名") }
+                                // 至少保留一个账本
+                                TextButton(onClick = { onDelete(book) }, enabled = books.size > 1) {
+                                    Text(
+                                        "删除",
+                                        color = if (books.size > 1) expenseColor() else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             }
                         }
-                        TextButton(onClick = { onRename(book) }) { Text("重命名") }
-                        // 至少保留一个账本
-                        TextButton(onClick = { onDelete(book) }, enabled = books.size > 1) {
-                            Text("删除", color = if (books.size > 1) dev.penned.app.ui.theme.expenseColor() else MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
                     }
-                    HorizontalDivider()
                 }
             }
         }
@@ -231,18 +249,17 @@ fun BooksContent(
 @Composable
 private fun TextDialog(title: String, initial: String = "", onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf(initial) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                placeholder = { Text("账本名称") },
-                singleLine = true,
-            )
-        },
-        confirmButton = { TextButton(onClick = { onConfirm(text) }, enabled = text.isNotBlank()) { Text("保存") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-    )
+    PennedDialog(
+        onDismiss = onDismiss,
+        title = title,
+        onConfirm = { onConfirm(text) },
+        confirmEnabled = text.isNotBlank(),
+    ) {
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it },
+            placeholder = { Text("账本名称") },
+            singleLine = true,
+        )
+    }
 }

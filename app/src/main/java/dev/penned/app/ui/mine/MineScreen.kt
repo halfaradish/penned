@@ -1,28 +1,29 @@
 package dev.penned.app.ui.mine
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.penned.app.ui.components.PennedDivider
+import dev.penned.app.ui.components.PennedListRow
+import dev.penned.app.ui.components.SectionCard
+import dev.penned.app.ui.icons.PennedIcons
+import dev.penned.app.ui.theme.PennedSpacing
+
+/** 设置类页面：图标 + 标题 + 副标题 + 右箭头的分组卡（取代原来的裸分隔线列表）。 */
+private val ROW_DIVIDER_INDENT = 64.dp
 
 /**
  * 「我的」页（M1 第二批）：数据管理入口 + 关于。对标一木的信息结构，仅保留规格内条目。
  */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun MineScreen(
     onOpenDataManagement: () -> Unit,
@@ -30,80 +31,63 @@ fun MineScreen(
     onOpenPinLock: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Scaffold(modifier = modifier.fillMaxSize()) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize()) {
-            Spacer(Modifier.height(16.dp))
-            Text(
-                "一笔一记",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(horizontal = 20.dp),
-            )
-            Text(
-                "本地优先 · 无服务器",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            )
-            Spacer(Modifier.height(16.dp))
-            SectionLabel("数据")
-            MenuRow("数据管理", "导入一木 xls / CSV 备份 · 导出 · 导入批次", onOpenDataManagement)
-            MenuRow("分类管理", "新增 / 重命名 / 删除支出与收入分类", onOpenCategories)
-            HorizontalDivider()
-            SectionLabel("其他")
-            MenuRow("密码锁", "启动与回到应用时需输入 4 位密码", onOpenPinLock)
-            // 纯信息行：不做成可点条目（关于页/更新检查随 M2）
-            InfoRow("关于", "版本 0.1.0（M1）")
-            HorizontalDivider()
-        }
-    }
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
-    )
-}
-
-@Composable
-private fun MenuRow(title: String, subtitle: String, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = PennedSpacing.xxl),
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Text(
+            "一笔一记",
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.padding(
+                start = PennedSpacing.lg,
+                end = PennedSpacing.lg,
+                top = PennedSpacing.md,
+            ),
+        )
+        Text(
+            "本地优先 · 无服务器",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(
+                start = PennedSpacing.lg,
+                end = PennedSpacing.lg,
+                top = PennedSpacing.xs,
+            ),
+        )
+
+        SectionCard(title = "数据") {
+            PennedListRow(
+                title = "数据管理",
+                subtitle = "导入一木 xls / CSV 备份 · 导出 · 导入批次",
+                leadingIcon = PennedIcons.Database,
+                onClick = onOpenDataManagement,
+            )
+            PennedDivider(startIndent = ROW_DIVIDER_INDENT)
+            PennedListRow(
+                title = "分类管理",
+                subtitle = "新增 / 重命名 / 删除支出与收入分类",
+                leadingIcon = PennedIcons.Tag,
+                onClick = onOpenCategories,
             )
         }
-        Text("›", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
 
-/** 不可点的信息行（无涟漪、无 ›，避免做成"看着能点其实没反应"的死 UI）。 */
-@Composable
-private fun InfoRow(title: String, subtitle: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Spacer(Modifier.height(PennedSpacing.sm))
+        SectionCard(title = "其他") {
+            PennedListRow(
+                title = "密码锁",
+                subtitle = "启动与回到应用时需输入 4 位密码",
+                leadingIcon = PennedIcons.Lock,
+                onClick = onOpenPinLock,
+            )
+            PennedDivider(startIndent = ROW_DIVIDER_INDENT)
+            // 纯信息行：不可点、无右箭头（关于页与更新检查随 M2）
+            PennedListRow(
+                title = "关于",
+                subtitle = "版本 0.1.0（M1）",
+                leadingIcon = PennedIcons.Info,
+                showChevron = false,
             )
         }
     }

@@ -27,6 +27,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import dev.penned.app.domain.PinHasher
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.material3.Icon
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import dev.penned.app.ui.icons.PennedIcons
+import dev.penned.app.ui.theme.PennedDimens
 
 /**
  * PIN 数字键盘（4 位）：锁屏与设置页共用。纯 UI + 可测状态机 [PinState]。
@@ -62,7 +72,7 @@ fun PinPad(
                         .clip(CircleShape)
                         .background(
                             if (i < filledCount) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.surfaceVariant,
+                            else MaterialTheme.colorScheme.surfaceContainerHigh,
                         ),
                 )
             }
@@ -82,25 +92,54 @@ fun PinPad(
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
                 row.forEach { key ->
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        modifier = Modifier
-                            .size(76.dp, 60.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .clickable(enabled = key != '·', onClick = {
-                                when (key) {
-                                    '⌫' -> onBackspace()
-                                    else -> onDigit(key)
-                                }
-                            }),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(key.toString(), style = MaterialTheme.typography.titleLarge)
-                        }
+                    if (key == '·') {
+                        // 占位键不做成"看着能点其实没反应"的死 UI
+                        Spacer(Modifier.size(76.dp, 60.dp))
+                        return@forEach
                     }
+                    PinKey(
+                        label = if (key == '⌫') null else key.toString(),
+                        backspace = key == '⌫',
+                        onClick = { if (key == '⌫') onBackspace() else onDigit(key) },
+                    )
                 }
             }
+        }
+    }
+}
+
+/** 单个 PIN 键：与记账键盘同款键面（白底 + 发丝线 + 按压态 + 触感）。 */
+@Composable
+private fun PinKey(label: String?, backspace: Boolean, onClick: () -> Unit) {
+    val haptics = LocalHapticFeedback.current
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val shape = RoundedCornerShape(12.dp)
+    val background by animateColorAsState(
+        targetValue = if (pressed) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface,
+        label = "pinKey",
+    )
+    Box(
+        modifier = Modifier
+            .size(76.dp, 60.dp)
+            .clip(shape)
+            .background(background)
+            .border(BorderStroke(PennedDimens.hairline, MaterialTheme.colorScheme.outlineVariant), shape)
+            .clickable(interactionSource = interaction, indication = null) {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onClick()
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (backspace) {
+            Icon(
+                PennedIcons.Backspace,
+                contentDescription = "退格",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
+        } else {
+            Text(label.orEmpty(), style = MaterialTheme.typography.titleLarge)
         }
     }
 }
