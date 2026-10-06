@@ -3,12 +3,17 @@ package dev.penned.app.ui.add
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.domain.AccountType
+import dev.penned.app.domain.Money
+import dev.penned.app.domain.MoneyExpression
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.theme.PennedTheme
 import org.junit.Rule
@@ -191,6 +196,75 @@ class AddScreenScreenshotTest {
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_add_transfer_picker.png")
         composeRule.onNodeWithText("储蓄卡").performClick()
         org.junit.Assert.assertEquals("a2", from)
+    }
+
+    // ---- 加减乘除：键盘 → MoneyExpression 真求值（S2 引擎的键位补齐）----
+
+    /** 把真实键盘与真实求值引擎接起来的最小宿主（等价于 AddViewModel 的接线）。 */
+    @androidx.compose.runtime.Composable
+    private fun calculatorContent(amount: MutableState<String>) =
+        AddTransactionContent(
+            type = TxType.EXPENSE,
+            amountText = amount.value,
+            note = "",
+            selectedId = "p0",
+            expandedId = null,
+            canSave = true,
+            showEquals = MoneyExpression.hasPendingOperator(amount.value),
+            accountId = null,
+            fromId = null,
+            toId = null,
+            feeText = "",
+            accounts = emptyList(),
+            parents = listOf(CategoryUi("p0", "其他", hasSubs = false)),
+            expandedSubs = emptyList(),
+            onSelectType = {}, onKey = { amount.value = MoneyExpression.append(amount.value, it) },
+            onSelectParent = {}, onSelectSub = {}, onNoteChange = {}, onPickAccount = {},
+            onPickFrom = {}, onPickTo = {}, onSwap = {}, onFeeChange = {},
+            onEvaluate = { MoneyExpression.evaluate(amount.value)?.let { amount.value = Money.format(it) } },
+            onSave = {}, onSaveAgain = {}, onBack = {}, onEdit = {},
+        )
+
+    /** 按键盘键（按 tag 定位，避开与分类宫格重名的文本）。 */
+    private fun press(key: String) = composeRule.onNodeWithTag("amount-key-$key").performClick()
+
+    @Test
+    fun captureCalculatorMultiplyDivide() {
+        val amount = mutableStateOf("12")
+        composeRule.setContent { PennedTheme { calculatorContent(amount) } }
+        // 四个运算符键都在（一木：右侧运算块 + − × ÷）
+        listOf("+", "-", "×", "÷").forEach { composeRule.onNodeWithTag("amount-key-$it").assertIsDisplayed() }
+
+        // 12×3÷4：表达式原样显示，右下键变 "="
+        listOf("×", "3", "÷", "4").forEach { press(it) }
+        composeRule.onNodeWithText("12×3÷4").assertIsDisplayed()
+        composeRule.onNodeWithText("=").assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_add_calculator.png")
+
+        // "=" → 9.00（乘除优先、按分结算），右下键回 "完成"
+        press("完成")
+        composeRule.onNodeWithText("9.00").assertIsDisplayed()
+        composeRule.onNodeWithText("完成").assertIsDisplayed()
+    }
+
+    @Test
+    fun calculatorPrecedenceMultiplyFirst() {
+        // 2+3×4 = 14 元（乘除优先，不是 20）
+        val amount = mutableStateOf("2")
+        composeRule.setContent { PennedTheme { calculatorContent(amount) } }
+        listOf("+", "3", "×", "4").forEach { press(it) }
+        press("完成")
+        composeRule.onNodeWithText("14.00").assertIsDisplayed()
+    }
+
+    @Test
+    fun calculatorDivideByZeroKeepsExpression() {
+        // 除零：求值返回 null → 表达式保持、仍显示 "="（不落库、不崩）
+        val amount = mutableStateOf("8÷0")
+        composeRule.setContent { PennedTheme { calculatorContent(amount) } }
+        press("完成")
+        composeRule.onNodeWithText("8÷0").assertIsDisplayed()
+        composeRule.onNodeWithText("=").assertIsDisplayed()
     }
 }
 
