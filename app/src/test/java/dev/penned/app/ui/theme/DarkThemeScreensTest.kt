@@ -82,7 +82,9 @@ class DarkThemeScreensTest {
                 onAdd = {},
             )
         }
-        composeRule.onNodeWithText("本月支出").assertIsDisplayed()
+        // 合并卡：月汇总与预算同卡（文案从"本月支出"简化为"支出"）
+        composeRule.onNodeWithText("支出").assertIsDisplayed()
+        composeRule.onNodeWithText("结余").assertIsDisplayed()
         composeRule.onNodeWithText("转账 · 转入 储蓄卡").assertIsDisplayed()
         capture("home")
     }

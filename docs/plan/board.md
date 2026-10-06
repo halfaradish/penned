@@ -51,6 +51,15 @@
 
 ## 已完成
 
+### 首页布局改造：合并卡随列表滚动 + 右下角 FAB（2026-10-06）
+- 问题：月汇总卡 + 预算行 + "添加一条新记账"三块固定占顶部约 200dp，且不随内容滚动（列表只有剩余空间能滚）
+- **月汇总与预算合并成一张卡**（约 100dp）：第一行 `支出 22.00 · 收入 0.00 · 结余 -22.00`（labelSmall + titleSmall 同行，比"标签一行金额一行"省一半高度）；第二行 `剩余预算 2978.00` + 右侧 `预算 3000.00 · 已用 22.00`（可点 → 预算管理；未设预算时换成"设置本月预算，控制花销 →"）；第三行 4dp 进度条（超支红）。删除 `SummaryCell`/`BudgetSummaryRow`，新增 `HomeSummaryCard`/`SummaryInline`
+- **布局骨架**：固定区只剩标题栏（账本名 + 搜索）；合并卡、添加按钮改为 LazyColumn 的头部 item（`key = month-card` / `add-button`），空态也从"整屏居中"改成列表项 —— 全部随内容滚走
+- **右下角 FAB**：`AnimatedVisibility(fadeIn/fadeOut)` 包裹的绿色圆按钮（`containerColor = primary`，白 "+"），落在底部导航栏正上方；显隐靠 `derivedStateOf { listState.layoutInfo.visibleItemsInfo.any { it.key == "add-button" } }`，即"添加一条新记账"滚出视野后接管；`totalItemsCount > 0` 防首帧闪现；多选模式不显示
+- 测试：新增 `HomeScreenScreenshotTest`（首页首次有浅色截图）——`m1_home_top.png`（合并卡 + 无 FAB）、`m1_home_scrolled.png`（滚动后卡片/按钮消失 + FAB 出现 + 点 FAB 触发 onAdd）、多选模式无 FAB/卡片/按钮；`DarkThemeScreensTest.darkHome` 断言随文案更新（本月支出 → 支出）
+- 模拟机实测：顶部（合并卡、按钮在、无 FAB）→ 上滑（卡片与按钮滚走、绿色 FAB 出现）→ 点 FAB 进入记一笔 → 长按进多选（FAB 消失）→ 退出多选仍在下滑位置（FAB 正确复现）
+- 验证：`./gradlew build` 全绿
+
 ### M1 收尾 9/9：首页搜索（2026-10-06）
 - 背景：第三次复查把首页「搜索」当死 UI 摘掉（理由"M1 规格未列"），用户指出这是要用的功能 → 按一木首页顶栏语义实现**真搜索**
 - 范围：当前账本内，关键词按字面匹配 **备注 / 一级分类名 / 二级分类名**，数字关键词额外按**金额精确匹配**（"16" → 16.00 元）；结果按日分组（复用 `HomeGroups.groupByDay`，与首页同一套行渲染 `TransactionRow` 抽成共用文件）；点结果进账单详情

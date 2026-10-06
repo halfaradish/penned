@@ -15,8 +15,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -24,6 +28,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -31,12 +36,14 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
@@ -51,6 +58,12 @@ import java.time.LocalDate
 import java.time.ZoneId
 import dev.penned.app.ui.theme.expenseColor
 import dev.penned.app.ui.theme.incomeColor
+
+/** 列表项 key：FAB 显隐判断靠它（"添加一条新记账"滚出视野后 FAB 接管）。 */
+private const val ADD_BUTTON_KEY = "add-button"
+private const val SUMMARY_CARD_KEY = "month-card"
+private const val HOME_LIST_TAG = "home-list"
+private const val HOME_FAB_TAG = "home-fab"
 
 @Composable
 fun HomeScreen(
@@ -192,145 +205,199 @@ fun HomeContent(
             }
         }
 
-        if (!selectionMode) {
-            val today = LocalDate.now(zone)
-            val totals = HomeGroups.monthTotals(rows, today.year, today.monthValue, zone)
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    SummaryCell("本月支出", Money.format(totals.expenseCents), expenseColor())
-                    SummaryCell("本月收入", Money.format(totals.incomeCents), incomeColor())
-                    SummaryCell("本月结余", Money.format(totals.incomeCents - totals.expenseCents), MaterialTheme.colorScheme.onSurface)
-                }
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            val listState = rememberLazyListState()
+            // 月汇总/预算/添加按钮都是列表项：随内容滚走，滚走后由右下角 FAB 接管"记一笔"
+            val addButtonVisible by remember {
+                derivedStateOf { listState.layoutInfo.visibleItemsInfo.any { it.key == ADD_BUTTON_KEY } }
             }
+            val showFab = !selectionMode &&
+                listState.layoutInfo.totalItemsCount > 0 &&  // 首帧尚未布局时不闪现
+                !addButtonVisible
 
-            if (budgetSummary != null) {
-                BudgetSummaryRow(
-                    summary = budgetSummary,
-                    onClick = onOpenBudgets,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-            } else {
-                TextButton(
-                    onClick = onOpenBudgets,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 0.dp),
-                ) { Text("设置本月预算，控制花销 →") }
-            }
-
-            Button(
-                onClick = onAdd,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize().testTag(HOME_LIST_TAG),
             ) {
-                Text("添加一条新记账")
-            }
-        }
-
-        if (rows.isEmpty()) {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text("还没有记账", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(4.dp))
-                Text("点上方按钮记下第一笔", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                HomeGroups.groupByDay(rows, zone).forEach { group ->
-                    item(key = "day-${group.epochDay}") {
-                        Row(
+                if (!selectionMode) {
+                    item(key = SUMMARY_CARD_KEY) {
+                        val today = LocalDate.now(zone)
+                        HomeSummaryCard(
+                            totals = HomeGroups.monthTotals(rows, today.year, today.monthValue, zone),
+                            budgetSummary = budgetSummary,
+                            onOpenBudgets = onOpenBudgets,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                        )
+                    }
+                    item(key = ADD_BUTTON_KEY) {
+                        Button(
+                            onClick = onAdd,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
                         ) {
-                            Text(
-                                text = HomeGroups.dayLabel(group.epochDay, zone),
-                                style = MaterialTheme.typography.titleSmall,
-                            )
-                            Text(
-                                text = "收 ${Money.format(group.incomeCents)}  支 ${Money.format(group.expenseCents)}",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            Text("添加一条新记账")
                         }
                     }
-                    items(group.items, key = { it.id }) { row ->
-                        TransactionRow(
-                            row = row,
-                            selectionMode = selectionMode,
-                            selected = row.id in selectedIds,
-                            onClick = {
-                                if (selectionMode) onToggleSelect(row.id) else onOpenRow(row.id)
-                            },
-                            onLongClick = { onLongPressRow(row.id) },
-                        )
-                        if (!selectionMode) {
-                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                }
+
+                if (rows.isEmpty()) {
+                    item(key = "empty") {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text("还没有记账", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.height(4.dp))
+                            Text("点上方按钮记下第一笔", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                } else {
+                    HomeGroups.groupByDay(rows, zone).forEach { group ->
+                        item(key = "day-${group.epochDay}") {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    text = HomeGroups.dayLabel(group.epochDay, zone),
+                                    style = MaterialTheme.typography.titleSmall,
+                                )
+                                Text(
+                                    text = "收 ${Money.format(group.incomeCents)}  支 ${Money.format(group.expenseCents)}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        items(group.items, key = { it.id }) { row ->
+                            TransactionRow(
+                                row = row,
+                                selectionMode = selectionMode,
+                                selected = row.id in selectedIds,
+                                onClick = {
+                                    if (selectionMode) onToggleSelect(row.id) else onOpenRow(row.id)
+                                },
+                                onLongClick = { onLongPressRow(row.id) },
+                            )
+                            if (!selectionMode) {
+                                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                            }
                         }
                     }
                 }
             }
+
+            HomeAddFab(
+                visible = showFab,
+                onClick = onAdd,
+                modifier = Modifier.align(Alignment.BottomEnd),
+            )
         }
     }
 }
 
+/** 右下角"记一笔"FAB：独立 composable，避免 AnimatedVisibility 命中 ColumnScope 的重载。 */
 @Composable
-private fun BudgetSummaryRow(
-    summary: HomeViewModel.BudgetSummary,
-    onClick: () -> Unit,
+private fun HomeAddFab(visible: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut(), modifier = modifier) {
+        FloatingActionButton(
+            onClick = onClick,
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            modifier = Modifier
+                .padding(16.dp)
+                .testTag(HOME_FAB_TAG),
+        ) {
+            Text("+", style = MaterialTheme.typography.titleLarge)
+        }
+    }
+}
+
+/**
+ * 月汇总 + 预算合并成一张卡（省屏占比）：
+ * 第一行 支出/收入/结余，第二行 剩余预算 + 预算明细（可点进预算管理），第三行 4dp 进度条。
+ * 没设预算时第二行换成"设置本月预算"入口。
+ */
+@Composable
+private fun HomeSummaryCard(
+    totals: HomeGroups.MonthTotals,
+    budgetSummary: HomeViewModel.BudgetSummary?,
+    onOpenBudgets: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val state = dev.penned.app.domain.BudgetMath.state(summary.totalCents, summary.spentCents)
-    Card(modifier = modifier.clickable(onClick = onClick)) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("剩余预算", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-                Text(
-                    if (state.overspent) "已超支 ${Money.format(-state.remainingCents)}" else Money.format(state.remainingCents),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (state.overspent) expenseColor() else MaterialTheme.colorScheme.primary,
+    Card(modifier = modifier) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                SummaryInline("支出", Money.format(totals.expenseCents), expenseColor())
+                SummaryInline("收入", Money.format(totals.incomeCents), incomeColor())
+                SummaryInline(
+                    "结余",
+                    Money.format(totals.incomeCents - totals.expenseCents),
+                    MaterialTheme.colorScheme.onSurface,
                 )
             }
             Spacer(Modifier.height(6.dp))
-            LinearProgressIndicator(
-                progress = { state.usedFraction },
-                modifier = Modifier.fillMaxWidth().height(5.dp),
-                color = if (state.overspent) expenseColor() else MaterialTheme.colorScheme.primary,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "本月预算 ${Money.format(summary.totalCents)} · 已用 ${Money.format(summary.spentCents)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (budgetSummary == null) {
+                Text(
+                    "设置本月预算，控制花销 →",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable(onClick = onOpenBudgets)
+                        .padding(vertical = 2.dp),
+                )
+            } else {
+                val state = dev.penned.app.domain.BudgetMath.state(budgetSummary.totalCents, budgetSummary.spentCents)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable(onClick = onOpenBudgets)
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("剩余预算", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        if (state.overspent) "已超支 ${Money.format(-state.remainingCents)}" else Money.format(state.remainingCents),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = if (state.overspent) expenseColor() else MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        "预算 ${Money.format(budgetSummary.totalCents)} · 已用 ${Money.format(budgetSummary.spentCents)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                LinearProgressIndicator(
+                    progress = { state.usedFraction },
+                    modifier = Modifier.fillMaxWidth().height(4.dp),
+                    color = if (state.overspent) expenseColor() else MaterialTheme.colorScheme.primary,
+                )
+            }
         }
     }
 }
 
+/** 合并卡第一行的一格：标签与金额同行（比"标签上一行、金额下一行"省一半高度）。 */
 @Composable
-private fun SummaryCell(label: String, value: String, valueColor: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(4.dp))
-        Text(value, style = MaterialTheme.typography.titleMedium, color = valueColor)
+private fun SummaryInline(label: String, value: String, valueColor: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.width(4.dp))
+        Text(value, style = MaterialTheme.typography.titleSmall, color = valueColor)
     }
 }
 
@@ -372,7 +439,14 @@ private fun HomeDataPreview() {
         tx("2", minuteOf(2026, 10, 4, 8, 10), TxType.INCOME, 150000, "工资", null, null),
         tx("3", minuteOf(2026, 10, 3, 12, 0), TxType.EXPENSE, 700, "午餐", "食品餐饮", "西门"),
     )
-    PennedTheme { HomeContent("日常账本", rows, onAdd = {}) }
+    PennedTheme {
+        HomeContent(
+            "日常账本",
+            rows,
+            onAdd = {},
+            budgetSummary = HomeViewModel.BudgetSummary(totalCents = 300000, spentCents = 2200),
+        )
+    }
 }
 
 private fun tx(
