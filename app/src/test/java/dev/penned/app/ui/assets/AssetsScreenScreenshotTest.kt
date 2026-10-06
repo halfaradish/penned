@@ -31,7 +31,7 @@ class AssetsScreenScreenshotTest {
 
     // groupName 故意留空：分组标题由账户大类推导（此前 groupName 从没写过值，标题永远是"默认分组"）
     private val accounts = listOf(
-        AccountWithBalance("a1", "支付宝", AccountType.DEBIT, null, 128_450L),
+        AccountWithBalance("a1", "支付宝", AccountType.DEBIT, null, 128_450L, remark = "尾号 6688"),
         AccountWithBalance("a2", "现金", AccountType.CASH, null, 3_200L),
         AccountWithBalance("a3", "招行信用卡", AccountType.CREDIT, null, -58_900L),
     )
@@ -65,6 +65,8 @@ class AssetsScreenScreenshotTest {
         composeRule.onNodeWithText("支付宝").assertIsDisplayed()
         composeRule.onNodeWithText("现金").assertIsDisplayed()
         composeRule.onNodeWithText("招行信用卡").assertIsDisplayed()
+        // 备注只在写了的时候占副标题一行
+        composeRule.onNodeWithText("尾号 6688").assertIsDisplayed()
         // 信贷账户组小计与组内唯一账户同额
         composeRule.onAllNodesWithText("-589.00").assertCountEquals(2)
         // 三张汇总卡

@@ -118,6 +118,35 @@ class AccountEditScreenScreenshotTest {
     }
 
     @Test
+    fun scopeAllBooksShowsHint() {
+        composeRule.setContent {
+            PennedTheme {
+                AccountEditContent(
+                    state = AccountEditUiState(
+                        accountId = "a1",
+                        group = AccountGroup.FUNDS,
+                        type = AccountType.DEBIT,
+                        presetLabel = "微信",
+                        name = "微信",
+                        remark = "尾号 6688",
+                        scopeAllBooks = true,
+                    ),
+                    onBack = {},
+                    onSelectGroup = {}, onNameChange = {}, onInitialChange = {}, onSave = {},
+                    onRemarkChange = {}, onScopeChange = {},
+                    onDelete = {},
+                )
+            }
+        }
+        composeRule.onNodeWithText("备注").assertIsDisplayed()
+        composeRule.onNodeWithText("尾号 6688").assertIsDisplayed()
+        composeRule.onNodeWithText("生效账本").assertIsDisplayed()
+        composeRule.onNodeWithText("全部账本").assertIsDisplayed()
+        composeRule.onNodeWithText("所有账本都能看到这个账户，余额按各账本流水合并计算").assertIsDisplayed()
+        capture("account_edit_all_books")
+    }
+
+    @Test
     fun editAccountWithTransactionsBlocksDelete() {
         composeRule.setContent {
             PennedTheme {

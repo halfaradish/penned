@@ -50,6 +50,7 @@ import dev.penned.app.ui.components.ConfirmDialog
 import dev.penned.app.ui.components.PennedButton
 import dev.penned.app.ui.components.PennedButtonVariant
 import dev.penned.app.ui.components.PennedCard
+import dev.penned.app.ui.components.PennedDivider
 import dev.penned.app.ui.components.PennedSheet
 import dev.penned.app.ui.components.PennedTopBar
 import dev.penned.app.ui.icons.PennedIcons
@@ -76,6 +77,10 @@ data class AccountEditUiState(
     val presetLabel: String? = null,
     val name: String = "",
     val initialText: String = "",
+    /** 备注（选填，只作个人备忘）。 */
+    val remark: String = "",
+    /** 生效账本：true = 所有账本可见（余额跨账本合并），false = 仅所属账本（D027）。 */
+    val scopeAllBooks: Boolean = false,
     /** 编辑已有账户时：其名下流水数（>0 不给删，删除键置灰并说明原因）。 */
     val pendingTxCount: Int = 0,
     /** 删除时才发现有流水（竞态）的兜底说明。 */
@@ -134,6 +139,8 @@ class AccountEditViewModel(
             } else {
                 Money.format(account.initialBalanceCents, grouped = false)
             },
+            remark = account.remark.orEmpty(),
+            scopeAllBooks = account.scopeAllBooks,
             pendingTxCount = db.transactionDao().countByAccount(id),
         )
     }
@@ -151,11 +158,20 @@ class AccountEditViewModel(
         update { it.copy(initialText = input.filter { ch -> ch.isDigit() || ch == '.' }) }
     }
 
+    fun setRemark(remark: String) {
+        update { it.copy(remark = remark) }
+    }
+
+    fun setScopeAllBooks(allBooks: Boolean) {
+        update { it.copy(scopeAllBooks = allBooks) }
+    }
+
     fun save(onDone: () -> Unit) {
         viewModelScope.launch {
             val s = _state.value
             val now = System.currentTimeMillis()
             val name = s.resolvedName()
+            val remark = s.remark.trim().ifEmpty { null }
             val existingId = s.accountId
             if (existingId == null) {
                 val bookId = app.settings.currentBookId.firstOrNull() ?: return@launch
@@ -166,6 +182,8 @@ class AccountEditViewModel(
                         name = name,
                         type = s.type,
                         initialBalanceCents = s.balanceCents,
+                        remark = remark,
+                        scopeAllBooks = s.scopeAllBooks,
                         createdAt = now,
                         updatedAt = now,
                         deviceId = app.deviceId,
@@ -179,6 +197,8 @@ class AccountEditViewModel(
                         name = name,
                         type = s.type,
                         initialBalanceCents = s.balanceCents,
+                        remark = remark,
+                        scopeAllBooks = s.scopeAllBooks,
                         updatedAt = now,
                     )
                 )
@@ -228,6 +248,8 @@ fun AccountEditScreen(
         onSelectGroup = viewModel::selectGroup,
         onNameChange = viewModel::setName,
         onInitialChange = viewModel::setInitial,
+        onRemarkChange = viewModel::setRemark,
+        onScopeChange = viewModel::setScopeAllBooks,
         onSave = { viewModel.save(onDone = onBack) },
         onDelete = if (state.isEdit) ({ confirmDelete = true }) else null,
         modifier = modifier,
@@ -256,11 +278,14 @@ fun AccountEditContent(
     onInitialChange: (String) -> Unit,
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
+    onRemarkChange: (String) -> Unit = {},
+    onScopeChange: (Boolean) -> Unit = {},
     onDelete: (() -> Unit)? = null,
 ) {
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     var showGroupPicker by remember { mutableStateOf(false) }
+    var showScopePicker by remember { mutableStateOf(false) }
 
     // 从「自定义」格进来时名称没有预设兜底，直接把光标送进名称输入
     LaunchedEffect(Unit) {
@@ -281,6 +306,17 @@ fun AccountEditContent(
         )
     }
 
+    if (showScopePicker) {
+        ScopePickerSheet(
+            allBooks = state.scopeAllBooks,
+            onPick = {
+                onScopeChange(it)
+                showScopePicker = false
+            },
+            onDismiss = { showScopePicker = false },
+        )
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -294,7 +330,7 @@ fun AccountEditContent(
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
             ) {
-                // 卡片一：名称 / 余额
+                // 卡片一：名称 / 余额 / 备注
                 PennedCard(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg),
                     contentPadding = PaddingValues(0.dp),
@@ -314,6 +350,12 @@ fun AccountEditContent(
                         money = true,
                         onValueChange = onInitialChange,
                     )
+                    EditFieldRow(
+                        label = "备注",
+                        value = state.remark,
+                        placeholder = "选填",
+                        onValueChange = onRemarkChange,
+                    )
                 }
 
                 // 卡片二：归属
@@ -323,11 +365,36 @@ fun AccountEditContent(
                         .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
                     contentPadding = PaddingValues(0.dp),
                 ) {
-                    GroupPickerRow(
-                        group = state.group,
-                        type = state.type,
+                    PickerRow(
+                        label = "所属分组",
+                        value = state.group.title,
                         onClick = { showGroupPicker = true },
+                        leading = {
+                            CategoryAvatar(
+                                name = state.group.title,
+                                size = PennedDimens.avatar,
+                                slot = accountPigmentSlot(state.type),
+                            )
+                        },
                     )
+                    PennedDivider()
+                    PickerRow(
+                        label = "生效账本",
+                        value = if (state.scopeAllBooks) "全部账本" else "仅本账本",
+                        onClick = { showScopePicker = true },
+                    )
+                    if (state.scopeAllBooks) {
+                        Text(
+                            "所有账本都能看到这个账户，余额按各账本流水合并计算",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(
+                                start = PennedSpacing.lg,
+                                end = PennedSpacing.lg,
+                                bottom = PennedSpacing.md,
+                            ),
+                        )
+                    }
                 }
                 Spacer(Modifier.height(PennedSpacing.xxl))
             }
@@ -360,11 +427,17 @@ fun AccountEditContent(
     }
 }
 
-/** 所属分组行：右边是账户头像预览（颜色跟着类型走）+ 分组名 + 右箭头。 */
+/** 选择行：左标签 + 右侧值（可带头部预览）+ 右箭头。 */
 @Composable
-private fun GroupPickerRow(group: AccountGroup, type: AccountType, onClick: () -> Unit) {
+private fun PickerRow(
+    label: String,
+    value: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    leading: (@Composable () -> Unit)? = null,
+) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .heightIn(min = PennedDimens.rowMinHeight)
             .clickable(onClick = onClick)
@@ -372,15 +445,17 @@ private fun GroupPickerRow(group: AccountGroup, type: AccountType, onClick: () -
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "所属分组",
+            label,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.width(72.dp),
         )
         Spacer(Modifier.weight(1f))
-        CategoryAvatar(group.title, size = PennedDimens.avatar, slot = accountPigmentSlot(type))
-        Spacer(Modifier.width(PennedSpacing.sm))
-        Text(group.title, style = MaterialTheme.typography.bodyLarge)
+        if (leading != null) {
+            leading()
+            Spacer(Modifier.width(PennedSpacing.sm))
+        }
+        Text(value, style = MaterialTheme.typography.bodyLarge)
         Spacer(Modifier.width(PennedSpacing.sm))
         Icon(
             PennedIcons.ChevronRight,
@@ -388,6 +463,39 @@ private fun GroupPickerRow(group: AccountGroup, type: AccountType, onClick: () -
             tint = MaterialTheme.colorScheme.outline,
             modifier = Modifier.size(18.dp),
         )
+    }
+}
+
+/** 生效账本选择：二选一（D027）。 */
+@Composable
+private fun ScopePickerSheet(
+    allBooks: Boolean,
+    onPick: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    PennedSheet(onDismiss = onDismiss, title = "生效账本") {
+        listOf(
+            false to "仅本账本",
+            true to "全部账本",
+        ).forEach { (value, label) ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = PennedDimens.rowMinHeight)
+                    .clickable { onPick(value) }
+                    .padding(horizontal = PennedSpacing.xl),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                if (value == allBooks) {
+                    Text(
+                        "已选",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -512,6 +620,8 @@ private fun EditAccountPreview() {
                 presetLabel = "信用卡",
                 name = "招行信用卡",
                 initialText = "0.00",
+                remark = "尾号 6688",
+                scopeAllBooks = true,
                 pendingTxCount = 2,
             ),
             onBack = {},

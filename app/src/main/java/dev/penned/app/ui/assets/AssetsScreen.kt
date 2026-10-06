@@ -505,13 +505,24 @@ private fun AccountRow(account: AccountWithBalance, masked: Boolean, onClick: ()
     ) {
         CategoryAvatar(account.name, size = PennedDimens.avatarLarge, slot = accountPigmentSlot(account.type))
         Spacer(Modifier.width(PennedSpacing.md))
-        Text(
-            account.name,
-            style = MaterialTheme.typography.bodyLarge,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
+        Column(Modifier.weight(1f)) {
+            Text(
+                account.name,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            // 备注只在写了的时候占一行（D027：个人备忘，不参与任何计算）
+            if (!account.remark.isNullOrBlank()) {
+                Text(
+                    account.remark,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
         Text(
             if (masked) MASK else Money.format(account.balanceCents),
             style = MaterialTheme.typography.titleMedium,

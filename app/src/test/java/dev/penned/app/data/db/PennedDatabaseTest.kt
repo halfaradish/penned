@@ -136,6 +136,59 @@ class PennedDatabaseTest {
     }
 
     @Test
+    fun `shared account shows in every book with merged balance`() = runTest {
+        // D027：生效账本 = 全部账本 → 每个账本都能看到，余额按跨账本流水合并
+        val bookA = DefaultSeed.seedIfEmpty(db, "device-a", now = 1000L)!!
+        val bookB = dev.penned.app.data.db.entity.BookEntity(
+            id = "book-b", name = "旅行账本", sortOrder = 1, createdAt = 2000L, updatedAt = 2000L, deviceId = "device-a",
+        )
+        db.bookDao().upsert(bookB)
+        db.accountDao().upsert(
+            AccountEntity(
+                id = "acc-shared", bookId = bookA.id, name = "微信", type = AccountType.DEBIT,
+                initialBalanceCents = 10_000, remark = "尾号 6688", scopeAllBooks = true,
+                createdAt = 1000L, updatedAt = 1000L, deviceId = "device-a",
+            )
+        )
+        db.accountDao().upsert(
+            AccountEntity(
+                id = "acc-local", bookId = bookA.id, name = "现金", type = AccountType.CASH,
+                initialBalanceCents = 5_000, createdAt = 1000L, updatedAt = 1000L, deviceId = "device-a",
+            )
+        )
+        fun spend(id: String, bookId: String, cents: Long) = TransactionEntity(
+            id = id, bookId = bookId, type = TxType.EXPENSE, amountCents = cents, accountId = "acc-shared",
+            dateEpochMinute = 10, creatorDeviceId = "d", createdAt = 1L, updatedAt = 1L, deviceId = "d",
+        )
+        db.transactionDao().upsert(spend("t-a", bookA.id, 1_200))
+        db.transactionDao().upsert(spend("t-b", bookB.id, 300))
+
+        // bookB：只看到共享账户，余额 = 100.00 - 12.00（bookA）- 3.00（bookB）
+        val inB = db.accountDao().observeWithBalance(bookB.id).first().single()
+        assertEquals("acc-shared", inB.id)
+        assertEquals(8_500L, inB.balanceCents)
+        assertEquals("尾号 6688", inB.remark)
+
+        // bookA：两个账户都在，共享账户余额同额（合并口径与当前账本无关），私有账户只算本账本
+        val inA = db.accountDao().observeWithBalance(bookA.id).first().associateBy { it.id }
+        assertEquals(setOf("acc-local", "acc-shared"), inA.keys)
+        assertEquals(8_500L, inA.getValue("acc-shared").balanceCents)
+        assertEquals(5_000L, inA.getValue("acc-local").balanceCents)
+
+        // 记一笔的账户选择器同样能选到共享账户（bookB 里只有它）
+        assertEquals(
+            setOf("acc-shared"),
+            db.accountDao().observeByBook(bookB.id).first().map { it.id }.toSet(),
+        )
+
+        // 删掉 bookA：共享账户不动（bookB 还在用，流水外键不能悬空），私有账户软删
+        db.accountDao().softDeleteByBook(bookA.id, now = 5000L)
+        assertEquals(listOf("acc-shared"), db.accountDao().observeWithBalance(bookB.id).first().map { it.id })
+        assertEquals(listOf("acc-shared"), db.accountDao().observeWithBalance(bookA.id).first().map { it.id })
+        assertTrue(db.accountDao().get("acc-local")!!.deleted)
+    }
+
+    @Test
     fun `account transaction count covers both transfer legs and ignores deleted rows`() = runTest {
         val book = DefaultSeed.seedIfEmpty(db, "device-a", now = 1000L)!!
         fun tx(id: String, type: TxType, accountId: String?, targetAccountId: String? = null) = TransactionEntity(
