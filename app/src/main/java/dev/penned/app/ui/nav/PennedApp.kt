@@ -31,6 +31,7 @@ import dev.penned.app.ui.detail.DetailScreen
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.home.HomeScreen
 import dev.penned.app.ui.home.HomeViewModel
+import dev.penned.app.ui.home.SearchScreen
 import dev.penned.app.ui.lock.PinManageScreen
 import dev.penned.app.ui.lock.PinViewModel
 import dev.penned.app.ui.mine.MineScreen
@@ -91,6 +92,7 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onOpenDetail = { id -> navController.navigate("detail/$id") },
                     onManageBooks = { navController.navigate("books") },
                     onManageBudgets = { navController.navigate("budgets") },
+                    onSearch = { navController.navigate("search") },
                 )
             }
             composable(
@@ -112,6 +114,12 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onEdit = { id ->
                         navController.navigate("add?editId=$id")
                     },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable("search") {
+                SearchScreen(
+                    onOpenDetail = { id -> navController.navigate("detail/$id") },
                     onBack = { navController.popBackStack() },
                 )
             }

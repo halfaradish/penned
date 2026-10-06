@@ -49,6 +49,35 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE id = :id")
     fun observeById(id: String): Flow<TransactionEntity?>
 
+    /**
+     * 首页搜索：备注 / 一级分类名 / 二级分类名 模糊匹配，数字输入额外按金额精确匹配。
+     * pattern 由 [dev.penned.app.domain.SearchQuery.likePattern] 转义（% _ \ 按字面）。
+     */
+    @Query(
+        """
+        SELECT t.id AS id, t.type AS type, t.amountCents AS amountCents,
+               t.accountId AS accountId, t.categoryId AS categoryId,
+               t.dateEpochMinute AS dateEpochMinute, t.note AS note,
+               c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey,
+               ta.name AS targetAccountName,
+               t.excludeFromStats AS excludeFromStats
+        FROM transactions t
+        LEFT JOIN categories c ON c.id = t.categoryId
+        LEFT JOIN categories p ON p.id = c.parentId
+        LEFT JOIN accounts ta ON ta.id = t.targetAccountId
+        WHERE t.deleted = 0 AND t.bookId = :bookId
+          AND (
+            t.note LIKE :pattern ESCAPE '\'
+            OR c.name LIKE :pattern ESCAPE '\'
+            OR p.name LIKE :pattern ESCAPE '\'
+            OR (:cents IS NOT NULL AND t.amountCents = :cents)
+          )
+        ORDER BY t.dateEpochMinute DESC
+        LIMIT 200
+        """
+    )
+    fun observeSearchWithCategory(bookId: String, pattern: String, cents: Long?): Flow<List<TxWithCategory>>
+
     /** 批次明细（导入批次管理页钻取）。 */
     @Query(
         """

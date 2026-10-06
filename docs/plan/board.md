@@ -51,6 +51,16 @@
 
 ## 已完成
 
+### M1 收尾 9/9：首页搜索（2026-10-06）
+- 背景：第三次复查把首页「搜索」当死 UI 摘掉（理由"M1 规格未列"），用户指出这是要用的功能 → 按一木首页顶栏语义实现**真搜索**
+- 范围：当前账本内，关键词按字面匹配 **备注 / 一级分类名 / 二级分类名**，数字关键词额外按**金额精确匹配**（"16" → 16.00 元）；结果按日分组（复用 `HomeGroups.groupByDay`，与首页同一套行渲染 `TransactionRow` 抽成共用文件）；点结果进账单详情
+- 细节：LIKE 通配符转义（`%` `_` `\` 按字面，SQL 里配 `ESCAPE '\'`）——否则输入 `%` 会命中全部；输入框用 BasicTextField（Robolectric 可 idle）；带「清除」与三种状态（未输入/无匹配/结果 + "找到 N 条"）；上限 200 条
+- 新增：`domain/SearchQuery`（纯函数）、`TransactionDao.observeSearchWithCategory`、`ui/home/SearchScreen.kt`（SearchContent 无状态入口）、首页入口 + `search` 路由
+- 测试：`SearchQueryTest`（转义/金额解析/空白）、`PennedDatabaseTest`「search matches note category parent and amount within the book」（含账本隔离 + `%` 不命中全部）、`SearchScreenScreenshotTest`（结果/未输入/无匹配三张截图 + 真实键盘输入过滤 → 清除回初始态）
+- 模拟机实测（真实 751 行数据）：搜 `10pro` → 6 条（小米10pro手机膜 -3.45 / 小米10pro -1028.00 …按日分组带收支小计）；搜金额 `1028` → 精确 1 条；搜 `14.54` → 0 条（真实数据里 14.54 是**退款**金额而非流水金额，行为符合"按金额搜流水"的语义）
+- 组合筛选（日期范围/类型/账户/标签）仍留 M3
+- 验证：`./gradlew build` 全绿
+
 ### M1 收尾 8/8（下）：批次明细钻取 + 行渲染 polish（2026-10-06）
 - **导入批次明细页**（`data/batches/{batchId}`）：批次行可点进明细（文件名/条数/导入时间 + 该批流水清单，只读；空态"这批流水已全部删除"）。DAO `TransactionDao.observeByBatch` + `ImportBatchDao.observeById`（过滤 deleted）+ repository 暴露
 - 首页转账行：由「未分类？」改为「转账 · 转入 X」（`TxWithCategory` 投影补 `targetAccountName`，`LEFT JOIN accounts`；图标位显示「转」）
@@ -70,7 +80,7 @@
 - 一木 xls 导入器仍不解析这三列（真实文件这些列为空；报销列涉及 M3 语义）——留待有真实样本再补
 
 ### M1 收尾 7/8：死 UI 与文案清理（2026-10-06）
-- 首页顶栏「搜索」：纯文本、无 clickable、无页面 → 移除（搜索/组合筛选归 M3，规格未列）
+- 首页顶栏「搜索」：纯文本、无 clickable、无页面 → 当时按"规格未列"移除，**用户指出该功能要用 → 已在 9/9 实现真搜索**（见下条）
 - 我的页「关于」：`onClick = {}` 死行 → 改为不可点的 `InfoRow`（无涟漪无 ›，版本信息保留）
 - 资产页账户行：`clickable {}` 空动作 → 去掉 clickable（账户详情/编辑不在 M1 规格内）
 - 我的页「分类管理」副标题："隐藏"改为"删除"，与实现（软删）一致；`CategoryEntity.hidden` 保留给 M3 隐藏分类（不是死字段，是预留）

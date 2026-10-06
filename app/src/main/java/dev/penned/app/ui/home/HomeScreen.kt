@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -36,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -57,6 +59,7 @@ fun HomeScreen(
     onOpenDetail: (String) -> Unit,
     onManageBooks: () -> Unit,
     onManageBudgets: () -> Unit = {},
+    onSearch: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val rows by viewModel.rows.collectAsStateWithLifecycle()
@@ -75,6 +78,7 @@ fun HomeScreen(
         onAdd = onAdd,
         budgetSummary = budgetSummary,
         onOpenBudgets = onManageBudgets,
+        onSearch = onSearch,
         onBookClick = { showBookMenu = true },
         bookMenu = {
             DropdownMenu(expanded = showBookMenu, onDismissRequest = { showBookMenu = false }) {
@@ -135,6 +139,7 @@ fun HomeContent(
     onAdd: () -> Unit,
     budgetSummary: HomeViewModel.BudgetSummary? = null,
     onOpenBudgets: () -> Unit = {},
+    onSearch: () -> Unit = {},
     onBookClick: () -> Unit = {},
     bookMenu: @Composable () -> Unit = {},
     selectionMode: Boolean = false,
@@ -175,6 +180,15 @@ fun HomeContent(
                     bookMenu()
                 }
                 Spacer(Modifier.weight(1f))
+                Text(
+                    text = "搜索",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onSearch)
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                )
             }
         }
 
@@ -320,84 +334,6 @@ private fun SummaryCell(label: String, value: String, valueColor: Color) {
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun TransactionRow(
-    row: TxWithCategory,
-    selectionMode: Boolean,
-    selected: Boolean,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-) {
-    // 转账行没有分类，显示"转账 · 转入 X"（D007 单表多态；此前一律显示"未分类？"）
-    val title = when (row.type) {
-        TxType.TRANSFER -> listOfNotNull("转账", row.targetAccountName?.let { "转入 $it" }).joinToString(" · ")
-        else -> listOfNotNull(row.categoryParentName, row.categoryName).joinToString(" · ").ifEmpty { "未分类" }
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (selectionMode) {
-            Box(
-                modifier = Modifier
-                    .size(22.dp)
-                    .background(
-                        if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                        CircleShape,
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (selected) {
-                    Text("✓", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimary)
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-        }
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .background(categoryColor(if (row.type == TxType.TRANSFER) "转账" else row.categoryName ?: "?"), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = if (row.type == TxType.TRANSFER) "转" else (row.categoryName ?: "?").take(1),
-                style = MaterialTheme.typography.labelLarge,
-                color = Color.White,
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            if (!row.note.isNullOrBlank()) {
-                Text(
-                    row.note,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        val color = when (row.type) {
-            TxType.EXPENSE -> expenseColor()
-            TxType.INCOME -> incomeColor()
-            TxType.TRANSFER -> MaterialTheme.colorScheme.onSurface
-        }
-        val prefix = when (row.type) {
-            TxType.EXPENSE -> "-"
-            TxType.INCOME -> "+"
-            TxType.TRANSFER -> ""
-        }
-        Text(
-            text = prefix + Money.format(row.amountCents),
-            style = MaterialTheme.typography.titleMedium,
-            color = color,
-            textAlign = TextAlign.End,
-        )
-    }
-}
 
 /** 由分类名哈希生成稳定配色：黄金角散列避免色相聚集（M0 方案，图标系统随 M6 落地）。 */
 fun categoryColor(name: String): Color {

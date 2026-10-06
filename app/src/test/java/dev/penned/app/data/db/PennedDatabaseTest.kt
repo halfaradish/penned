@@ -126,6 +126,41 @@ class PennedDatabaseTest {
     }
 
     @Test
+    fun `search matches note category parent and amount within the book`() = runTest {
+        val book = DefaultSeed.seedIfEmpty(db, "device-a", now = 1000L)!!
+        val other = dev.penned.app.data.db.entity.BookEntity(
+            id = "book-b", name = "别的账本", createdAt = 1L, updatedAt = 1L, deviceId = "d",
+        )
+        db.bookDao().upsert(other)
+        val dinner = db.categoryDao().observeByBook(book.id).first().first { it.name == "晚餐" }
+        fun tx(id: String, bookId: String, cents: Long, note: String?, categoryId: String?) = TransactionEntity(
+            id = id, bookId = bookId, type = TxType.EXPENSE, amountCents = cents,
+            categoryId = categoryId, dateEpochMinute = 10_000, note = note,
+            creatorDeviceId = "d", createdAt = 1L, updatedAt = 1L, deviceId = "d",
+        )
+        db.transactionDao().upsert(tx("a", book.id, 1600, "北苑餐厅", dinner.id))
+        db.transactionDao().upsert(tx("b", book.id, 1454, "遮光布", null))
+        db.transactionDao().upsert(tx("c", other.id, 9999, "北苑餐厅", null))
+
+        fun search(q: String) = kotlinx.coroutines.runBlocking {
+            db.transactionDao().observeSearchWithCategory(
+                book.id, dev.penned.app.domain.SearchQuery.likePattern(q),
+                dev.penned.app.domain.SearchQuery.amountCentsOrNull(q),
+            ).first()
+        }
+
+        assertEquals(listOf("a"), search("北苑").map { it.id })            // 备注
+        assertEquals(listOf("a"), search("晚餐").map { it.id })            // 二级分类名
+        assertEquals(listOf("a"), search("食品餐饮").map { it.id })        // 一级分类名
+        assertEquals(listOf("b"), search("14.54").map { it.id })           // 金额
+        assertTrue(search("不存在的关键词").isEmpty())
+        // 账本隔离：别的账本的同名备注搜不到
+        assertEquals(1, search("北苑").size)
+        // 通配符按字面：单个 % 不应命中全部
+        assertTrue(search("%").isEmpty())
+    }
+
+    @Test
     fun `recent query resolves transfer target account name`() = runTest {
         // 首页转账行显示"转账 · 转入 X"：投影要带出 targetAccountName
         val book = DefaultSeed.seedIfEmpty(db, "device-a", now = 1000L)!!
