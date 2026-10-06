@@ -1,6 +1,11 @@
 package dev.penned.app.ui.add
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,23 +15,37 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import dev.penned.app.ui.icons.PennedIcons
+import dev.penned.app.ui.theme.PennedDimens
+import dev.penned.app.ui.theme.PennedSpacing
 
 private const val KEY_AGAIN = "再记"
 private const val KEY_DONE = "完成"
 private const val KEY_EQUALS = "="
 
 /** 键位：span = 占几格；operatorBlock = 右侧运算块（⌫ 与 +−×÷ 用灰字形，与数字区分）。 */
-private data class Key(val label: String, val span: Float = 1f, val operatorBlock: Boolean = false)
+private data class Key(
+    val label: String,
+    val span: Float = 1f,
+    val operatorBlock: Boolean = false,
+    val icon: Boolean = false,
+)
 
 /**
  * 5 列布局（对标一木）：数字占 3 列，右侧 2 格是运算块——
@@ -34,7 +53,7 @@ private data class Key(val label: String, val span: Float = 1f, val operatorBloc
  * 表达式由 [dev.penned.app.domain.MoneyExpression] 求值（乘除优先、除零保护）。
  */
 private val KEYS: List<List<Key>> = listOf(
-    listOf(Key("1"), Key("2"), Key("3"), Key(AddViewModel.KEY_BACKSPACE, span = 2f, operatorBlock = true)),
+    listOf(Key("1"), Key("2"), Key("3"), Key(AddViewModel.KEY_BACKSPACE, span = 2f, operatorBlock = true, icon = true)),
     listOf(Key("4"), Key("5"), Key("6"), Key("+", operatorBlock = true), Key("-", operatorBlock = true)),
     listOf(Key("7"), Key("8"), Key("9"), Key("×", operatorBlock = true), Key("÷", operatorBlock = true)),
     listOf(Key(KEY_AGAIN), Key("0"), Key("."), Key(KEY_DONE, span = 2f)),
@@ -57,15 +76,15 @@ fun AmountKeyboard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(horizontal = PennedSpacing.xs, vertical = PennedSpacing.sm),
+        verticalArrangement = Arrangement.spacedBy(PennedSpacing.sm),
     ) {
         KEYS.forEach { rowKeys ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .height(PennedDimens.keyHeight),
+                horizontalArrangement = Arrangement.spacedBy(PennedSpacing.sm),
             ) {
                 rowKeys.forEach { key ->
                     KeyCell(
@@ -108,24 +127,39 @@ private fun KeyCell(
         else -> Action.Type
     }
     val primary = isDone && (showEquals || canSave)
-    // 页面底色就是 surfaceVariant，键不能再用它（否则看不出是键）；运算键靠灰字形区分
-    val background = when {
+    val enabled = action != Action.Save || canSave
+    val haptics = LocalHapticFeedback.current
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+
+    // 按压态用底色变化表达（键盘上每键一次涟漪太吵）；动作键填主色、运算键用次级底
+    val target = when {
         primary -> MaterialTheme.colorScheme.primary
-        isDone -> MaterialTheme.colorScheme.surfaceVariant
+        pressed && enabled -> MaterialTheme.colorScheme.surfaceContainerHigh
+        isDone -> MaterialTheme.colorScheme.surfaceContainer
         else -> MaterialTheme.colorScheme.surface
     }
+    val background by animateColorAsState(targetValue = target, label = "key")
     val contentColor = when {
         primary -> MaterialTheme.colorScheme.onPrimary
+        !enabled -> MaterialTheme.colorScheme.outline
         key.operatorBlock -> MaterialTheme.colorScheme.onSurfaceVariant
         else -> MaterialTheme.colorScheme.onSurface
     }
+    val shape = RoundedCornerShape(12.dp)
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
+            .clip(shape)
             .background(background)
+            .border(BorderStroke(PennedDimens.hairline, MaterialTheme.colorScheme.outlineVariant), shape)
             // 键盘键位是语义单元：测试按 tag 定位（"+"/"-" 会与分类宫格「＋ 新增」文本撞车）
             .testTag("amount-key-$label")
-            .clickable(enabled = action != Action.Save || canSave) {
+            .clickable(
+                enabled = enabled,
+                interactionSource = interaction,
+                indication = null,
+            ) {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 when (action) {
                     Action.Evaluate -> onEvaluate()
                     Action.Save -> onSave()
@@ -135,12 +169,21 @@ private fun KeyCell(
             },
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = displayLabel,
-            color = contentColor,
-            style = MaterialTheme.typography.titleLarge,
-            textAlign = TextAlign.Center,
-        )
+        if (key.icon) {
+            Icon(
+                PennedIcons.Backspace,
+                contentDescription = "退格",
+                tint = contentColor,
+                modifier = Modifier.size(22.dp),
+            )
+        } else {
+            Text(
+                text = displayLabel,
+                color = contentColor,
+                style = MaterialTheme.typography.titleLarge,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 

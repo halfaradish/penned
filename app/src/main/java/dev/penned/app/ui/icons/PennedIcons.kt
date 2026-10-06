@@ -45,6 +45,22 @@ object PennedIcons {
         icon("close") { stroke { line(6.6f, 6.6f, 17.4f, 17.4f); line(17.4f, 6.6f, 6.6f, 17.4f) } }
     }
 
+    /** 退格（记账键盘右上键，替代 ⌫ 字形）。 */
+    val Backspace: ImageVector by lazy {
+        icon("backspace") {
+            stroke {
+                moveTo(8.8f, 5.2f)
+                lineTo(19.6f, 5.2f)
+                lineTo(19.6f, 18.8f)
+                lineTo(8.8f, 18.8f)
+                lineTo(3.2f, 12f)
+                close()
+                line(13.6f, 9.6f, 17.2f, 14.4f)
+                line(17.2f, 9.6f, 13.6f, 14.4f)
+            }
+        }
+    }
+
     val Check: ImageVector by lazy {
         icon("check") { stroke { line(5.4f, 12.6f, 9.8f, 17f); line(9.8f, 17f, 18.6f, 7.2f) } }
     }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -39,7 +41,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.TxType
+import dev.penned.app.ui.components.CategoryAvatar
+import dev.penned.app.ui.components.PennedCard
+import dev.penned.app.ui.components.PennedChip
+import dev.penned.app.ui.components.PennedListRow
+import dev.penned.app.ui.components.PennedSegmentedTabs
+import dev.penned.app.ui.components.PennedSheet
 import dev.penned.app.ui.icons.PennedIcons
+import dev.penned.app.ui.theme.PennedDimens
+import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.PennedTheme
 import java.time.LocalDate
 import dev.penned.app.ui.theme.expenseColor
@@ -51,6 +61,7 @@ fun AddTransactionScreen(
     app: dev.penned.app.PennedApplication,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
+    onManageCategories: () -> Unit = {},
 ) {
     val viewModel = androidx.lifecycle.viewmodel.compose.viewModel(
         key = editId ?: "new",
@@ -116,7 +127,7 @@ fun AddTransactionScreen(
         onSaveAgain = viewModel::saveAgain,
         onEvaluate = viewModel::evaluate,
         onBack = onDone,
-        onEdit = { /* M1 第二批：分类管理 */ },
+        onEdit = onManageCategories,
         modifier = modifier,
     )
 }
@@ -159,7 +170,7 @@ fun AddTransactionContent(
     onEdit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val pageBg = MaterialTheme.colorScheme.surfaceVariant
+    val pageBg = MaterialTheme.colorScheme.background
     var showAccountPicker by remember { mutableStateOf(false) }
     var showFromPicker by remember { mutableStateOf(false) }
     var showToPicker by remember { mutableStateOf(false) }
@@ -174,69 +185,68 @@ fun AddTransactionContent(
     }
 
     Column(modifier = modifier.fillMaxSize().background(pageBg)) {
-        // 顶栏：返回 + 类型 Tab + 编辑
+        // 顶栏：返回 + 类型分段 + 分类管理（原 disabled 的"编辑"死 UI 已接通）
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 2.dp),
+                .padding(horizontal = PennedSpacing.xs, vertical = PennedSpacing.sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onBack, modifier = Modifier.size(44.dp)) {
+            IconButton(onClick = onBack, modifier = Modifier.size(PennedDimens.iconButton)) {
                 Icon(PennedIcons.Back, contentDescription = "返回", tint = MaterialTheme.colorScheme.onSurface)
             }
-            Spacer(Modifier.weight(1f))
-            TypeTabsRow(type = type, onSelect = onSelectType)
-            Spacer(Modifier.weight(1f))
-            Text(
-                text = "编辑",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable(enabled = false, onClick = onEdit)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            PennedSegmentedTabs(
+                options = TYPE_TABS,
+                selected = type,
+                onSelect = onSelectType,
+                label = { typeLabel(it) },
+                modifier = Modifier.weight(1f),
             )
+            IconButton(onClick = onEdit, modifier = Modifier.size(PennedDimens.iconButton)) {
+                Icon(PennedIcons.Edit, contentDescription = "管理分类", tint = MaterialTheme.colorScheme.onSurface)
+            }
         }
 
         if (type == TxType.TRANSFER) {
             // 转账面板：转出 / 互换 / 转入
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surface,
+            PennedCard(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
+                    .padding(horizontal = PennedSpacing.md),
             ) {
-                Column(Modifier.padding(16.dp)) {
-                    AccountFieldRow(
-                        label = "转出账户",
-                        account = accounts.firstOrNull { it.id == fromId },
-                        onClick = { showFromPicker = true },
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text("⇅", style = MaterialTheme.typography.titleLarge, modifier = Modifier.clickable(onClick = onSwap))
+                AccountFieldRow(
+                    label = "转出账户",
+                    account = accounts.firstOrNull { it.id == fromId },
+                    onClick = { showFromPicker = true },
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = PennedSpacing.sm),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onSwap) {
+                        Icon(
+                            PennedIcons.Transfer,
+                            contentDescription = "互换账户",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
                     }
-                    AccountFieldRow(
-                        label = "转入账户",
-                        account = accounts.firstOrNull { it.id == toId },
-                        onClick = { showToPicker = true },
-                    )
                 }
+                AccountFieldRow(
+                    label = "转入账户",
+                    account = accounts.firstOrNull { it.id == toId },
+                    onClick = { showToPicker = true },
+                )
             }
         } else {
             // 分类卡片
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surface,
+            PennedCard(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
+                    .padding(horizontal = PennedSpacing.md),
+                contentPadding = PaddingValues(horizontal = PennedSpacing.sm, vertical = PennedSpacing.md),
             ) {
                 CategoryPanel(
                     parents = parents,
@@ -247,20 +257,18 @@ fun AddTransactionContent(
                     onSelectSub = onSelectSub,
                     onAddParent = { addCategoryParent = null; showAddCategory = true },
                     onAddSub = { parentId -> addCategoryParent = parentId; showAddCategory = true },
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
                 )
             }
         }
 
         // 信息条：备注 + 实时金额 + chips
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surface,
+        PennedCard(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = PennedSpacing.md, vertical = PennedSpacing.sm),
+            contentPadding = PaddingValues(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
         ) {
-            Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Column(Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     BasicTextField(
                         value = note,
@@ -288,33 +296,40 @@ fun AddTransactionContent(
                     )
                     Text(
                         text = if (amountText.isEmpty()) "0.00" else amountText,
-                        style = MaterialTheme.typography.headlineSmall,
+                        style = MaterialTheme.typography.displaySmall,
                         color = amountColor,
                     )
                 }
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.height(PennedSpacing.sm))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(PennedSpacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     val today = java.time.LocalDate.now()
-                    SelectableChip(
-                        text = dev.penned.app.domain.AddDate.chipLabel(dateEpochDay, today),
+                    PennedChip(
+                        label = dev.penned.app.domain.AddDate.chipLabel(dateEpochDay, today),
+                        icon = PennedIcons.Calendar,
                         selected = dateEpochDay != null && dateEpochDay != today.toEpochDay(),
                         onClick = { showDatePicker = true },
                     )
                     if (type == TxType.TRANSFER) {
-                        SelectableChip(
-                            text = if (feeText.isBlank()) "手续费" else "手续费 ${feeText}",
+                        PennedChip(
+                            label = if (feeText.isBlank()) "手续费" else "手续费 $feeText",
+                            icon = PennedIcons.Tag,
                             selected = feeText.isNotBlank(),
                             onClick = { showFee = true },
                         )
                     } else {
-                        SelectableChip(
-                            text = accounts.firstOrNull { it.id == accountId }?.name ?: "无账户",
+                        PennedChip(
+                            label = accounts.firstOrNull { it.id == accountId }?.name ?: "无账户",
+                            icon = PennedIcons.Wallet,
                             selected = accountId != null,
                             onClick = { showAccountPicker = true },
                         )
                     }
                     if (type != TxType.TRANSFER) {
-                        StaticChip(text = "不报销") // M1 第二批：报销状态
+                        // 报销状态是 M3 的编辑能力，这里保持只读语义（新记为"不报销"）
+                        PennedChip(label = "不报销", icon = PennedIcons.Info, enabled = false)
                     }
                 }
             }
@@ -328,12 +343,11 @@ fun AddTransactionContent(
             onEvaluate = onEvaluate,
             onSaveAgain = onSaveAgain,
             onSave = onSave,
-            modifier = Modifier.padding(horizontal = 4.dp),
         )
     }
 
     if (showAccountPicker) {
-        AccountPickerDialog(
+        AccountPickerSheet(
             accounts = accounts,
             selectedId = accountId,
             includeNone = true,
@@ -345,7 +359,7 @@ fun AddTransactionContent(
         )
     }
     if (showFromPicker) {
-        AccountPickerDialog(
+        AccountPickerSheet(
             accounts = accounts,
             selectedId = fromId,
             includeNone = false,
@@ -357,7 +371,7 @@ fun AddTransactionContent(
         )
     }
     if (showToPicker) {
-        AccountPickerDialog(
+        AccountPickerSheet(
             accounts = accounts,
             selectedId = toId,
             includeNone = false,
@@ -420,146 +434,76 @@ fun AddTransactionContent(
 @Composable
 private fun AccountFieldRow(label: String, account: AccountEntity?, onClick: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceContainer,
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
     ) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surface),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text((account?.name ?: label).take(1), style = MaterialTheme.typography.labelLarge)
-            }
-            Spacer(Modifier.size(12.dp))
+        Row(Modifier.padding(PennedSpacing.md), verticalAlignment = Alignment.CenterVertically) {
+            CategoryAvatar(account?.name ?: label, size = PennedDimens.avatar)
+            Spacer(Modifier.width(PennedSpacing.md))
             Text(
                 account?.name ?: label,
                 style = MaterialTheme.typography.bodyLarge,
                 color = if (account == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                PennedIcons.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.size(18.dp),
             )
         }
     }
 }
 
-@Composable
-private fun TypeTabsRow(
-    type: TxType,
-    onSelect: (TxType) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(MaterialTheme.colorScheme.surface),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        listOf(
-            TxType.EXPENSE to "支出",
-            TxType.INCOME to "收入",
-            TxType.TRANSFER to "转账",
-        ).forEach { (t, label) ->
-            val selected = type == t
-            Text(
-                text = label,
-                style = MaterialTheme.typography.titleMedium,
-                color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
-                    .clickable { onSelect(t) }
-                    .padding(horizontal = 18.dp, vertical = 8.dp),
-            )
-        }
-    }
+private val TYPE_TABS = listOf(TxType.EXPENSE, TxType.INCOME, TxType.TRANSFER)
+
+private fun typeLabel(type: TxType): String = when (type) {
+    TxType.EXPENSE -> "支出"
+    TxType.INCOME -> "收入"
+    TxType.TRANSFER -> "转账"
 }
 
+/** 账户选择：从底部升起的抽屉（D024 交互范式一），选中项打勾。 */
 @Composable
-private fun StaticChip(text: String, modifier: Modifier = Modifier) {
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        modifier = modifier,
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-        )
-    }
-}
-
-@Composable
-private fun SelectableChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-        modifier = modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick),
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium,
-            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-        )
-    }
-}
-
-@Composable
-fun AccountPickerDialog(
+fun AccountPickerSheet(
     accounts: List<AccountEntity>,
     selectedId: String?,
     includeNone: Boolean,
     onPick: (String?) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("选择账户") },
-        text = {
-            Column {
-                if (includeNone) {
-                    Text(
-                        "无账户",
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { onPick(null) }
-                            .padding(12.dp),
-                    )
-                }
-                accounts.forEach { account ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { onPick(account.id) }
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(account.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                        if (account.id == selectedId) {
-                            Text("✓", color = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-                }
-                if (accounts.isEmpty()) {
-                    Text(
-                        "还没有账户，去「资产」页添加",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
-    )
+    PennedSheet(onDismiss = onDismiss, title = "选择账户") {
+        if (includeNone) {
+            PennedListRow(
+                title = "无账户",
+                leadingIcon = PennedIcons.Close,
+                trailing = if (selectedId == null) "已选" else null,
+                showChevron = false,
+                onClick = { onPick(null) },
+            )
+        }
+        accounts.forEach { account ->
+            PennedListRow(
+                title = account.name,
+                leadingIcon = PennedIcons.Wallet,
+                trailing = if (account.id == selectedId) "已选" else null,
+                showChevron = false,
+                onClick = { onPick(account.id) },
+            )
+        }
+        if (accounts.isEmpty()) {
+            Text(
+                "还没有账户，去「资产」页添加",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = PennedSpacing.xl, vertical = PennedSpacing.sm),
+            )
+        }
+    }
 }
 
 @Composable

@@ -38,6 +38,7 @@ class AddScreenScreenshotTest {
         dateEpochDay: Long? = null,
         onPickDate: (Long?) -> Unit = {},
         onAddCategory: (String, String?) -> Unit = { _, _ -> },
+        onEdit: () -> Unit = {},
     ) = AddTransactionContent(
         type = TxType.EXPENSE,
         amountText = "16.5",
@@ -69,8 +70,17 @@ class AddScreenScreenshotTest {
         onSelectType = {}, onKey = {}, onSelectParent = {}, onSelectSub = {},
         onNoteChange = {}, onPickAccount = {}, onPickFrom = {}, onPickTo = {},
         onSwap = {}, onFeeChange = {}, onPickDate = onPickDate, onAddCategory = onAddCategory, onEvaluate = {},
-        onSave = {}, onSaveAgain = {}, onBack = {}, onEdit = {},
+        onSave = {}, onSaveAgain = {}, onBack = {}, onEdit = onEdit,
     )
+
+    @Test
+    fun editActionOpensCategoryManagement() {
+        // 原 disabled 的"编辑"死 UI 已接通分类管理（board 待办）
+        var opened = false
+        composeRule.setContent { PennedTheme { content(onEdit = { opened = true }) } }
+        composeRule.onNodeWithContentDescription("管理分类").performClick()
+        org.junit.Assert.assertTrue(opened)
+    }
 
     @Test
     fun captureAddScreen() {
@@ -150,7 +160,7 @@ class AddScreenScreenshotTest {
         // 规格断言：转账面板两个账户位 + 互换键 + 手续费 chip
         composeRule.onNodeWithText("转出账户").assertIsDisplayed()
         composeRule.onNodeWithText("转入账户").assertIsDisplayed()
-        composeRule.onNodeWithText("⇅").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("互换账户").assertIsDisplayed()
         composeRule.onNodeWithText("手续费").assertIsDisplayed()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_add_transfer_empty.png")
     }

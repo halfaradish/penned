@@ -1,19 +1,28 @@
 package dev.penned.app.ui.add
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -21,15 +30,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.penned.app.ui.components.PennedChip
+import dev.penned.app.ui.icons.PennedIcons
+import dev.penned.app.ui.theme.PennedDimens
+import dev.penned.app.ui.theme.PennedSpacing
 
 data class CategoryUi(val id: String, val name: String, val hasSubs: Boolean)
 
 /**
- * 分类面板（对标一木记一笔）：
- * 5 列一级网格 + 行内展开子分类条带；中性圆底 + 首字，选中青绿实心反白（D011/D019）。
+ * 分类面板：5 列一级宫格，点一级在其下方就地展开子分类 chip 带（动效见原则五）。
+ * 选中 = 主色实心圆反白；有子分类的圆内右上带小圆点提示可展开。
  */
 @Composable
 fun CategoryPanel(
@@ -57,20 +69,23 @@ fun CategoryPanel(
                 }
                 repeat(5 - rowItems.size) { Spacer(modifier = Modifier.weight(1f)) }
             }
-            if (rowItems.any { it.id == expandedId } && expandedSubs.isNotEmpty()) {
+            val expandedHere = rowItems.any { it.id == expandedId }
+            AnimatedVisibility(
+                visible = expandedHere && expandedSubs.isNotEmpty(),
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+            ) {
                 SubBand(
                     subs = expandedSubs,
                     selectedId = selectedId,
                     expandedParentId = expandedId,
                     onSelectSub = onSelectSub,
                     onAddSub = onAddSub,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp),
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
-        // 一级宫格尾部「+ 新增」（M1 第二批：宫格内新增分类入口）
+        // 宫格尾部「新增」格（M1 第二批：宫格内新增分类入口）
         Row(modifier = Modifier.fillMaxWidth()) {
             Column(
                 modifier = Modifier
@@ -82,12 +97,17 @@ fun CategoryPanel(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(PennedDimens.categoryBubble)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                        .background(MaterialTheme.colorScheme.surfaceContainer),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("+", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(
+                        PennedIcons.Plus,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
                 }
                 Text(
                     "新增",
@@ -101,7 +121,8 @@ fun CategoryPanel(
     }
 }
 
-/** 展开的子分类条带：灰色圆角面 + 子分类 + 尾部"新增"（M1 第二批接通新增入口） */
+/** 展开的子分类带：次级底色 + chip 流（含尾部"新增"）。 */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SubBand(
     subs: List<CategoryUi>,
@@ -111,34 +132,28 @@ private fun SubBand(
     onAddSub: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = modifier) {
-        Column(Modifier.padding(vertical = 8.dp)) {
-            subs.chunked(5).forEach { rowItems ->
-                Row(Modifier.fillMaxWidth()) {
-                    rowItems.forEach { sub ->
-                        CategoryCell(
-                            category = sub,
-                            selected = sub.id == selectedId,
-                            compact = true,
-                            onClick = { onSelectSub(sub) },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    repeat(5 - rowItems.size) { Spacer(modifier = Modifier.weight(1f)) }
-                }
-            }
-            Row(Modifier.fillMaxWidth()) {
-                Text(
-                    text = "+ 新增",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { expandedParentId?.let(onAddSub) },
-                    textAlign = TextAlign.Center,
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = modifier.padding(vertical = PennedSpacing.sm),
+    ) {
+        FlowRow(
+            modifier = Modifier.fillMaxWidth().padding(PennedSpacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(PennedSpacing.sm),
+            verticalArrangement = Arrangement.spacedBy(PennedSpacing.sm),
+        ) {
+            subs.forEach { sub ->
+                PennedChip(
+                    label = sub.name,
+                    selected = sub.id == selectedId,
+                    onClick = { onSelectSub(sub) },
                 )
             }
+            PennedChip(
+                label = "新增子分类",
+                icon = PennedIcons.Plus,
+                onClick = { expandedParentId?.let(onAddSub) },
+            )
         }
     }
 }
@@ -151,7 +166,7 @@ private fun CategoryCell(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val circleSize = if (compact) 40.dp else 48.dp
+    val circleSize = if (compact) 40.dp else PennedDimens.categoryBubble
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
@@ -164,7 +179,13 @@ private fun CategoryCell(
                 modifier = Modifier
                     .size(circleSize)
                     .clip(CircleShape)
-                    .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant),
+                    .background(
+                        if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainer
+                        },
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -173,11 +194,13 @@ private fun CategoryCell(
                     color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                 )
             }
+            // 有子分类：圆内右上小圆点（放到圆外会显得和单元格脱开）
             if (category.hasSubs) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .size(10.dp)
+                        .padding(top = 3.dp, end = 3.dp)
+                        .size(9.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primary),
                 )

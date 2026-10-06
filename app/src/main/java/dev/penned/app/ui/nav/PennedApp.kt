@@ -116,6 +116,7 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     app = app,
                     editId = entry.arguments?.getString("editId")?.ifEmpty { null },
                     onDone = { navController.popBackStack() },
+                    onManageCategories = { navController.navigate("categories") },
                 )
             }
             composable(
