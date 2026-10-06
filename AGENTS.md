@@ -55,6 +55,7 @@ Android 单端本地记账 App「一笔一记 / penned」，功能对标"一木�
 
 - `docs/可行性分析与技术方案.md` 总方案与里程碑（M0~M6）
 - `docs/信息架构分析.md` 页面结构（对标参考）
+- `docs/界面重构方案.md` **界面规范（配色/字阶/圆角/间距/五条原则/逐屏要点）——改 UI 先看它**，token 与共用组件以本文为准（D024/D025）
 - `docs/local/一木导出反分析.md` schema 依据 + 导入器格式（**私密文档，已 gitignore，克隆仓库后可能不存在；需要真实数据时问用户**）
 - `docs/开发工作流.md` 工作流全文
 - `docs/specs/M{n}.md` 冻结规格 | `docs/decisions.md` 决策日志 | `docs/plan/board.md` 任务看板
