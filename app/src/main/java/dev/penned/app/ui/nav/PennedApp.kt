@@ -1,5 +1,12 @@
 package dev.penned.app.ui.nav
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
@@ -10,6 +17,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -33,6 +41,7 @@ import dev.penned.app.ui.data.ImportBatchesScreen
 import dev.penned.app.ui.detail.DetailScreen
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.primaryInkColor
+import dev.penned.app.ui.theme.rememberAnimationsEnabled
 import dev.penned.app.ui.home.HomeScreen
 import dev.penned.app.ui.home.HomeViewModel
 import dev.penned.app.ui.home.SearchScreen
@@ -58,6 +67,8 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+    val motion = rememberAnimationsEnabled()
+    val tabRoutes = remember { TABS.map { it.route }.toSet() }
 
     Scaffold(
         bottomBar = {
@@ -91,6 +102,30 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
         NavHost(
             navController = navController,
             startDestination = "home",
+            // 转场（原则五：动效回答动作）——Tab 切换淡入淡出，下钻页共享轴滑入滑出；
+            // 系统"动画时长缩放"为 0 时全部关闭
+            enterTransition = {
+                when {
+                    !motion -> EnterTransition.None
+                    targetState.destination.route in tabRoutes -> fadeIn(tween(180))
+                    else -> slideInHorizontally(tween(260)) { it / 5 } + fadeIn(tween(260))
+                }
+            },
+            exitTransition = { if (!motion) ExitTransition.None else fadeOut(tween(160)) },
+            popEnterTransition = {
+                when {
+                    !motion -> EnterTransition.None
+                    initialState.destination.route in tabRoutes -> fadeIn(tween(180))
+                    else -> slideInHorizontally(tween(260)) { -it / 5 } + fadeIn(tween(260))
+                }
+            },
+            popExitTransition = {
+                when {
+                    !motion -> ExitTransition.None
+                    targetState.destination.route in tabRoutes -> fadeOut(tween(160))
+                    else -> slideOutHorizontally(tween(260)) { it / 5 } + fadeOut(tween(260))
+                }
+            },
             // consumeWindowInsets：普通 padding 不标记 inset 已消费，内层 Scaffold/TopAppBar 会
             // 再加一遍状态栏/导航栏高度（真机搜索页顶部 2× 状态栏死带，D025）
             modifier = Modifier.padding(padding).consumeWindowInsets(padding),

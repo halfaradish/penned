@@ -296,9 +296,13 @@ fun HomeContent(
                                         selected = row.id in selectedIds,
                                         onClick = { onToggleSelect(row.id) },
                                         onLongClick = { onLongPressRow(row.id) },
+                                        modifier = Modifier.animateItem(),
                                     )
                                 } else {
-                                    SwipeToDeleteRow(onDelete = { onDeleteRow(row.id) }) {
+                                    SwipeToDeleteRow(
+                                        onDelete = { onDeleteRow(row.id) },
+                                        modifier = Modifier.animateItem(),
+                                    ) {
                                         TransactionRow(
                                             row = row,
                                             selectionMode = false,

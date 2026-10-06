@@ -168,6 +168,7 @@ fun SearchContent(
                                     selected = false,
                                     onClick = { onOpenDetail(row.id) },
                                     onLongClick = {},
+                                    modifier = Modifier.animateItem(),
                                 )
                                 HorizontalDivider(
                                     modifier = Modifier.padding(horizontal = PennedSpacing.lg),
