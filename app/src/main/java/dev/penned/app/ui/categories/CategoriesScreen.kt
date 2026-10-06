@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.penned.app.data.db.entity.CategoryEntity
 import dev.penned.app.domain.CategoryType
+import dev.penned.app.ui.components.PennedTopBar
+import dev.penned.app.ui.components.CategoryAvatar
 import dev.penned.app.ui.theme.categoryColor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -55,12 +57,7 @@ fun CategoriesScreen(
     var editTarget by remember { mutableStateOf<CategoryEntity?>(null) }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("分类管理") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("‹ 返回") } },
-            )
-        },
+        topBar = { PennedTopBar(title = "分类管理", onBack = onBack) },
     ) { padding ->
         Column(
             Modifier
@@ -135,14 +132,7 @@ private fun CategoryRow(parent: CategoryEntity, subs: List<CategoryEntity>, onCl
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .background(categoryColor(parent.name), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(parent.name.take(1), style = MaterialTheme.typography.labelLarge, color = androidx.compose.ui.graphics.Color.White)
-        }
+        CategoryAvatar(parent.name, size = 32.dp)
         Spacer(Modifier.size(12.dp))
         Text(parent.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
         if (subs.isEmpty()) {

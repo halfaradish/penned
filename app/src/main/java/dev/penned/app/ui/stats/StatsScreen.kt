@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.penned.app.domain.Money
 import dev.penned.app.ui.home.HomeGroups
+import dev.penned.app.ui.components.CategoryAvatar
 import dev.penned.app.ui.theme.categoryColor
 import dev.penned.app.ui.theme.expenseColor
 import dev.penned.app.ui.theme.incomeColor
@@ -207,9 +208,7 @@ private fun DonutSection(
                     modifier = Modifier.width(20.dp),
                     textAlign = TextAlign.Center,
                 )
-                Box(Modifier.size(28.dp).background(categoryColor(cat.name), CircleShape), contentAlignment = Alignment.Center) {
-                    Text(cat.name.take(1), style = MaterialTheme.typography.labelSmall, color = Color.White)
-                }
+                CategoryAvatar(cat.name, size = 28.dp)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {

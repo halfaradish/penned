@@ -47,6 +47,7 @@ import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.domain.AccountType
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.MoneyInput
+import dev.penned.app.ui.components.CategoryAvatar
 import dev.penned.app.ui.theme.categoryColor
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
@@ -244,14 +245,7 @@ fun AssetsContent(
                                     .padding(horizontal = 20.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .background(categoryColor(account.name), CircleShape),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text(account.name.take(1), style = MaterialTheme.typography.labelLarge, color = Color.White)
-                                }
+                                CategoryAvatar(account.name)
                                 Spacer(Modifier.size(12.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(account.name, style = MaterialTheme.typography.bodyLarge)

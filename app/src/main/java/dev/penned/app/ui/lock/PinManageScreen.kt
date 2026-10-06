@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import dev.penned.app.ui.components.PennedTopBar
 import dev.penned.app.ui.theme.expenseColor
 
 /** 密码锁设置：开启（两次输入）/ 修改（先验旧）/ 关闭。哈希经 [PinHasher] 存储。 */
@@ -105,12 +106,7 @@ fun PinManageScreen(
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("密码锁") },
-                navigationIcon = { TextButton(onClick = onBack) { Text(if (step == Step.DONE) "完成" else "‹ 返回") } },
-            )
-        },
+        topBar = { PennedTopBar(title = "密码锁", onBack = onBack) },
     ) { padding ->
         when (step) {
             Step.WAIT_HASH -> { /* DataStore 首值未到 */ }

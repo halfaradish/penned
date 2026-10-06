@@ -44,6 +44,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
+import dev.penned.app.ui.components.PennedTopBar
 import dev.penned.app.ui.theme.expenseColor
 
 data class DetailUi(
@@ -133,12 +134,7 @@ fun DetailContent(
 ) {
     val d = detail
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("账单详情") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("‹ 返回") } },
-            )
-        },
+        topBar = { PennedTopBar(title = "账单详情", onBack = onBack) },
     ) { padding ->
         Surface(modifier = Modifier.padding(padding).fillMaxSize()) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {

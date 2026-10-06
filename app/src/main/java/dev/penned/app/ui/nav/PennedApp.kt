@@ -1,9 +1,12 @@
 package dev.penned.app.ui.nav
 
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,6 +32,7 @@ import dev.penned.app.ui.data.ImportBatchDetailScreen
 import dev.penned.app.ui.data.ImportBatchesScreen
 import dev.penned.app.ui.detail.DetailScreen
 import dev.penned.app.ui.icons.PennedIcons
+import dev.penned.app.ui.theme.primaryInkColor
 import dev.penned.app.ui.home.HomeScreen
 import dev.penned.app.ui.home.HomeViewModel
 import dev.penned.app.ui.home.SearchScreen
@@ -58,7 +62,7 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
     Scaffold(
         bottomBar = {
             if (currentRoute in TABS.map { it.route }) {
-                NavigationBar {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                     TABS.forEach { tab ->
                         NavigationBarItem(
                             selected = currentRoute == tab.route,
@@ -71,6 +75,13 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                             },
                             icon = { Icon(tab.icon, contentDescription = tab.label) },
                             label = { Text(tab.label) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = primaryInkColor(),
+                                selectedTextColor = primaryInkColor(),
+                                indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
                         )
                     }
                 }
@@ -80,7 +91,9 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
         NavHost(
             navController = navController,
             startDestination = "home",
-            modifier = Modifier.padding(padding),
+            // consumeWindowInsets：普通 padding 不标记 inset 已消费，内层 Scaffold/TopAppBar 会
+            // 再加一遍状态栏/导航栏高度（真机搜索页顶部 2× 状态栏死带，D025）
+            modifier = Modifier.padding(padding).consumeWindowInsets(padding),
         ) {
             composable("home") {
                 val vm: HomeViewModel = androidx.lifecycle.viewmodel.compose.viewModel(

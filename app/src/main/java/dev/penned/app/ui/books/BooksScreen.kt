@@ -34,6 +34,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.room.withTransaction
 import dev.penned.app.PennedApplication
 import dev.penned.app.data.db.entity.BookEntity
+import dev.penned.app.ui.components.PennedTopBar
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -186,14 +187,7 @@ fun BooksContent(
     onBack: () -> Unit = {},
 ) {
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("管理账本") },
-                navigationIcon = {
-                    TextButton(onClick = onBack) { Text("‹ 返回") }
-                },
-            )
-        },
+        topBar = { PennedTopBar(title = "管理账本", onBack = onBack) },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
             Button(

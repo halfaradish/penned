@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.penned.app.data.db.dao.TxWithCategory
+import dev.penned.app.ui.components.PennedTopBar
 import dev.penned.app.data.db.entity.ImportBatchEntity
 import java.time.Instant
 import java.time.ZoneId
@@ -74,12 +75,7 @@ fun DataManagementScreen(
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("数据管理") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("‹ 返回") } },
-            )
-        },
+        topBar = { PennedTopBar(title = "数据管理", onBack = onBack) },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
@@ -178,12 +174,7 @@ fun ImportBatchesScreen(
     var confirmTarget by remember { mutableStateOf<ImportBatchEntity?>(null) }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("导入批次") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("‹ 返回") } },
-            )
-        },
+        topBar = { PennedTopBar(title = "导入批次", onBack = onBack) },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         if (batches.isEmpty()) {
@@ -269,12 +260,7 @@ fun ImportBatchDetailContent(
     onBack: () -> Unit = {},
 ) {
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("批次明细") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("‹ 返回") } },
-            )
-        },
+        topBar = { PennedTopBar(title = "批次明细", onBack = onBack) },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
             batch?.let {

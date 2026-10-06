@@ -37,6 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.penned.app.domain.BudgetMath
 import dev.penned.app.domain.CategoryType
 import dev.penned.app.domain.Money
+import dev.penned.app.ui.components.PennedTopBar
 import dev.penned.app.ui.theme.expenseColor
 
 /**
@@ -55,12 +56,7 @@ fun BudgetScreen(
     var showAddCategory by remember { mutableStateOf(false) }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("预算管理") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("‹ 返回") } },
-            )
-        },
+        topBar = { PennedTopBar(title = "预算管理", onBack = onBack) },
     ) { padding ->
         Column(
             Modifier

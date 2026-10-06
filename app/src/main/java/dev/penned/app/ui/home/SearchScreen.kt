@@ -39,6 +39,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.penned.app.PennedApplication
 import dev.penned.app.data.db.dao.TxWithCategory
 import dev.penned.app.domain.SearchQuery
+import dev.penned.app.ui.components.PennedTopBar
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -120,12 +121,7 @@ fun SearchContent(
     zone: ZoneId = ZoneId.systemDefault(),
 ) {
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("搜索") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("‹ 返回") } },
-            )
-        },
+        topBar = { PennedTopBar(title = "搜索", onBack = onBack) },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
             // 用 BasicTextField：Robolectric 下能 idle（弹窗里的 OutlinedTextField 不行，见看板）
