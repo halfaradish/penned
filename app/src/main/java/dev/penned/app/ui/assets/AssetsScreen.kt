@@ -1,8 +1,13 @@
 package dev.penned.app.ui.assets
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,11 +15,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -26,9 +31,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -42,13 +54,14 @@ import dev.penned.app.domain.AccountType
 import dev.penned.app.domain.Money
 import dev.penned.app.ui.components.CategoryAvatar
 import dev.penned.app.ui.components.EmptyState
-import dev.penned.app.ui.components.MoneyText
 import dev.penned.app.ui.components.PennedCard
+import dev.penned.app.ui.components.PennedDivider
 import dev.penned.app.ui.components.SwipeToDeleteRow
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.expenseColor
+import dev.penned.app.ui.theme.primaryInkColor
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -58,6 +71,9 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+/** 眼睛藏起来时金额显示成它（页面内状态，不落库）。 */
+private const val MASK = "****"
 
 data class AssetsUiState(
     val accounts: List<AccountWithBalance> = emptyList(),
@@ -194,12 +210,18 @@ fun AssetsContent(
     onDeleteAccount: (AccountWithBalance) -> Unit = {},
     snackbarHostState: SnackbarHostState? = null,
 ) {
+    // 眼睛藏金额：切 Tab 回来还在（rememberSaveable），重启重置
+    var masked by rememberSaveable { mutableStateOf(false) }
+    var collapsedGroups by remember { mutableStateOf(emptySet<String>()) }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { if (snackbarHostState != null) SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onAddAccount,
+                modifier = Modifier.size(60.dp),
+                shape = CircleShape,
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
             ) {
@@ -207,94 +229,55 @@ fun AssetsContent(
             }
         },
     ) { padding ->
-        Column(modifier = modifier.fillMaxSize().padding(padding)) {
-            Text(
-                "资产",
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(
-                    start = PennedSpacing.lg,
-                    end = PennedSpacing.lg,
-                    top = PennedSpacing.md,
-                    bottom = PennedSpacing.sm,
-                ),
-            )
-
-            // 净资产 hero：一个主数字 + 两个分列
-            PennedCard(modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg)) {
+        // 整页一起滚：页头/净资产卡/汇总卡/分组卡都随列表滚走，只留 FAB 与底栏
+        LazyColumn(
+            modifier = modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(bottom = 96.dp),
+        ) {
+            item(key = "title") {
                 Text(
-                    "净资产(元)",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    "资产",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(
+                        start = PennedSpacing.lg,
+                        end = PennedSpacing.lg,
+                        top = PennedSpacing.md,
+                        bottom = PennedSpacing.sm,
+                    ),
                 )
-                Spacer(Modifier.height(PennedSpacing.xs))
-                Text(
-                    Money.format(state.netCents),
-                    style = MaterialTheme.typography.displaySmall,
-                    color = if (state.netCents < 0) expenseColor() else MaterialTheme.colorScheme.onSurface,
-                )
-                Spacer(Modifier.height(PennedSpacing.md))
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    AmountColumn("总资产", Money.format(state.assetCents), Modifier.weight(1f))
-                    AmountColumn("负资产", Money.format(state.liabilityCents), Modifier.weight(1f))
-                }
             }
-
-            // 报销 / 债务 / 理财：三列一张卡（原来三张卡各塞两行小字，读不动）
-            PennedCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
-            ) {
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    SummaryCell(
-                        "报销",
-                        "可报",
-                        Money.format(state.reimbursePendingCents),
-                        "已报",
-                        Money.format(state.reimburseDoneCents),
-                        Modifier.weight(1f),
-                    )
-                    SummaryCell("债务", "应付", "0.00", "应收", "0.00", Modifier.weight(1f))
-                    SummaryCell("理财", "总额", "0.00", "盈亏", "0.00", Modifier.weight(1f))
-                }
+            item(key = "net") {
+                NetAssetCard(state = state, masked = masked, onToggleMask = { masked = !masked })
             }
+            item(key = "summary") { SummaryCards(state = state, masked = masked) }
 
             if (state.accounts.isEmpty()) {
-                EmptyState(
-                    title = "你还没有任何账户",
-                    hint = "点击右下角 + 添加你的第一个账户",
-                    icon = PennedIcons.Wallet,
-                    modifier = Modifier.padding(top = PennedSpacing.xxl),
-                )
+                item(key = "empty") {
+                    EmptyState(
+                        title = "你还没有任何账户",
+                        hint = "点击右下角 + 添加你的第一个账户",
+                        icon = PennedIcons.Wallet,
+                        modifier = Modifier.padding(top = PennedSpacing.xxl),
+                    )
+                }
             } else {
-                val grouped = groupAccounts(state.accounts)
-                LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
-                    grouped.forEach { (group, list) ->
-                        item(key = "g-$group") {
-                            Text(
-                                group,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(
-                                    start = PennedSpacing.lg,
-                                    end = PennedSpacing.lg,
-                                    top = PennedSpacing.md,
-                                    bottom = PennedSpacing.sm,
-                                ),
-                            )
-                        }
-                        items(list, key = { it.id }) { account ->
-                            SwipeToDeleteRow(
-                                onDelete = { onDeleteAccount(account) },
-                                modifier = Modifier.animateItem(),
-                            ) {
-                                AccountRow(account = account, onClick = { onOpenAccount(account.id) })
-                            }
-                            HorizontalDivider(
-                                modifier = Modifier.padding(horizontal = PennedSpacing.lg),
-                                color = MaterialTheme.colorScheme.outlineVariant,
-                            )
-                        }
+                groupAccounts(state.accounts).forEach { (title, accounts) ->
+                    item(key = "g-$title") {
+                        AccountGroupCard(
+                            title = title,
+                            accounts = accounts,
+                            masked = masked,
+                            collapsed = title in collapsedGroups,
+                            onToggle = {
+                                collapsedGroups = if (title in collapsedGroups) {
+                                    collapsedGroups - title
+                                } else {
+                                    collapsedGroups + title
+                                }
+                            },
+                            onOpenAccount = onOpenAccount,
+                            onDeleteAccount = onDeleteAccount,
+                        )
                     }
                 }
             }
@@ -302,12 +285,205 @@ fun AssetsContent(
     }
 }
 
+/** 净资产卡：浅青底 + 大数字，右列总资产/负资产，标题旁一个眼睛。 */
+@Composable
+private fun NetAssetCard(state: AssetsUiState, masked: Boolean, onToggleMask: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = PennedSpacing.lg)
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.primaryContainer)
+            .padding(PennedSpacing.lg),
+    ) {
+        Row(Modifier.fillMaxWidth()) {
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "净资产(元)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Box(
+                        Modifier.size(36.dp).clickable(onClick = onToggleMask),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            if (masked) PennedIcons.EyeOff else PennedIcons.Eye,
+                            contentDescription = if (masked) "显示金额" else "隐藏金额",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+                Text(
+                    if (masked) MASK else Money.format(state.netCents),
+                    style = MaterialTheme.typography.displaySmall,
+                    color = if (state.netCents < 0) expenseColor() else primaryInkColor(),
+                )
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                AmountLine("总资产", state.assetCents, masked)
+                Spacer(Modifier.height(PennedSpacing.sm))
+                AmountLine("负资产", state.liabilityCents, masked)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AmountLine(label: String, cents: Long, masked: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.width(PennedSpacing.sm))
+        Text(
+            if (masked) MASK else Money.format(cents),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+private data class SummaryLine(val label: String, val cents: Long, val color: Color)
+
+/** 报销 / 债务 / 理财：三张独立小卡（债务与理财是 M1 静态占位）。 */
+@Composable
+private fun SummaryCards(state: AssetsUiState, masked: Boolean) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
+        horizontalArrangement = Arrangement.spacedBy(PennedSpacing.md),
+    ) {
+        SummaryCard(
+            title = "报销",
+            lines = listOf(
+                SummaryLine("可报", state.reimbursePendingCents, MaterialTheme.colorScheme.onSurface),
+                SummaryLine("已报", state.reimburseDoneCents, MaterialTheme.colorScheme.onSurface),
+            ),
+            masked = masked,
+            modifier = Modifier.weight(1f),
+        )
+        SummaryCard(
+            title = "债务",
+            lines = listOf(
+                SummaryLine("应付", 0L, expenseColor()),
+                SummaryLine("应收", 0L, primaryInkColor()),
+            ),
+            masked = masked,
+            modifier = Modifier.weight(1f),
+        )
+        SummaryCard(
+            title = "理财",
+            lines = listOf(
+                SummaryLine("总额", 0L, MaterialTheme.colorScheme.onSurface),
+                SummaryLine("盈亏", 0L, primaryInkColor()),
+            ),
+            masked = masked,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun SummaryCard(
+    title: String,
+    lines: List<SummaryLine>,
+    masked: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    PennedCard(
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = PennedSpacing.xs, vertical = PennedSpacing.md),
+    ) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleSmall,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(PennedSpacing.sm))
+        lines.forEach { line ->
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(line.label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.width(PennedSpacing.xs))
+                Text(
+                    if (masked) MASK else Money.format(line.cents),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = line.color,
+                )
+            }
+            Spacer(Modifier.height(2.dp))
+        }
+    }
+}
+
 /**
- * 账户行：颜料头像（按类型固定色）+ 名称 + 等宽余额。
- * 不显示类型副标题——分组标题与头像色已经表达了类型（此前「支付宝」那行副标题写着"储蓄卡"）。
+ * 分组卡：组名 + 组小计 + 折叠箭头，组内是账户行（左滑删除、点进编辑）。
+ * 整组做成一个 LazyColumn item——分组天然是"一张卡"，行数少，不需要逐行虚拟化。
  */
 @Composable
-private fun AccountRow(account: AccountWithBalance, onClick: () -> Unit) {
+private fun AccountGroupCard(
+    title: String,
+    accounts: List<AccountWithBalance>,
+    masked: Boolean,
+    collapsed: Boolean,
+    onToggle: () -> Unit,
+    onOpenAccount: (String) -> Unit,
+    onDeleteAccount: (AccountWithBalance) -> Unit,
+) {
+    val rotation by animateFloatAsState(if (collapsed) -90f else 0f, label = "group-chevron")
+    PennedCard(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.sm),
+        contentPadding = PaddingValues(0.dp),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onToggle)
+                .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            val groupTotal = accounts.sumOf { it.balanceCents }
+            Text(
+                if (masked) MASK else Money.format(groupTotal),
+                style = MaterialTheme.typography.titleMedium,
+                color = if (groupTotal < 0) expenseColor() else primaryInkColor(),
+            )
+            Spacer(Modifier.width(PennedSpacing.sm))
+            Icon(
+                PennedIcons.ChevronDown,
+                contentDescription = if (collapsed) "展开$title" else "折叠$title",
+                tint = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.size(18.dp).rotate(rotation),
+            )
+        }
+        AnimatedVisibility(visible = !collapsed) {
+            Column {
+                accounts.forEachIndexed { index, account ->
+                    SwipeToDeleteRow(
+                        onDelete = { onDeleteAccount(account) },
+                        rowBackground = MaterialTheme.colorScheme.surface,
+                    ) {
+                        AccountRow(
+                            account = account,
+                            masked = masked,
+                            onClick = { onOpenAccount(account.id) },
+                        )
+                    }
+                    if (index < accounts.lastIndex) PennedDivider()
+                }
+            }
+        }
+    }
+}
+
+/** 账户行：颜料头像（按类型固定色）+ 名称 + 等宽余额（正=品牌青绿、负=朱砂）。 */
+@Composable
+private fun AccountRow(account: AccountWithBalance, masked: Boolean, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -325,39 +501,11 @@ private fun AccountRow(account: AccountWithBalance, onClick: () -> Unit) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        MoneyText(
-            cents = account.balanceCents,
+        Text(
+            if (masked) MASK else Money.format(account.balanceCents),
             style = MaterialTheme.typography.titleMedium,
-            color = if (account.balanceCents < 0) expenseColor() else MaterialTheme.colorScheme.onSurface,
-            signed = false,
+            color = if (account.balanceCents < 0) expenseColor() else primaryInkColor(),
         )
-    }
-}
-
-@Composable
-private fun AmountColumn(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(2.dp))
-        Text(value, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-    }
-}
-
-@Composable
-private fun SummaryCell(
-    title: String,
-    label1: String,
-    value1: String,
-    label2: String,
-    value2: String,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier) {
-        Text(title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(PennedSpacing.xs))
-        Text("$label1 $value1", style = MaterialTheme.typography.bodySmall)
-        Spacer(Modifier.height(2.dp))
-        Text("$label2 $value2", style = MaterialTheme.typography.bodySmall)
     }
 }
 

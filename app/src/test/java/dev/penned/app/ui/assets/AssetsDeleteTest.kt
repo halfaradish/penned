@@ -106,8 +106,9 @@ class AssetsDeleteTest {
         seed(app)
         launch(app)
 
-        // 初始净资产 = 100.00（误建）+ 38.00（在用 50.00 - 12.00 支出）；两个账户都是正数，总资产同额
-        composeRule.onAllNodesWithText("138.00").assertCountEquals(2)
+        // 初始净资产 = 100.00（误建）+ 38.00（在用 50.00 - 12.00 支出）；两个账户都是正数，
+        // 所以净资产、总资产、资金账户组小计三处都是 138.00
+        composeRule.onAllNodesWithText("138.00").assertCountEquals(3)
 
         composeRule.onNodeWithText("误建账户").performTouchInput { swipeLeft() }
         composeRule.waitUntil(5_000) { count("误建账户") == 0 }
@@ -122,7 +123,7 @@ class AssetsDeleteTest {
         composeRule.waitForIdle()
         composeRule.waitForIdle()
         assertFalse(runBlocking { app.database.accountDao().get("acc-empty")!!.deleted })
-        composeRule.waitUntil(5_000) { count("138.00") == 2 }
+        composeRule.waitUntil(5_000) { count("138.00") == 3 }
     }
 
     @Test

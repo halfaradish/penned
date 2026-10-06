@@ -227,6 +227,27 @@ object PennedIcons {
         }
     }
 
+    /** 眼睛（资产页"显示金额"）：上下两道浅弧合成的眼形 + 瞳孔。 */
+    val Eye: ImageVector by lazy {
+        icon("eye") {
+            stroke {
+                lens()
+                circle(12f, 12f, 2.6f)
+            }
+        }
+    }
+
+    /** 闭眼（资产页"隐藏金额"）：同一个眼形加一道斜杠。 */
+    val EyeOff: ImageVector by lazy {
+        icon("eye_off") {
+            stroke {
+                lens()
+                circle(12f, 12f, 2.6f)
+                line(4.2f, 19.8f, 19.8f, 4.2f)
+            }
+        }
+    }
+
     // —— 构建辅助 ——
 
     private const val STROKE = 1.9f
@@ -268,6 +289,14 @@ object PennedIcons {
         moveTo(cx - r, cy)
         arcTo(r, r, 0f, true, true, cx + r, cy)
         arcTo(r, r, 0f, true, true, cx - r, cy)
+        close()
+    }
+
+    /** 眼形（左右两段浅弧，上弧由左向右、下弧由右向左）。 */
+    private fun PathBuilder.lens() {
+        moveTo(2.6f, 12f)
+        arcTo(11f, 8f, 0f, false, true, 21.4f, 12f)
+        arcTo(11f, 8f, 0f, false, true, 2.6f, 12f)
         close()
     }
 

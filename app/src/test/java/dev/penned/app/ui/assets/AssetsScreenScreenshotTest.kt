@@ -1,13 +1,18 @@
 package dev.penned.app.ui.assets
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.penned.app.data.db.dao.AccountWithBalance
 import dev.penned.app.domain.AccountType
 import dev.penned.app.ui.theme.PennedTheme
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -15,7 +20,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** M1 第一批验收缺项：资产页 Roborazzi 截图。 */
+/** M1 第一批验收缺项：资产页 Roborazzi 截图（AD-2 按参考图重做后的版面）。 */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w400dp-h800dp")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -40,6 +45,10 @@ class AssetsScreenScreenshotTest {
         reimburseDoneCents = 12_000L,
     )
 
+    private fun capture(name: String) {
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/$name.png")
+    }
+
     @Test
     fun captureAssetsScreen() {
         composeRule.setContent {
@@ -48,14 +57,21 @@ class AssetsScreenScreenshotTest {
         // 规格断言：净资产/总资产/负资产汇总、分组标题、账户余额（负数为信用卡）
         composeRule.onNodeWithText("净资产(元)").assertIsDisplayed()
         composeRule.onNodeWithText("727.50").assertIsDisplayed()
+        // 千分位（AD-1）：总资产 1316.50 → 1,316.50；资金账户组小计同额（1284.50 + 32.00）
+        composeRule.onAllNodesWithText("1,316.50").assertCountEquals(2)
         // 分组标题按账户大类推导：现金/支付宝 → 资金账户，信用卡 → 信贷账户
         composeRule.onNodeWithText("资金账户").assertIsDisplayed()
         composeRule.onNodeWithText("信贷账户").assertIsDisplayed()
         composeRule.onNodeWithText("支付宝").assertIsDisplayed()
         composeRule.onNodeWithText("现金").assertIsDisplayed()
         composeRule.onNodeWithText("招行信用卡").assertIsDisplayed()
-        composeRule.onNodeWithText("-589.00").assertIsDisplayed()
-        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_assets_screen.png")
+        // 信贷账户组小计与组内唯一账户同额
+        composeRule.onAllNodesWithText("-589.00").assertCountEquals(2)
+        // 三张汇总卡
+        listOf("报销", "债务", "理财").forEach { composeRule.onNodeWithText(it).assertIsDisplayed() }
+        // 眼睛（隐藏金额）
+        composeRule.onNodeWithContentDescription("隐藏金额").assertIsDisplayed()
+        capture("m1_assets_screen")
     }
 
     @Test
@@ -64,6 +80,28 @@ class AssetsScreenScreenshotTest {
             PennedTheme { AssetsContent(state = AssetsUiState(), onAddAccount = {}) }
         }
         composeRule.onNodeWithText("你还没有任何账户").assertIsDisplayed()
-        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_assets_empty.png")
+        capture("m1_assets_empty")
+    }
+
+    @Test
+    fun collapseGroupAndMaskAmounts() {
+        composeRule.setContent {
+            PennedTheme { AssetsContent(state = state(), onAddAccount = {}) }
+        }
+        // 折叠资金账户：组内两行收起，组小计与标题还在
+        composeRule.onNodeWithText("资金账户").performClick()
+        composeRule.onNodeWithText("支付宝").assertDoesNotExist()
+        composeRule.onNodeWithText("招行信用卡").assertIsDisplayed()
+        // 让点击涟漪与折叠动画跑完：Robolectric 下不推进时钟会截到半透明的中间帧
+        composeRule.mainClock.advanceTimeBy(1_500)
+        composeRule.waitForIdle()
+        capture("assets_collapsed")
+
+        // 眼睛：金额全变 ****，净资产数字消失
+        composeRule.onNodeWithContentDescription("隐藏金额").performClick()
+        assertTrue(composeRule.onAllNodesWithText("****").fetchSemanticsNodes().isNotEmpty())
+        composeRule.onNodeWithText("727.50").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("显示金额").assertIsDisplayed()
+        capture("assets_masked")
     }
 }
