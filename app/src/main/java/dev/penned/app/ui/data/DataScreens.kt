@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.penned.app.data.db.dao.TxWithCategory
 import dev.penned.app.data.db.entity.ImportBatchEntity
 import java.time.Instant
 import java.time.ZoneId
@@ -161,6 +162,7 @@ private fun MenuRow(title: String, subtitle: String, enabled: Boolean = true, on
 fun ImportBatchesScreen(
     viewModel: DataViewModel,
     onBack: () -> Unit,
+    onOpenBatch: (String) -> Unit = {},
 ) {
     val batches by viewModel.batches.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
@@ -203,7 +205,10 @@ fun ImportBatchesScreen(
                 items(batches.size) { i ->
                     val batch = batches[i]
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onOpenBatch(batch.id) }
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
@@ -241,3 +246,93 @@ fun ImportBatchesScreen(
 private fun formatBatchTime(epochMillis: Long): String =
     DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
         .format(Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()))
+
+/** 批次明细页：某一批导入的流水清单（只读，M1 收尾补"查看"）。 */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+fun ImportBatchDetailScreen(
+    viewModel: DataViewModel,
+    batchId: String,
+    onBack: () -> Unit,
+) {
+    val batch by viewModel.batch(batchId).collectAsStateWithLifecycle(initialValue = null)
+    val rows by viewModel.batchTransactions(batchId).collectAsStateWithLifecycle(initialValue = emptyList())
+    ImportBatchDetailContent(batch = batch, rows = rows, onBack = onBack)
+}
+
+/** 无状态入口：截图测试/预览用。 */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+fun ImportBatchDetailContent(
+    batch: ImportBatchEntity?,
+    rows: List<TxWithCategory>,
+    onBack: () -> Unit = {},
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("批次明细") },
+                navigationIcon = { TextButton(onClick = onBack) { Text("‹ 返回") } },
+            )
+        },
+    ) { padding ->
+        Column(Modifier.padding(padding).fillMaxSize()) {
+            batch?.let {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
+                    Text(it.fileName, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "${it.count} 条流水 · 导入于 ${formatBatchTime(it.importedAt)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                HorizontalDivider()
+            }
+            if (rows.isEmpty()) {
+                Column(
+                    Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text("这批流水已全部删除", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                LazyColumn(Modifier.fillMaxSize()) {
+                    items(rows.size) { i ->
+                        val row = rows[i]
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    row.note ?: row.categoryName ?: "未分类",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                )
+                                Text(
+                                    batchRowDate(row.dateEpochMinute) + " · " +
+                                        (row.categoryName ?: "未分类"),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Text(
+                                (if (row.type == dev.penned.app.domain.TxType.EXPENSE) "-" else if (row.type == dev.penned.app.domain.TxType.INCOME) "+" else "") +
+                                    dev.penned.app.domain.Money.format(row.amountCents),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (row.type == dev.penned.app.domain.TxType.EXPENSE) dev.penned.app.ui.theme.expenseColor()
+                                else if (row.type == dev.penned.app.domain.TxType.INCOME) dev.penned.app.ui.theme.incomeColor()
+                                else MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                        HorizontalDivider()
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun batchRowDate(epochMinute: Long): String =
+    Instant.ofEpochSecond(epochMinute * 60).atZone(ZoneId.systemDefault())
+        .let { "%d月%d日".format(it.monthValue, it.dayOfMonth) }

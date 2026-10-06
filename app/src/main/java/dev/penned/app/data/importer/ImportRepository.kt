@@ -8,6 +8,7 @@ import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.data.db.entity.BookEntity
 import dev.penned.app.data.db.entity.CategoryEntity
 import dev.penned.app.data.db.entity.ImportBatchEntity
+import dev.penned.app.data.db.dao.TxWithCategory
 import dev.penned.app.data.db.entity.TransactionEntity
 import dev.penned.app.domain.AccountType
 import dev.penned.app.domain.CategoryType
@@ -125,6 +126,11 @@ class ImportRepository(
     }
 
     fun observeBatches() = db.importBatchDao().observeAll()
+
+    /** 批次明细钻取：批次信息 + 该批次未删除的流水。 */
+    fun observeBatch(id: String) = db.importBatchDao().observeById(id)
+
+    fun observeBatchTransactions(batchId: String) = db.transactionDao().observeByBatch(batchId)
 
     /** 按批次整体软删：批次与其名下流水一起标记删除。 */
     suspend fun deleteBatch(batchId: String) = withContext(Dispatchers.IO) {

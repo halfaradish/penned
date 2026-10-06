@@ -48,6 +48,9 @@ class AssetsScreenScreenshotTest {
         composeRule.onNodeWithText("净资产(元)").assertIsDisplayed()
         composeRule.onNodeWithText("727.50").assertIsDisplayed()
         composeRule.onNodeWithText("资金账户").assertIsDisplayed()
+        // 账户类型显示中文（此前是 DEBIT/CASH 英文枚举）
+        composeRule.onNodeWithText("储蓄卡").assertIsDisplayed()
+        composeRule.onNodeWithText("信用卡").assertIsDisplayed()
         composeRule.onNodeWithText("信贷账户").assertIsDisplayed()
         composeRule.onNodeWithText("-589.00").assertIsDisplayed()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_assets_screen.png")

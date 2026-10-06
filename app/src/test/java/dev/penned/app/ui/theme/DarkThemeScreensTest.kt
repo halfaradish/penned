@@ -76,11 +76,14 @@ class DarkThemeScreensTest {
                     txRow("1", TxType.EXPENSE, 1600, "晚餐", "食品餐饮"),
                     txRow("2", TxType.INCOME, 150000, "工资", null),
                     txRow("3", TxType.EXPENSE, 700, "打车", "出行交通"),
+                    // 转账行：显示"转账 · 转入 X"而非"未分类"
+                    txRow("4", TxType.TRANSFER, 8200, null, null).copy(targetAccountName = "储蓄卡"),
                 ),
                 onAdd = {},
             )
         }
         composeRule.onNodeWithText("本月支出").assertIsDisplayed()
+        composeRule.onNodeWithText("转账 · 转入 储蓄卡").assertIsDisplayed()
         capture("home")
     }
 
@@ -298,6 +301,7 @@ class DarkThemeScreensTest {
         categoryName = name,
         categoryParentName = parent,
         categoryIconKey = null,
+        targetAccountName = null,
         excludeFromStats = false,
     )
 }

@@ -114,6 +114,15 @@ class AssetsViewModel(private val app: PennedApplication) : ViewModel() {
     }
 }
 
+/** 账户类型中文名（列表副标题；此前直接显示 DEBIT/CASH 英文枚举）。 */
+fun accountTypeLabel(type: AccountType): String = when (type) {
+    AccountType.CASH -> "现金"
+    AccountType.DEBIT -> "储蓄卡"
+    AccountType.CREDIT -> "信用卡"
+    AccountType.INVEST -> "理财"
+    AccountType.DEBT -> "负债"
+}
+
 /** 添加账户的类型预设（对标一木：分组模板 + 自定义）。 */
 data class AccountPreset(val label: String, val type: AccountType)
 
@@ -246,7 +255,7 @@ fun AssetsContent(
                                 Spacer(Modifier.size(12.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(account.name, style = MaterialTheme.typography.bodyLarge)
-                                    Text(account.type.name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(accountTypeLabel(account.type), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 Text(
                                     Money.format(account.balanceCents),

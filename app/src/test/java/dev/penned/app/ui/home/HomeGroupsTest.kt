@@ -21,7 +21,7 @@ class HomeGroupsTest {
     ) = TxWithCategory(
         id = id, type = type, amountCents = cents, accountId = null, categoryId = null,
         dateEpochMinute = minute, note = null, categoryName = "x", categoryParentName = null,
-        categoryIconKey = null, excludeFromStats = false,
+        categoryIconKey = null, targetAccountName = null, excludeFromStats = false,
     )
 
     @Test

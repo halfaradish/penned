@@ -25,6 +25,7 @@ import dev.penned.app.ui.categories.CategoriesScreen
 import dev.penned.app.ui.categories.CategoriesViewModel
 import dev.penned.app.ui.data.DataManagementScreen
 import dev.penned.app.ui.data.DataViewModel
+import dev.penned.app.ui.data.ImportBatchDetailScreen
 import dev.penned.app.ui.data.ImportBatchesScreen
 import dev.penned.app.ui.detail.DetailScreen
 import dev.penned.app.ui.icons.PennedIcons
@@ -158,6 +159,20 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                 )
                 ImportBatchesScreen(
                     viewModel = vm,
+                    onBack = { navController.popBackStack() },
+                    onOpenBatch = { id -> navController.navigate("data/batches/$id") },
+                )
+            }
+            composable(
+                route = "data/batches/{batchId}",
+                arguments = listOf(navArgument("batchId") { type = NavType.StringType }),
+            ) { entry ->
+                val vm: DataViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+                    initializer = { DataViewModel(app) },
+                )
+                ImportBatchDetailScreen(
+                    viewModel = vm,
+                    batchId = entry.arguments?.getString("batchId").orEmpty(),
                     onBack = { navController.popBackStack() },
                 )
             }

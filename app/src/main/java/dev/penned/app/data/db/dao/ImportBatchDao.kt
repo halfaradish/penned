@@ -14,6 +14,9 @@ interface ImportBatchDao {
     @Query("SELECT * FROM import_batches WHERE id = :id")
     suspend fun get(id: String): ImportBatchEntity?
 
+    @Query("SELECT * FROM import_batches WHERE id = :id AND deleted = 0")
+    fun observeById(id: String): Flow<ImportBatchEntity?>
+
     @Upsert
     suspend fun upsert(batch: ImportBatchEntity)
 

@@ -11,10 +11,7 @@
 - 记一笔顶栏「编辑」是 disabled 死 UI（占位注释还写着"M1 第二批：分类管理"，该功能已做但未接通）；「不报销」chip 同为占位（M3）——接通分类管理或移除
 - 一木 xls 导入器不解析 地址/多币种/报销 列（真实 751 行文件这些列全空，无数据损失）——等真出现带这些列的文件再补解析（报销列还涉及 M3 的报销语义）
 - 日历 Tab 占位文案 "M1 第二批" 已过时：日历页未分配任何冻结里程碑（总方案 M0~M6 未列），需在 M2 规格时明确归属
-- 导入批次页只能看批次列表+删除，不能点进批次看这批流水（一木探索报告写的是"按批次查看/删除每次导入的账单"；"查看"是否含明细待定）
-- 首页流水行的转账记录显示「未分类？」——应显示「转账 → 账户」样式（polish，改 HomeGroups/HomeScreen 行渲染）
 - 首页流水行对全额退款流水显示 "-0.00"——可加「退款」小标记（详情页已有只读展示，polish）
-- 资产页账户行第二行显示英文枚举（DEBIT/CASH/CREDIT）——应显示中文类型名（polish，AccountType 加 label 映射）
 - 添加账户弹窗：点预设 chip 会覆盖已输入的名称（小 UX，与一木对齐时可改为仅作 placeholder）
 - Robolectric 怪癖：AlertDialog 内含文本输入时 Compose 不 idle（分类新增弹窗、资产页添加账户弹窗都无法截图测试，入口仅做存在性断言；PinPad/Budget 等用自绘输入绕开）。后续可试 Robolectric 升级或改用 compose ui-test 的 autoAdvance
 - M1 引入 Roborazzi gradle 插件，把"每次测试都重录截图"改为 record/verify 双任务（D018）
@@ -53,6 +50,14 @@
 （无）
 
 ## 已完成
+
+### M1 收尾 8/8（下）：批次明细钻取 + 行渲染 polish（2026-10-06）
+- **导入批次明细页**（`data/batches/{batchId}`）：批次行可点进明细（文件名/条数/导入时间 + 该批流水清单，只读；空态"这批流水已全部删除"）。DAO `TransactionDao.observeByBatch` + `ImportBatchDao.observeById`（过滤 deleted）+ repository 暴露
+- 首页转账行：由「未分类？」改为「转账 · 转入 X」（`TxWithCategory` 投影补 `targetAccountName`，`LEFT JOIN accounts`；图标位显示「转」）
+- 资产页账户类型：DEBIT/CASH/CREDIT 英文枚举 → 中文（现金/储蓄卡/信用卡/理财/负债）
+- 测试：`ImportBatchDetailScreenshotTest`（列表 + 空态）、`ImportRepositoryTest`「batch detail lists its own transactions and empties after delete」、`PennedDatabaseTest`「recent query resolves transfer target account name」、暗色首页断言转账行文案、资产页断言中文类型
+- 模拟机实测：真实 751 行批次 → 明细页显示「751 条流水 · 导入于 2026-09-29 16:19」+ 真实流水行（北苑餐厅 10月4日 · 晚餐 -16.00 …）
+- 验证：`./gradlew build` 全绿
 
 ### M1 收尾 8/8（中）：深色逐页自检补齐（2026-10-06）
 - 暗色截图 8 → 14 页：新增 `dark_detail`（含全额退款标记）/`dark_stats`（环形图+排行）/`dark_assets`/`dark_add_transfer`/`dark_add_calculator`（表达式 + `=` 态）/`dark_books`

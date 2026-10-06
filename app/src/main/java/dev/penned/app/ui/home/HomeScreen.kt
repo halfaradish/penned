@@ -329,7 +329,11 @@ private fun TransactionRow(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
-    val title = listOfNotNull(row.categoryParentName, row.categoryName).joinToString(" · ").ifEmpty { "未分类" }
+    // 转账行没有分类，显示"转账 · 转入 X"（D007 单表多态；此前一律显示"未分类？"）
+    val title = when (row.type) {
+        TxType.TRANSFER -> listOfNotNull("转账", row.targetAccountName?.let { "转入 $it" }).joinToString(" · ")
+        else -> listOfNotNull(row.categoryParentName, row.categoryName).joinToString(" · ").ifEmpty { "未分类" }
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -356,11 +360,11 @@ private fun TransactionRow(
         Box(
             modifier = Modifier
                 .size(36.dp)
-                .background(categoryColor(row.categoryName ?: "?"), CircleShape),
+                .background(categoryColor(if (row.type == TxType.TRANSFER) "转账" else row.categoryName ?: "?"), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = (row.categoryName ?: "?").take(1),
+                text = if (row.type == TxType.TRANSFER) "转" else (row.categoryName ?: "?").take(1),
                 style = MaterialTheme.typography.labelLarge,
                 color = Color.White,
             )
@@ -446,7 +450,7 @@ private fun tx(
 ) = TxWithCategory(
     id = id, type = type, amountCents = cents, accountId = null, categoryId = null,
     dateEpochMinute = minute, note = note, categoryName = name, categoryParentName = parent,
-    categoryIconKey = null, excludeFromStats = false,
+    categoryIconKey = null, targetAccountName = null, excludeFromStats = false,
 )
 
 private fun minuteOf(year: Int, month: Int, day: Int, hour: Int, minute: Int): Long =

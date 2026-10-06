@@ -28,6 +28,11 @@ class DataViewModel(private val app: PennedApplication) : ViewModel() {
     val batches: StateFlow<List<ImportBatchEntity>> = repository.observeBatches()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** 批次明细（钻取页）。 */
+    fun batch(batchId: String) = repository.observeBatch(batchId)
+
+    fun batchTransactions(batchId: String) = repository.observeBatchTransactions(batchId)
+
     fun importYimuXls(uri: Uri, resolver: ContentResolver) {
         viewModelScope.launch {
             busy.value = true

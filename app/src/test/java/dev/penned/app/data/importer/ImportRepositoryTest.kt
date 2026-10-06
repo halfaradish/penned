@@ -125,6 +125,24 @@ class ImportRepositoryTest {
     }
 
     @Test
+    fun `batch detail lists its own transactions and empties after delete`() = runTest {
+        val book = seedBook()
+        val result = repository.importYimuXls("yimu_sample_mini.xls", fixture("yimu_sample_mini.xls"))
+
+        val rows = repository.observeBatchTransactions(result.batchId).first()
+        assertEquals(8, rows.size)
+        assertTrue(rows.all { it.id.isNotBlank() })
+        // 批次信息也拿得到（明细页头部）
+        assertEquals("yimu_sample_mini.xls", repository.observeBatch(result.batchId).first()?.fileName)
+
+        repository.deleteBatch(result.batchId)
+        assertTrue(repository.observeBatchTransactions(result.batchId).first().isEmpty())
+        assertEquals(null, repository.observeBatch(result.batchId).first())
+        // 手工流水不受影响（本测试里没有手工流水，用另一批次验证隔离）
+        assertTrue(db.transactionDao().allInBook(book.id).isEmpty())
+    }
+
+    @Test
     fun `csv export import round trip through repository`() = runTest {
         val book = seedBook()
         repository.importYimuXls("yimu_sample_mini.xls", fixture("yimu_sample_mini.xls"))

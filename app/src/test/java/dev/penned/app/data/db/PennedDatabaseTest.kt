@@ -126,6 +126,34 @@ class PennedDatabaseTest {
     }
 
     @Test
+    fun `recent query resolves transfer target account name`() = runTest {
+        // 首页转账行显示"转账 · 转入 X"：投影要带出 targetAccountName
+        val book = DefaultSeed.seedIfEmpty(db, "device-a", now = 1000L)!!
+        db.accountDao().upsert(
+            dev.penned.app.data.db.entity.AccountEntity(
+                id = "acc-out", bookId = book.id, name = "支付宝", type = dev.penned.app.domain.AccountType.DEBIT,
+                createdAt = 1L, updatedAt = 1L, deviceId = "d",
+            )
+        )
+        db.accountDao().upsert(
+            dev.penned.app.data.db.entity.AccountEntity(
+                id = "acc-in", bookId = book.id, name = "储蓄卡", type = dev.penned.app.domain.AccountType.DEBIT,
+                createdAt = 1L, updatedAt = 1L, deviceId = "d",
+            )
+        )
+        db.transactionDao().upsert(
+            TransactionEntity(
+                id = "tf", bookId = book.id, type = TxType.TRANSFER, amountCents = 8200,
+                accountId = "acc-out", targetAccountId = "acc-in", dateEpochMinute = 1000,
+                creatorDeviceId = "d", createdAt = 1L, updatedAt = 1L, deviceId = "d",
+            )
+        )
+        val row = db.transactionDao().observeRecentWithCategory(book.id, 10).first().single()
+        assertEquals("储蓄卡", row.targetAccountName)
+        assertEquals(null, row.categoryName)
+    }
+
+    @Test
     fun `book soft delete cascades to its data and keeps other books`() = runTest {
         // M1 S3：删除=软删（账本 + 其流水/账户/分类/预算/导入批次）
         val bookA = DefaultSeed.seedIfEmpty(db, "device-a", now = 1000L)!!

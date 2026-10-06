@@ -19,6 +19,8 @@ data class TxWithCategory(
     val categoryName: String?,
     val categoryParentName: String?,
     val categoryIconKey: String?,
+    /** 转账行的转入账户名（非转账为 null），首页行显示"转账 · 转入 X"。 */
+    val targetAccountName: String?,
     /** D020「不计入收支」：仍显示在列表里，但不计入日/月/分类合计。 */
     val excludeFromStats: Boolean,
 )
@@ -31,10 +33,12 @@ interface TransactionDao {
                t.accountId AS accountId, t.categoryId AS categoryId,
                t.dateEpochMinute AS dateEpochMinute, t.note AS note,
                c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey,
+               ta.name AS targetAccountName,
                t.excludeFromStats AS excludeFromStats
         FROM transactions t
         LEFT JOIN categories c ON c.id = t.categoryId
         LEFT JOIN categories p ON p.id = c.parentId
+        LEFT JOIN accounts ta ON ta.id = t.targetAccountId
         WHERE t.deleted = 0 AND t.bookId = :bookId
         ORDER BY t.dateEpochMinute DESC
         LIMIT :limit
@@ -44,6 +48,25 @@ interface TransactionDao {
 
     @Query("SELECT * FROM transactions WHERE id = :id")
     fun observeById(id: String): Flow<TransactionEntity?>
+
+    /** 批次明细（导入批次管理页钻取）。 */
+    @Query(
+        """
+        SELECT t.id AS id, t.type AS type, t.amountCents AS amountCents,
+               t.accountId AS accountId, t.categoryId AS categoryId,
+               t.dateEpochMinute AS dateEpochMinute, t.note AS note,
+               c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey,
+               ta.name AS targetAccountName,
+               t.excludeFromStats AS excludeFromStats
+        FROM transactions t
+        LEFT JOIN categories c ON c.id = t.categoryId
+        LEFT JOIN categories p ON p.id = c.parentId
+        LEFT JOIN accounts ta ON ta.id = t.targetAccountId
+        WHERE t.deleted = 0 AND t.importBatchId = :batchId
+        ORDER BY t.dateEpochMinute DESC
+        """
+    )
+    fun observeByBatch(batchId: String): Flow<List<TxWithCategory>>
 
     /** 报销汇总（资产页）：可报 = 待报销金额，已报 = 已报销金额 */
     data class ReimburseSums(val pendingCents: Long, val doneCents: Long)
@@ -103,10 +126,12 @@ interface TransactionDao {
                t.accountId AS accountId, t.categoryId AS categoryId,
                t.dateEpochMinute AS dateEpochMinute, t.note AS note,
                c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey,
+               ta.name AS targetAccountName,
                t.excludeFromStats AS excludeFromStats
         FROM transactions t
         LEFT JOIN categories c ON c.id = t.categoryId
         LEFT JOIN categories p ON p.id = c.parentId
+        LEFT JOIN accounts ta ON ta.id = t.targetAccountId
         WHERE t.deleted = 0 AND t.bookId = :bookId
           AND t.dateEpochMinute BETWEEN :fromMinute AND :toMinute
         ORDER BY t.dateEpochMinute DESC
