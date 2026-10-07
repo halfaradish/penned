@@ -1,13 +1,17 @@
 package dev.penned.app.ui.stats
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.penned.app.domain.StatsMath
 import dev.penned.app.domain.StatsPeriod
 import dev.penned.app.domain.StatsPeriods
+import dev.penned.app.domain.StatsStrip
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.theme.PennedTheme
 import org.junit.Rule
@@ -39,6 +43,15 @@ class StatsScreenScreenshotTest {
 
     private val incomeCategories = listOf(StatsMath.CategoryTotal("工资", 350000, 1, 1f))
 
+    /** 切换条的跨度起点：2024-03 起有流水，条会一直排到本月。 */
+    private val earliest = YearMonth.of(2024, 3)
+
+    private fun stripMonths(include: YearMonth? = null): List<YearMonth> =
+        StatsStrip.months(earliest, YearMonth.from(today), include)
+
+    private fun stripYears(include: Int? = null): List<Int> =
+        StatsStrip.years(earliest, YearMonth.from(today), include)
+
     @Test
     fun captureStatsScreen() {
         composeRule.setContent {
@@ -49,6 +62,8 @@ class StatsScreenScreenshotTest {
                     totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 32300),
                     expenseCategories = expenseCategories,
                     incomeCategories = incomeCategories,
+                    stripMonths = stripMonths(YearMonth.of(2026, 10)),
+                    stripYears = stripYears(),
                     today = today,
                 )
             }
@@ -58,7 +73,11 @@ class StatsScreenScreenshotTest {
         composeRule.onNodeWithText("月统计").assertIsDisplayed()
         composeRule.onNodeWithText("年统计").assertIsDisplayed()
         composeRule.onNodeWithText("自定义").assertIsDisplayed()
-        composeRule.onNodeWithText("2026年10月").assertIsDisplayed()
+        // 期选择行换成切换条：左边一列年份 + 可横滑的月格（本月在最前），旧的箭头行没了
+        composeRule.onAllNodesWithText("2026").assertCountEquals(1)
+        composeRule.onNodeWithText("本月").assertIsDisplayed()
+        composeRule.onNodeWithText("上月").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("上一期").assertDoesNotExist()
         // 占比 + 数据合成切换式：默认支出侧，行里带笔数与占比
         composeRule.onNodeWithText("支出占比").assertIsDisplayed()
         composeRule.onNodeWithText("支出数据").assertIsDisplayed()
@@ -66,6 +85,29 @@ class StatsScreenScreenshotTest {
         // 收入不再是一整段卡片，只在卡头切换里出现
         composeRule.onNodeWithText("收入构成").assertDoesNotExist()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/ai_stats_month.png")
+    }
+
+    @Test
+    fun captureStatsMonthStripScrolled() {
+        // 选中一个老月份：条自动滚过去，左边年份列跟着变成 2025（参考图 p2 的行为）
+        val period = StatsPeriod.Month(YearMonth.of(2025, 12))
+        composeRule.setContent {
+            PennedTheme {
+                StatsContent(
+                    period = period,
+                    window = StatsPeriods.window(period, today = today),
+                    totals = StatsMath.PeriodTotals(incomeCents = 0, expenseCents = 32300),
+                    expenseCategories = expenseCategories,
+                    incomeCategories = emptyList(),
+                    stripMonths = stripMonths(YearMonth.of(2025, 12)),
+                    stripYears = stripYears(),
+                    today = today,
+                )
+            }
+        }
+        composeRule.onAllNodesWithText("2025").assertCountEquals(1)
+        composeRule.onNodeWithText("12月").assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/ak_stats_strip_scrolled.png")
     }
 
     @Test
@@ -145,11 +187,16 @@ class StatsScreenScreenshotTest {
                     incomeCategories = incomeCategories,
                     // 年统计的月度趋势：12 个月，只有 3 月与 10 月有数据
                     monthlyBars = List(12) { 0L }.toMutableList().also { it[2] = 420000; it[9] = 32300 },
+                    stripMonths = stripMonths(),
+                    stripYears = stripYears(2026),
                     today = today,
                 )
             }
         }
-        composeRule.onNodeWithText("2026年").assertIsDisplayed()
+        // 年统计的期选择行也是切换条：一行年份格（最前是今年）
+        composeRule.onAllNodesWithText("2026").assertCountEquals(1)
+        composeRule.onNodeWithText("2025").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("下一期").assertDoesNotExist()
         composeRule.onNodeWithText("月度趋势").assertIsDisplayed()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/ai_stats_year.png")
     }

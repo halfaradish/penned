@@ -54,9 +54,6 @@ sealed interface StatsPeriod {
     data class Custom(val startEpochDay: Long, val endEpochDay: Long) : StatsPeriod {
         override val view: StatsView get() = StatsView.CUSTOM
     }
-
-    /** 只有月/年能前后翻；近七日固定"到今天"，自定义由用户自己选。 */
-    val navigable: Boolean get() = view == StatsView.MONTH || view == StatsView.YEAR
 }
 
 /** 统计期的构造与换算（纯函数，表驱动测试）。 */
@@ -78,18 +75,6 @@ object StatsPeriods {
         } else {
             StatsPeriod.Custom(endEpochDay, startEpochDay)
         }
-
-    fun prev(period: StatsPeriod): StatsPeriod = when (period) {
-        is StatsPeriod.Month -> period.copy(yearMonth = period.yearMonth.minusMonths(1))
-        is StatsPeriod.Year -> period.copy(year = period.year - 1)
-        else -> period
-    }
-
-    fun next(period: StatsPeriod): StatsPeriod = when (period) {
-        is StatsPeriod.Month -> period.copy(yearMonth = period.yearMonth.plusMonths(1))
-        is StatsPeriod.Year -> period.copy(year = period.year + 1)
-        else -> period
-    }
 
     /** 当前期的最后一天（视图切换的锚点）。 */
     fun lastDay(period: StatsPeriod, zone: ZoneId = ZoneId.systemDefault()): LocalDate = when (period) {

@@ -1,8 +1,6 @@
 package dev.penned.app.domain
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 import java.time.YearMonth
@@ -92,32 +90,6 @@ class StatsPeriodTest {
             today = LocalDate.of(2026, 10, 7),
         )
         assertEquals("2025年10月1日–10月15日", lastYear.label)
-    }
-
-    @Test
-    fun `prev and next shift month and year only`() {
-        assertEquals(
-            StatsPeriod.Month(YearMonth.of(2025, 12)),
-            StatsPeriods.prev(StatsPeriod.Month(YearMonth.of(2026, 1))),
-        )
-        assertEquals(
-            StatsPeriod.Month(YearMonth.of(2027, 1)),
-            StatsPeriods.next(StatsPeriod.Month(YearMonth.of(2026, 12))),
-        )
-        assertEquals(StatsPeriod.Year(2025), StatsPeriods.prev(StatsPeriod.Year(2026)))
-        assertEquals(StatsPeriod.Year(2027), StatsPeriods.next(StatsPeriod.Year(2026)))
-
-        // 近七日固定"到今天"、自定义由用户选——翻页原样返回
-        assertEquals(StatsPeriod.Last7Days, StatsPeriods.prev(StatsPeriod.Last7Days))
-        assertEquals(StatsPeriod.Last7Days, StatsPeriods.next(StatsPeriod.Last7Days))
-        val custom = StatsPeriods.custom(1L, 10L)
-        assertEquals(custom, StatsPeriods.prev(custom))
-        assertEquals(custom, StatsPeriods.next(custom))
-
-        assertTrue(StatsPeriod.Month(YearMonth.of(2026, 10)).navigable)
-        assertTrue(StatsPeriod.Year(2026).navigable)
-        assertFalse(StatsPeriod.Last7Days.navigable)
-        assertFalse(custom.navigable)
     }
 
     @Test

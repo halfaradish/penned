@@ -7,18 +7,23 @@ import dev.penned.app.data.db.dao.TxWithCategory
 import dev.penned.app.domain.StatsMath
 import dev.penned.app.domain.StatsPeriod
 import dev.penned.app.domain.StatsPeriods
+import dev.penned.app.domain.StatsStrip
 import dev.penned.app.domain.StatsView
 import dev.penned.app.domain.StatsWindow
 import dev.penned.app.domain.TxType
+import java.time.Instant
+import java.time.YearMonth
+import java.time.ZoneId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import java.time.YearMonth
 
 /**
  * 统计页：时间维度（近七日/月/年/自定义）+ 汇总 + 分类占比/数据。
@@ -37,6 +42,10 @@ class StatsViewModel(private val app: PennedApplication) : ViewModel() {
         /** 年统计的「月度趋势」：12 个月合计（别的维度用不上，留空）。 */
         val monthlyBars: List<Long> = emptyList(),
         val emptyTitle: String = StatsPeriods.emptyTitle(period),
+        /** 时间切换条：月（新→旧，含选中月），月统计视图用。 */
+        val stripMonths: List<YearMonth> = emptyList(),
+        /** 时间切换条 + 快速定位弹窗的年列：新→旧，年统计视图与弹窗共用。 */
+        val stripYears: List<Int> = emptyList(),
     )
 
     /** 当前统计期（默认本月）。 */
@@ -60,8 +69,28 @@ class StatsViewModel(private val app: PennedApplication) : ViewModel() {
             }
         }
 
+    /**
+     * 本账本最早有流水的月份：时间切换条的跨度起点。
+     * 从 epoch 分钟按本地墙钟换算（与 StatsPeriods 的窗口口径一致）。
+     */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val state: StateFlow<UiState> = combine(rows, period, type) { rows, p, type ->
+    private val earliestMonth: Flow<YearMonth?> = app.settings.currentBookId.flatMapLatest { bookId ->
+        if (bookId == null) {
+            flowOf(null)
+        } else {
+            app.database.transactionDao().observeEarliestMinute(bookId).map { minute ->
+                minute?.let {
+                    YearMonth.from(
+                        Instant.ofEpochSecond(it * 60).atZone(ZoneId.systemDefault()).toLocalDate(),
+                    )
+                }
+            }
+        }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val state: StateFlow<UiState> = combine(rows, period, type, earliestMonth) { rows, p, type, earliest ->
+        val asOf = YearMonth.now()
         UiState(
             period = p,
             window = StatsPeriods.window(p),
@@ -76,6 +105,8 @@ class StatsViewModel(private val app: PennedApplication) : ViewModel() {
                 emptyList()
             },
             emptyTitle = StatsPeriods.emptyTitle(p),
+            stripMonths = StatsStrip.months(earliest, asOf, include = (p as? StatsPeriod.Month)?.yearMonth),
+            stripYears = StatsStrip.years(earliest, asOf, include = (p as? StatsPeriod.Year)?.year),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState())
 
@@ -90,12 +121,14 @@ class StatsViewModel(private val app: PennedApplication) : ViewModel() {
         period.value = StatsPeriods.of(view, StatsPeriods.lastDay(current))
     }
 
-    fun prev() {
-        period.value = StatsPeriods.prev(period.value)
+    /** 时间切换条上点某个月（月统计视图）。 */
+    fun selectMonth(month: YearMonth) {
+        period.value = StatsPeriod.Month(month)
     }
 
-    fun next() {
-        period.value = StatsPeriods.next(period.value)
+    /** 时间切换条上点某一年（年统计视图）。 */
+    fun selectYear(year: Int) {
+        period.value = StatsPeriod.Year(year)
     }
 
     /** 自定义区间：倒着选由 [StatsPeriods.custom] 交换。 */

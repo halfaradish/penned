@@ -179,6 +179,13 @@ interface TransactionDao {
     @Query("SELECT COUNT(*) FROM transactions")
     suspend fun count(): Int
 
+    /**
+     * 本账本最早一条流水的时间（epoch 分钟，无流水为 null）。
+     * 统计页的时间切换条用它当跨度起点（[dev.penned.app.domain.StatsStrip]）。
+     */
+    @Query("SELECT MIN(dateEpochMinute) FROM transactions WHERE deleted = 0 AND bookId = :bookId")
+    fun observeEarliestMinute(bookId: String): Flow<Long?>
+
     @Query("SELECT COUNT(*) FROM transactions WHERE deleted = 0 AND bookId = :bookId")
     suspend fun countInBook(bookId: String): Int
 

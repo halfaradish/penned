@@ -73,10 +73,12 @@ fun StatsScreen(
         incomeCategories = state.incomeCategories,
         emptyTitle = state.emptyTitle,
         monthlyBars = state.monthlyBars,
+        stripMonths = state.stripMonths,
+        stripYears = state.stripYears,
         onSelectView = viewModel::selectView,
         onSelectType = viewModel::selectType,
-        onPrev = viewModel::prev,
-        onNext = viewModel::next,
+        onSelectMonth = viewModel::selectMonth,
+        onSelectYear = viewModel::selectYear,
         onPickRange = viewModel::setCustomRange,
         onOpenCategory = { target -> onOpenCategory(target, state.window) },
         modifier = modifier,
@@ -95,18 +97,22 @@ fun StatsContent(
     incomeCategories: List<StatsMath.CategoryTotal>,
     emptyTitle: String = "本期没有收支记录",
     monthlyBars: List<Long> = emptyList(),
+    stripMonths: List<YearMonth> = emptyList(),
+    stripYears: List<Int> = emptyList(),
     type: TxType = TxType.EXPENSE,
     onSelectView: (StatsView) -> Unit = {},
     onSelectType: (TxType) -> Unit = {},
-    onPrev: () -> Unit = {},
-    onNext: () -> Unit = {},
+    onSelectMonth: (YearMonth) -> Unit = {},
+    onSelectYear: (Int) -> Unit = {},
     onPickRange: (Long, Long) -> Unit = { _, _ -> },
     onOpenCategory: (CategoryTarget) -> Unit = {},
     modifier: Modifier = Modifier,
     today: LocalDate = LocalDate.now(),
 ) {
-    // 自定义区间的日期选择：记住点的是「开始」还是「结束」
+    // 自定义区间的日期选择：记住点的是「开始」还是「结束」；快速定位弹窗单独一个状态
     var picking by remember { mutableStateOf<RangeEnd?>(null) }
+    var locating by remember { mutableStateOf(false) }
+    val todayMonth = YearMonth.from(today)
 
     Column(
         modifier = modifier
@@ -128,8 +134,11 @@ fun StatsContent(
             period = period,
             window = window,
             today = today,
-            onPrev = onPrev,
-            onNext = onNext,
+            stripMonths = stripMonths,
+            stripYears = stripYears,
+            onSelectMonth = onSelectMonth,
+            onSelectYear = onSelectYear,
+            onPickYearMonth = { locating = true },
             onPickStart = { picking = RangeEnd.START },
             onPickEnd = { picking = RangeEnd.END },
         )
@@ -261,30 +270,61 @@ fun StatsContent(
             )
         }
     }
+
+    // 快速定位：点切换条左边的年份（月统计视图）
+    if (locating) {
+        YearMonthPickerDialog(
+            years = stripYears,
+            today = todayMonth,
+            initial = (period as? StatsPeriod.Month)?.yearMonth ?: todayMonth,
+            onDismiss = { locating = false },
+            onConfirm = { month ->
+                onSelectMonth(month)
+                locating = false
+            },
+        )
+    }
 }
 
 private enum class RangeEnd { START, END }
 
-/** 期选择行：月/年可前后翻，近七日只报区间，自定义出两个日期 chip。 */
+/**
+ * 期选择行：月/年出**时间切换条**（可横滑，AK 轮替代箭头翻页）、近七日只报区间文案、
+ * 自定义出两个日期 chip。
+ */
 @Composable
 private fun PeriodSelector(
     period: StatsPeriod,
     window: StatsWindow,
     today: LocalDate,
-    onPrev: () -> Unit,
-    onNext: () -> Unit,
+    stripMonths: List<YearMonth>,
+    stripYears: List<Int>,
+    onSelectMonth: (YearMonth) -> Unit,
+    onSelectYear: (Int) -> Unit,
+    onPickYearMonth: () -> Unit,
     onPickStart: () -> Unit,
     onPickEnd: () -> Unit,
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(PennedDimens.iconButton + PennedSpacing.sm)
-            .padding(horizontal = PennedSpacing.lg),
-        contentAlignment = Alignment.Center,
-    ) {
-        when (period) {
-            is StatsPeriod.Custom -> Row(horizontalArrangement = Arrangement.spacedBy(PennedSpacing.sm)) {
+    when (period) {
+        is StatsPeriod.Month -> MonthStrip(
+            months = stripMonths,
+            selected = period.yearMonth,
+            today = YearMonth.from(today),
+            onSelect = onSelectMonth,
+            onPickYearMonth = onPickYearMonth,
+        )
+        is StatsPeriod.Year -> YearStrip(
+            years = stripYears,
+            selected = period.year,
+            onSelect = onSelectYear,
+        )
+        is StatsPeriod.Custom -> Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(PennedDimens.iconButton + PennedSpacing.sm),
+            contentAlignment = Alignment.Center,
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(PennedSpacing.sm)) {
                 PennedChip(
                     label = StatsPeriods.dayLabel(period.startEpochDay, today),
                     leading = "开始",
@@ -296,27 +336,14 @@ private fun PeriodSelector(
                     onClick = onPickEnd,
                 )
             }
-            else -> Row(verticalAlignment = Alignment.CenterVertically) {
-                if (period.navigable) {
-                    IconButton(onClick = onPrev, modifier = Modifier.size(PennedDimens.iconButton)) {
-                        Icon(PennedIcons.Back, contentDescription = "上一期", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                Text(
-                    window.label,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(horizontal = PennedSpacing.sm),
-                )
-                if (period.navigable) {
-                    IconButton(onClick = onNext, modifier = Modifier.size(PennedDimens.iconButton)) {
-                        Icon(
-                            PennedIcons.ChevronRight,
-                            contentDescription = "下一期",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
+        }
+        is StatsPeriod.Last7Days -> Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(PennedDimens.iconButton + PennedSpacing.sm),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(window.label, style = MaterialTheme.typography.titleMedium)
         }
     }
 }

@@ -208,6 +208,17 @@ class DarkThemeScreensTest {
                     StatsMath.CategoryTotal("其他", 35570, 4, 0.12f),
                 ),
                 incomeCategories = listOf(StatsMath.CategoryTotal("工资", 350000, 1, 1f)),
+                stripMonths = dev.penned.app.domain.StatsStrip.months(
+                    earliest = java.time.YearMonth.of(2024, 3),
+                    today = java.time.YearMonth.of(2026, 10),
+                    include = java.time.YearMonth.of(2026, 9),
+                ),
+                stripYears = dev.penned.app.domain.StatsStrip.years(
+                    earliest = java.time.YearMonth.of(2024, 3),
+                    today = java.time.YearMonth.of(2026, 10),
+                ),
+                // 切换条上的「本月/上月」跟着"今天"走，固定住才可复现
+                today = LocalDate.of(2026, 10, 7),
             )
         }
         composeRule.onNodeWithText("支出占比").assertIsDisplayed()
