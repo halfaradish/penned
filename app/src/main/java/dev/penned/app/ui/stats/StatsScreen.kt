@@ -52,6 +52,7 @@ import dev.penned.app.ui.components.PennedChip
 import dev.penned.app.ui.components.PennedSegmentedTabs
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedDimens
+import dev.penned.app.ui.theme.PennedPigment
 import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.PennedTheme
 import dev.penned.app.ui.theme.expenseColor
@@ -327,18 +328,22 @@ private fun StatsPageBody(
             color = unitColor,
             seriesLabel = unit,
         )
+        // 这一张图里分配好的槽位：环、图例、数据行三处共用，段段不同色
+        val slots = PennedPigment.assignSlots(shown.map { it.name })
         StatsDonutCard(
             title = "${unit}占比",
             centerLabel = "总$unit",
             categories = shown,
             totalCents = total,
             totalColor = unitColor,
+            slots = slots,
             trailing = toggle,
         )
         StatsDataCard(
             title = "${unit}数据",
             categories = shown,
             type = type,
+            slots = slots,
             // 「其他」合并桶与「未分类」不是分类，不可点；其余行点进分类详细页
             drillable = {
                 it.name != StatsMath.OTHERS && it.name != StatsMath.UNCATEGORIZED

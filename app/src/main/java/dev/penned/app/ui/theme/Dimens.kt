@@ -44,9 +44,9 @@ object PennedDimens {
     /** 记账键盘键高。 */
     val keyHeight = 52.dp
 
-    /** 统计环形图直径与描边。 */
-    val donut = 132.dp
-    val donutStroke = 18.dp
+    /** 统计环形图直径与描边（AO 轮：环放大、描边收细，圆心要放得下 20sp 的金额）。 */
+    val donut = 144.dp
+    val donutStroke = 16.dp
 
     /** 底部 Snackbar 与导航栏的间距。 */
     val fabMargin = 16.dp

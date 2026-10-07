@@ -1,0 +1,95 @@
+package dev.penned.app.ui.theme
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * 一张图里的颜料分配（AO 轮）：用户反馈"连续三种一样的颜色"——根因是各分类按名字哈希落槽，
+ * 三个暖色槽（朱砂/赭石/藤黄）会在同一张图里撞上。这里锁住"同图不撞色"的规则。
+ */
+class PigmentAssignTest {
+
+    /** 各槽的色相角，与 [PennedPigment] 里的表一致（测试里独立抄一份来做校验）。 */
+    private val hues = listOf(5f, 28f, 45f, 146f, 204f, 227f, 280f, 326f)
+
+    private fun hueGap(a: Int, b: Int): Float {
+        val diff = kotlin.math.abs(hues[a] - hues[b])
+        return kotlin.math.min(diff, 360f - diff)
+    }
+
+    @Test
+    fun `同一张图里两两不撞色`() {
+        // 用用户那屏的真实分类
+        val names = listOf("出行交通", "休闲娱乐", "购物消费", "食品餐饮")
+        val slots = PennedPigment.assignSlots(names)
+
+        assertEquals(names.toSet(), slots.keys)
+        // 两两色相差 ≥ 阈值（就是"看不出区别"的那条线）
+        slots.values.forEach { a ->
+            slots.values.forEach { b ->
+                if (a < b) assertTrue("slot $a 与 $b 撞色", hueGap(a, b) >= PennedPigment.MIN_HUE_GAP)
+            }
+        }
+        // 相邻两行（图例顺序）必须看得出区别
+        names.zipWithNext().forEach { (a, b) ->
+            val gap = hueGap(slots.getValue(a), slots.getValue(b))
+            assertTrue("$a 与 $b 只差 $gap 度", gap >= PennedPigment.MIN_HUE_GAP)
+        }
+    }
+
+    @Test
+    fun `不撞色时保持名字哈希的稳定色`() {
+        // 单独一个分类：就用它自己的哈希槽（跨页/跨期稳定）
+        val name = "食品餐饮"
+        assertEquals(PennedPigment.slotOf(name), PennedPigment.assignSlots(listOf(name)).getValue(name))
+        // 名字顺序变了也不影响"先到先用"
+        val a = PennedPigment.assignSlots(listOf("食品餐饮", "购物消费"))
+        val b = PennedPigment.assignSlots(listOf("购物消费"))
+        assertEquals(b.getValue("购物消费"), a.getValue("购物消费"))
+    }
+
+    @Test
+    fun `五个分类也掰得开（贪心之后还有一轮爬山）`() {
+        // 分类详细页的真实集合：贪心收尾时最后一对只差 40°，爬山把它掰到 46°
+        val names = listOf("晚餐", "午餐", "休闲零食", "早餐", "食品餐饮")
+        val slots = PennedPigment.assignSlots(names)
+        val values = slots.values.toList()
+        var min = 360f
+        for (i in values.indices) {
+            for (j in i + 1 until values.size) {
+                min = kotlin.math.min(min, hueGap(values[i], values[j]))
+            }
+        }
+        assertTrue("最小色相差只有 $min 度", min >= PennedPigment.MIN_HUE_GAP)
+    }
+
+    @Test
+    fun `八个分类也拿得到八个不同槽`() {
+        val names = listOf("A", "B", "C", "D", "E", "F", "G", "H")
+        val slots = PennedPigment.assignSlots(names)
+        assertEquals(8, slots.size)
+        assertEquals(8, slots.values.toSet().size)
+    }
+
+    @Test
+    fun `中性名字不参与分配`() {
+        val slots = PennedPigment.assignSlots(listOf("食品餐饮", "其他", "未分类", "转账"))
+        assertEquals(-1, slots.getValue("其他"))
+        assertEquals(-1, slots.getValue("未分类"))
+        assertEquals(-1, slots.getValue("转账"))
+        assertNotEquals(-1, slots.getValue("食品餐饮"))
+    }
+
+    @Test
+    fun `结果确定可复现`() {
+        val names = listOf("出行交通", "休闲娱乐", "购物消费", "食品餐饮", "其他")
+        assertEquals(PennedPigment.assignSlots(names), PennedPigment.assignSlots(names))
+        // 重复名字只算一次
+        assertEquals(
+            PennedPigment.assignSlots(listOf("食品餐饮", "购物消费")),
+            PennedPigment.assignSlots(listOf("食品餐饮", "食品餐饮", "购物消费")),
+        )
+    }
+}

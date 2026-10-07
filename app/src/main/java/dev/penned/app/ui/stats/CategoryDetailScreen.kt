@@ -40,6 +40,7 @@ import dev.penned.app.ui.home.HomeGroups
 import dev.penned.app.ui.home.TransactionRow
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedDimens
+import dev.penned.app.ui.theme.PennedPigment
 import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.PennedTheme
 import dev.penned.app.ui.theme.expenseColor
@@ -271,6 +272,8 @@ fun CategoryDetailContent(
                     }
                 }
             } else {
+                // 这一张图里分配好的槽位：环、图例、数据行三处共用，段段不同色
+                val slots = PennedPigment.assignSlots(children.map { it.name })
                 item(key = "donut") {
                     StatsDonutCard(
                         title = "${unit}占比",
@@ -278,6 +281,7 @@ fun CategoryDetailContent(
                         categories = children,
                         totalCents = summary.totalCents,
                         totalColor = if (isExpense) expenseColor() else incomeColor(),
+                        slots = slots,
                     )
                 }
                 item(key = "data") {
@@ -285,6 +289,7 @@ fun CategoryDetailContent(
                         title = "${unit}数据",
                         categories = children,
                         type = target.type,
+                        slots = slots,
                         // 直挂在节点上的桶、合并桶「其他」与「未分类」都不是分类，不可再下钻
                         drillable = {
                             it.name != target.name &&
