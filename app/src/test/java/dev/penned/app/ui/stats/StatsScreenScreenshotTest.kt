@@ -259,6 +259,31 @@ class StatsScreenScreenshotTest {
     }
 
     @Test
+    fun captureStatsLongRange() {
+        // 一整年的自定义区间：柱子变细、横轴退回单行月份（与分类详细页同口径）
+        val start = LocalDate.of(2025, 9, 1)
+        val period = StatsPeriods.custom(start.toEpochDay(), LocalDate.of(2026, 8, 31).toEpochDay())
+        composeRule.setContent {
+            PennedTheme {
+                StatsContent(
+                    period = period,
+                    window = StatsPeriods.window(period, today = today),
+                    totals = StatsMath.PeriodTotals(incomeCents = 0, expenseCents = 32300),
+                    expenseCategories = expenseCategories,
+                    incomeCategories = emptyList(),
+                    trendBars = dailyBars(365, 20 to 1600L, 120 to 5200L, 250 to 3000L, 350 to 9500L),
+                    trendAxis = dayAxis(start, 365),
+                    today = today,
+                )
+            }
+        }
+        // 长窗口不标周几，只标月份
+        composeRule.onNodeWithText("9月").assertIsDisplayed()
+        composeRule.onAllNodesWithText("周四").assertCountEquals(0)
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/al_stats_long_range.png")
+    }
+
+    @Test
     fun captureStatsScreenEmpty() {
         val period = StatsPeriod.Last7Days
         composeRule.setContent {
