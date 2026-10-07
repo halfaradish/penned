@@ -50,6 +50,7 @@ import dev.penned.app.ui.components.PennedCard
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
 import java.time.LocalDate
+import kotlin.math.abs
 import kotlin.math.ceil
 
 /** 图表区的测试标记：按住看详情的用例要按坐标按下去。 */
@@ -156,12 +157,22 @@ private fun ChartBody(
                 .pointerInput(bars.size, gutterPx, slotPx) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
+                        val slop = viewConfiguration.touchSlop
+                        var claimed = false
                         pressed = indexAt(down.position.x, gutterPx, slotPx, bars.size)
                         while (true) {
                             val event = awaitPointerEvent()
                             val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            // 手指抬起、或手势被外层滚动抢走 → 收起浮层
-                            if (!change.pressed || change.isConsumed) break
+                            if (!change.pressed) break
+                            val dx = abs(change.position.x - down.position.x)
+                            val dy = abs(change.position.y - down.position.y)
+                            // 横向拖动归图表（按住扫柱），别让翻页抢走；竖向留给页面滚动
+                            if (!claimed && dx > slop && dx > dy) claimed = true
+                            if (claimed) {
+                                change.consume()
+                            } else if (change.isConsumed) {
+                                break // 竖向被外层滚动抢走 → 收起浮层
+                            }
                             pressed = indexAt(change.position.x, gutterPx, slotPx, bars.size)
                         }
                         pressed = null

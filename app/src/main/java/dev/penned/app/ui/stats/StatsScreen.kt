@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DatePicker
@@ -21,13 +23,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -67,15 +72,9 @@ fun StatsScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     StatsContent(
-        period = state.period,
-        window = state.window,
-        totals = state.totals,
+        view = state.view,
+        pages = state.pages,
         type = state.type,
-        expenseCategories = state.expenseCategories,
-        incomeCategories = state.incomeCategories,
-        emptyTitle = state.emptyTitle,
-        trendBars = state.trendBars,
-        trendAxis = state.trendAxis,
         stripMonths = state.stripMonths,
         stripYears = state.stripYears,
         onSelectView = viewModel::selectView,
@@ -83,33 +82,30 @@ fun StatsScreen(
         onSelectMonth = viewModel::selectMonth,
         onSelectYear = viewModel::selectYear,
         onPickRange = viewModel::setCustomRange,
-        onOpenCategory = { target -> onOpenCategory(target, state.window) },
+        onOpenCategory = onOpenCategory,
         modifier = modifier,
     )
 }
+
+/** 四页横向滑动的测试标记（左右滑动切视图的用例要往它上面划）。 */
+internal const val STATS_PAGER_TAG = "stats-pager"
 
 /** 占比/数据卡头的切换项：只在这两个域里切（转账不属于收支统计）。 */
 private val STATS_TYPES = listOf(TxType.EXPENSE, TxType.INCOME)
 
 @Composable
 fun StatsContent(
-    period: StatsPeriod,
-    window: StatsWindow,
-    totals: StatsMath.PeriodTotals,
-    expenseCategories: List<StatsMath.CategoryTotal>,
-    incomeCategories: List<StatsMath.CategoryTotal>,
-    emptyTitle: String = "本期没有收支记录",
-    trendBars: List<Long> = emptyList(),
-    trendAxis: TrendAxis = TrendAxis.Months(YearMonth.now().year),
+    view: StatsView,
+    pages: Map<StatsView, StatsPage>,
+    type: TxType = TxType.EXPENSE,
     stripMonths: List<YearMonth> = emptyList(),
     stripYears: List<Int> = emptyList(),
-    type: TxType = TxType.EXPENSE,
     onSelectView: (StatsView) -> Unit = {},
     onSelectType: (TxType) -> Unit = {},
     onSelectMonth: (YearMonth) -> Unit = {},
     onSelectYear: (Int) -> Unit = {},
     onPickRange: (Long, Long) -> Unit = { _, _ -> },
-    onOpenCategory: (CategoryTarget) -> Unit = {},
+    onOpenCategory: (CategoryTarget, StatsWindow) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
     today: LocalDate = LocalDate.now(),
 ) {
@@ -117,129 +113,71 @@ fun StatsContent(
     var picking by remember { mutableStateOf<RangeEnd?>(null) }
     var locating by remember { mutableStateOf(false) }
     val todayMonth = YearMonth.from(today)
+    val current = pages[view] ?: StatsPage()
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(bottom = PennedSpacing.xxl),
-    ) {
-        // 时间维度分段直接当首行（2026-10-07：去掉冗余的「统计」页头大标题——底栏 Tab 已写着"统计"）
+    // 时间维度分段固定在顶部；下面用 HorizontalPager 装四页，左右滑动切视图
+    val pagerState = rememberPagerState(initialPage = view.ordinal) { StatsView.entries.size }
+    // 点分段（或外面改了 view）→ 翻到那一页；滑动中不动，免得跟手指抢
+    LaunchedEffect(view) {
+        if (pagerState.currentPage != view.ordinal && !pagerState.isScrollInProgress) {
+            pagerState.animateScrollToPage(view.ordinal)
+        }
+    }
+    // 滑完停稳 → 告诉外面切了视图（外面会把该视图自己记的位置发回来）
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.settledPage }.collect { page ->
+            onSelectView(StatsView.entries[page])
+        }
+    }
+
+    Column(modifier = modifier.fillMaxSize()) {
+        // 时间维度分段固定当首行（2026-10-07：去掉冗余的「统计」页头大标题——底栏 Tab 已写着"统计"）
         PennedSegmentedTabs(
             options = StatsView.entries.toList(),
-            selected = period.view,
+            selected = view,
             onSelect = onSelectView,
             label = { it.label },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = PennedSpacing.md, start = PennedSpacing.lg, end = PennedSpacing.lg),
         )
-        PeriodSelector(
-            period = period,
-            window = window,
-            today = today,
-            stripMonths = stripMonths,
-            stripYears = stripYears,
-            onSelectMonth = onSelectMonth,
-            onSelectYear = onSelectYear,
-            onPickYearMonth = { locating = true },
-            onPickStart = { picking = RangeEnd.START },
-            onPickEnd = { picking = RangeEnd.END },
-        )
-
-        // 汇总卡
-        PennedCard(modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg)) {
-            Row(modifier = Modifier.fillMaxWidth()) {
-                SummaryCell("支出", Money.format(totals.expenseCents), expenseColor(), Modifier.weight(1f))
-                SummaryCell("收入", Money.format(totals.incomeCents), incomeColor(), Modifier.weight(1f))
-                SummaryCell(
-                    "结余",
-                    Money.format(totals.incomeCents - totals.expenseCents),
-                    MaterialTheme.colorScheme.onSurface,
-                    Modifier.weight(1f),
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.weight(1f).fillMaxWidth().testTag(STATS_PAGER_TAG),
+        ) { page ->
+            val pageView = StatsView.entries[page]
+            val data = pages[pageView] ?: StatsPage()
+            // 每页自己一段纵向滚动（滚动位置按页各自记）
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(bottom = PennedSpacing.xxl),
+            ) {
+                StatsPageBody(
+                    view = pageView,
+                    page = data,
+                    type = type,
+                    today = today,
+                    stripMonths = stripMonths,
+                    stripYears = stripYears,
+                    onSelectType = onSelectType,
+                    onSelectMonth = onSelectMonth,
+                    onSelectYear = onSelectYear,
+                    onPickYearMonth = { locating = true },
+                    onPickStart = { picking = RangeEnd.START },
+                    onPickEnd = { picking = RangeEnd.END },
+                    onOpenCategory = onOpenCategory,
                 )
             }
-        }
-
-        if (expenseCategories.isEmpty() && incomeCategories.isEmpty()) {
-            EmptyState(
-                title = emptyTitle,
-                hint = "记几笔之后回来看统计",
-                icon = PennedIcons.Pie,
-                modifier = Modifier.padding(top = PennedSpacing.xxl),
-            )
-            return@Column
-        }
-
-        // 占比 + 数据：一张卡头的「支出|收入」切换驱动两张卡（参考图口径）
-        val isExpense = type == TxType.EXPENSE
-        val unit = if (isExpense) "支出" else "收入"
-        val unitColor = if (isExpense) expenseColor() else incomeColor()
-        val shown = if (isExpense) expenseCategories else incomeCategories
-        val total = if (isExpense) totals.expenseCents else totals.incomeCents
-        val toggle: @Composable () -> Unit = {
-            PennedSegmentedTabs(
-                options = STATS_TYPES,
-                selected = type,
-                onSelect = onSelectType,
-                label = { if (it == TxType.EXPENSE) "支出" else "收入" },
-                modifier = Modifier.width(132.dp),
-            )
-        }
-        if (shown.isEmpty()) {
-            // 该侧本期没数据：卡内给句话，切换器留在原处（一点即可看另一侧）
-            PennedCard(modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.sm)) {
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "${unit}占比",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f),
-                    )
-                    toggle()
-                }
-                Text(
-                    "本期没有${unit}记录",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        } else {
-            // 趋势卡坐落在汇总卡与占比卡之间（四个视图都有：按日 / 年统计按 12 个月），
-            // 跟着卡头的支出/收入切换走
-            StatsBarChartCard(
-                title = StatsTrend.title(type),
-                bars = trendBars,
-                xLabels = trendAxisLabels(trendAxis, today),
-                color = unitColor,
-                seriesLabel = unit,
-            )
-            StatsDonutCard(
-                title = "${unit}占比",
-                centerLabel = "总$unit",
-                categories = shown,
-                totalCents = total,
-                totalColor = unitColor,
-                trailing = toggle,
-            )
-            StatsDataCard(
-                title = "${unit}数据",
-                categories = shown,
-                type = type,
-                // 「其他」合并桶与「未分类」不是分类，不可点；其余行点进分类详细页
-                drillable = {
-                    it.name != StatsMath.OTHERS && it.name != StatsMath.UNCATEGORIZED
-                },
-                onOpenCategory = { name -> onOpenCategory(CategoryTarget(type, name, parent = null)) },
-            )
         }
     }
 
     val target = picking
     if (target != null) {
         val initialDay = when (target) {
-            RangeEnd.START -> period.startDayOrNull() ?: window.startEpochDay
-            RangeEnd.END -> period.endDayOrNull() ?: window.endEpochDay
+            RangeEnd.START -> current.period.startDayOrNull() ?: current.window.startEpochDay
+            RangeEnd.END -> current.period.endDayOrNull() ?: current.window.endEpochDay
         }
         val pickerState = rememberDatePickerState(
             initialSelectedDateMillis = AddDate.dayToPickerMillis(initialDay),
@@ -251,8 +189,8 @@ fun StatsContent(
                     pickerState.selectedDateMillis?.let { millis ->
                         val day = AddDate.pickerMillisToDay(millis)
                         when (target) {
-                            RangeEnd.START -> onPickRange(day, window.endEpochDay)
-                            RangeEnd.END -> onPickRange(window.startEpochDay, day)
+                            RangeEnd.START -> onPickRange(day, current.window.endEpochDay)
+                            RangeEnd.END -> onPickRange(current.window.startEpochDay, day)
                         }
                     }
                     picking = null
@@ -279,12 +217,133 @@ fun StatsContent(
         YearMonthPickerDialog(
             years = stripYears,
             today = todayMonth,
-            initial = (period as? StatsPeriod.Month)?.yearMonth ?: todayMonth,
+            initial = (current.period as? StatsPeriod.Month)?.yearMonth ?: todayMonth,
             onDismiss = { locating = false },
             onConfirm = { month ->
                 onSelectMonth(month)
                 locating = false
             },
+        )
+    }
+}
+
+/**
+ * 单页内容（四页共用）：期选择行 + 汇总卡 + 趋势/占比/数据三卡。
+ * 数据全部来自该页自己的 [StatsPage]（每页各记各的位置），只有支出/收入的选择是全页共享的。
+ */
+@Composable
+private fun StatsPageBody(
+    view: StatsView,
+    page: StatsPage,
+    type: TxType,
+    today: LocalDate,
+    stripMonths: List<YearMonth>,
+    stripYears: List<Int>,
+    onSelectType: (TxType) -> Unit,
+    onSelectMonth: (YearMonth) -> Unit,
+    onSelectYear: (Int) -> Unit,
+    onPickYearMonth: () -> Unit,
+    onPickStart: () -> Unit,
+    onPickEnd: () -> Unit,
+    onOpenCategory: (CategoryTarget, StatsWindow) -> Unit,
+) {
+    PeriodSelector(
+        period = page.period,
+        window = page.window,
+        today = today,
+        stripMonths = stripMonths,
+        stripYears = stripYears,
+        onSelectMonth = onSelectMonth,
+        onSelectYear = onSelectYear,
+        onPickYearMonth = onPickYearMonth,
+        onPickStart = onPickStart,
+        onPickEnd = onPickEnd,
+    )
+
+    // 汇总卡
+    PennedCard(modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg)) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            SummaryCell("支出", Money.format(page.totals.expenseCents), expenseColor(), Modifier.weight(1f))
+            SummaryCell("收入", Money.format(page.totals.incomeCents), incomeColor(), Modifier.weight(1f))
+            SummaryCell(
+                "结余",
+                Money.format(page.totals.incomeCents - page.totals.expenseCents),
+                MaterialTheme.colorScheme.onSurface,
+                Modifier.weight(1f),
+            )
+        }
+    }
+
+    if (page.expenseCategories.isEmpty() && page.incomeCategories.isEmpty()) {
+        EmptyState(
+            title = StatsPeriods.emptyTitle(page.period, today = today),
+            hint = "记几笔之后回来看统计",
+            icon = PennedIcons.Pie,
+            modifier = Modifier.padding(top = PennedSpacing.xxl),
+        )
+        return
+    }
+
+    // 占比 + 数据：一张卡头的「支出|收入」切换驱动两张卡（参考图口径）
+    val isExpense = type == TxType.EXPENSE
+    val unit = if (isExpense) "支出" else "收入"
+    val unitColor = if (isExpense) expenseColor() else incomeColor()
+    val shown = if (isExpense) page.expenseCategories else page.incomeCategories
+    val total = if (isExpense) page.totals.expenseCents else page.totals.incomeCents
+    val toggle: @Composable () -> Unit = {
+        PennedSegmentedTabs(
+            options = STATS_TYPES,
+            selected = type,
+            onSelect = onSelectType,
+            label = { if (it == TxType.EXPENSE) "支出" else "收入" },
+            modifier = Modifier.width(132.dp),
+        )
+    }
+    if (shown.isEmpty()) {
+        // 该侧本期没数据：卡内给句话，切换器留在原处（一点即可看另一侧）
+        PennedCard(modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.sm)) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "${unit}占比",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                toggle()
+            }
+            Text(
+                "本期没有${unit}记录",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    } else {
+        // 趋势卡坐落在汇总卡与占比卡之间（四个视图都有：按日 / 年统计按 12 个月），
+        // 跟着卡头的支出/收入切换走
+        StatsBarChartCard(
+            title = StatsTrend.title(type),
+            bars = page.trendBars,
+            xLabels = trendAxisLabels(page.trendAxis, today),
+            color = unitColor,
+            seriesLabel = unit,
+        )
+        StatsDonutCard(
+            title = "${unit}占比",
+            centerLabel = "总$unit",
+            categories = shown,
+            totalCents = total,
+            totalColor = unitColor,
+            trailing = toggle,
+        )
+        StatsDataCard(
+            title = "${unit}数据",
+            categories = shown,
+            type = type,
+            // 「其他」合并桶与「未分类」不是分类，不可点；其余行点进分类详细页
+            drillable = {
+                it.name != StatsMath.OTHERS && it.name != StatsMath.UNCATEGORIZED
+            },
+            onOpenCategory = { name -> onOpenCategory(CategoryTarget(type, name, parent = null), page.window) },
         )
     }
 }
@@ -365,18 +424,28 @@ private fun SummaryCell(label: String, value: String, valueColor: Color, modifie
 @Composable
 private fun StatsMonthPreview() {
     val period = StatsPeriod.Month(YearMonth.of(2026, 10))
+    val window = StatsPeriods.window(period)
+    val today = LocalDate.of(2026, 10, 7)
     PennedTheme {
         StatsContent(
-            period = period,
-            window = StatsPeriods.window(period),
-            totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 32300),
-            expenseCategories = listOf(
-                StatsMath.CategoryTotal("食品餐饮", 15600, 110, 0.483f),
-                StatsMath.CategoryTotal("购物消费", 9500, 15, 0.294f),
-                StatsMath.CategoryTotal("出行交通", 4200, 6, 0.13f),
-                StatsMath.CategoryTotal("其他", 3000, 4, 0.093f),
+            view = StatsView.MONTH,
+            pages = mapOf(
+                StatsView.MONTH to StatsPage(
+                    period = period,
+                    window = window,
+                    totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 32300),
+                    expenseCategories = listOf(
+                        StatsMath.CategoryTotal("食品餐饮", 15600, 110, 0.483f),
+                        StatsMath.CategoryTotal("购物消费", 9500, 15, 0.294f),
+                        StatsMath.CategoryTotal("出行交通", 4200, 6, 0.13f),
+                        StatsMath.CategoryTotal("其他", 3000, 4, 0.093f),
+                    ),
+                    incomeCategories = listOf(StatsMath.CategoryTotal("工资", 350000, 1, 1f)),
+                    trendBars = List(31) { 0L }.toMutableList().also { it[3] = 1600; it[19] = 9500 },
+                    trendAxis = StatsTrend.axisOf(period, window),
+                ),
             ),
-            incomeCategories = listOf(StatsMath.CategoryTotal("工资", 350000, 1, 1f)),
+            today = today,
         )
     }
 }

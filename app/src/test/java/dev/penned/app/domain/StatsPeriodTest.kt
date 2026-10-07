@@ -140,4 +140,48 @@ class StatsPeriodTest {
             StatsPeriods.emptyTitle(StatsPeriods.custom(1L, 2L), zone, today),
         )
     }
+
+    @Test
+    fun `initial map puts every view on its own default`() {
+        val today = LocalDate.of(2026, 10, 7)
+        val initial = StatsPeriods.initial(today)
+        assertEquals(StatsView.entries.size, initial.size)
+        assertEquals(StatsPeriod.Last7Days, initial.getValue(StatsView.LAST_7_DAYS))
+        assertEquals(StatsPeriod.Month(YearMonth.of(2026, 10)), initial.getValue(StatsView.MONTH))
+        assertEquals(StatsPeriod.Year(2026), initial.getValue(StatsView.YEAR))
+        // 自定义默认"本月 1 日…今天"
+        assertEquals(
+            StatsPeriods.custom(
+                LocalDate.of(2026, 10, 1).toEpochDay(),
+                LocalDate.of(2026, 10, 7).toEpochDay(),
+            ),
+            initial.getValue(StatsView.CUSTOM),
+        )
+    }
+
+    @Test
+    fun `seed anchors the first visit on the current period`() {
+        val today = LocalDate.of(2026, 10, 7)
+        val month = StatsPeriod.Month(YearMonth.of(2025, 3))
+        // 月 → 年：锚在当期最后一天（2025-03-31）→ 2025 年
+        assertEquals(StatsPeriod.Year(2025), StatsPeriods.seed(StatsView.YEAR, month, today = today))
+        // 年 → 月：锚在 2026-12-31 → 2026 年 12 月
+        assertEquals(
+            StatsPeriod.Month(YearMonth.of(2026, 12)),
+            StatsPeriods.seed(StatsView.MONTH, StatsPeriod.Year(2026), today = today),
+        )
+        // 自定义：直接把"正在看的那一段"装进去（不再落到莫名的 12 月 1–31 日）
+        assertEquals(
+            StatsPeriods.custom(LocalDate.of(2025, 3, 1).toEpochDay(), LocalDate.of(2025, 3, 31).toEpochDay()),
+            StatsPeriods.seed(StatsView.CUSTOM, month, today = today),
+        )
+        assertEquals(
+            StatsPeriods.custom(LocalDate.of(2026, 1, 1).toEpochDay(), LocalDate.of(2026, 12, 31).toEpochDay()),
+            StatsPeriods.seed(StatsView.CUSTOM, StatsPeriod.Year(2026), today = today),
+        )
+        assertEquals(
+            StatsPeriods.custom(LocalDate.of(2026, 10, 1).toEpochDay(), LocalDate.of(2026, 10, 7).toEpochDay()),
+            StatsPeriods.seed(StatsView.CUSTOM, StatsPeriod.Last7Days, today = today),
+        )
+    }
 }

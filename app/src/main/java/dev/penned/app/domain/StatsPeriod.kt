@@ -68,6 +68,29 @@ object StatsPeriods {
         StatsView.CUSTOM -> custom(asOf.withDayOfMonth(1).toEpochDay(), asOf.toEpochDay())
     }
 
+    /** 四个视图的默认位置（首次打开统计页 / 重启后）：本月、今年、本月 1 日…今天、滚动 7 天。 */
+    fun initial(today: LocalDate = LocalDate.now()): Map<StatsView, StatsPeriod> =
+        StatsView.entries.associateWith { of(it, today) }
+
+    /**
+     * **首次**切到某个视图时的期（之后各视图各记各的，不再重新锚）：
+     * 自定义直接把"当前正在看的那一段"装进去（月→整月、年→整年、近七日→滚动 7 天），
+     * 其余沿用"以当前期最后一天为锚"的老口径。
+     * 这样从年统计第一次切到自定义不会再莫名其妙地落到"12月1日–12月31日"。
+     */
+    fun seed(
+        target: StatsView,
+        current: StatsPeriod,
+        zone: ZoneId = ZoneId.systemDefault(),
+        today: LocalDate = LocalDate.now(zone),
+    ): StatsPeriod = when (target) {
+        StatsView.CUSTOM -> {
+            val window = window(current, zone, today)
+            custom(window.startEpochDay, window.endEpochDay)
+        }
+        else -> of(target, lastDay(current, zone))
+    }
+
     /** 自定义区间：倒着选（起 > 止）自动交换。 */
     fun custom(startEpochDay: Long, endEpochDay: Long): StatsPeriod.Custom =
         if (startEpochDay <= endEpochDay) {

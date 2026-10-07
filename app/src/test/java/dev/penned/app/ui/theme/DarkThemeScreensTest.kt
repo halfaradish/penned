@@ -199,18 +199,26 @@ class DarkThemeScreensTest {
         val period = dev.penned.app.domain.StatsPeriod.Month(java.time.YearMonth.of(2026, 9))
         dark {
             StatsContent(
-                period = period,
-                window = dev.penned.app.domain.StatsPeriods.window(period),
-                totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 295570),
-                expenseCategories = listOf(
-                    StatsMath.CategoryTotal("食品餐饮", 180000, 110, 0.61f),
-                    StatsMath.CategoryTotal("购物消费", 80000, 15, 0.27f),
-                    StatsMath.CategoryTotal("其他", 35570, 4, 0.12f),
+                view = dev.penned.app.domain.StatsView.MONTH,
+                pages = mapOf(
+                    dev.penned.app.domain.StatsView.MONTH to dev.penned.app.ui.stats.StatsPage(
+                        period = period,
+                        window = dev.penned.app.domain.StatsPeriods.window(period),
+                        totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 295570),
+                        expenseCategories = listOf(
+                            StatsMath.CategoryTotal("食品餐饮", 180000, 110, 0.61f),
+                            StatsMath.CategoryTotal("购物消费", 80000, 15, 0.27f),
+                            StatsMath.CategoryTotal("其他", 35570, 4, 0.12f),
+                        ),
+                        incomeCategories = listOf(StatsMath.CategoryTotal("工资", 350000, 1, 1f)),
+                        // 趋势卡：2026-09 按日（30 天），月中有几笔
+                        trendBars = List(30) { 0L }.toMutableList().also { it[3] = 12600; it[11] = 8000; it[26] = 35570 },
+                        trendAxis = dev.penned.app.domain.StatsTrend.axisOf(
+                            period,
+                            dev.penned.app.domain.StatsPeriods.window(period),
+                        ),
+                    ),
                 ),
-                incomeCategories = listOf(StatsMath.CategoryTotal("工资", 350000, 1, 1f)),
-                // 趋势卡：2026-09 按日（30 天），月中有几笔
-                trendBars = List(30) { 0L }.toMutableList().also { it[3] = 12600; it[11] = 8000; it[26] = 35570 },
-                trendAxis = dev.penned.app.domain.StatsTrend.axisOf(period, dev.penned.app.domain.StatsPeriods.window(period)),
                 stripMonths = dev.penned.app.domain.StatsStrip.months(
                     earliest = java.time.YearMonth.of(2024, 3),
                     today = java.time.YearMonth.of(2026, 10),

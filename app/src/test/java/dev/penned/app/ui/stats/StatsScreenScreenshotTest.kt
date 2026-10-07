@@ -16,6 +16,7 @@ import dev.penned.app.domain.StatsPeriod
 import dev.penned.app.domain.StatsPeriods
 import dev.penned.app.domain.StatsStrip
 import dev.penned.app.domain.StatsTrend
+import dev.penned.app.domain.StatsView
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.theme.PennedTheme
 import org.junit.Rule
@@ -50,6 +51,28 @@ class StatsScreenScreenshotTest {
     /** 切换条的跨度起点：2024-03 起有流水，条会一直排到本月。 */
     private val earliest = YearMonth.of(2024, 3)
 
+    /** 造一页数据（四个视图各一页；截图只看当前页，其余页给空壳即可）。 */
+    private fun pageOf(
+        period: StatsPeriod,
+        totalExpense: Long = 32300,
+        totalIncome: Long = 0,
+        categories: List<StatsMath.CategoryTotal> = emptyList(),
+        incomeCategories: List<StatsMath.CategoryTotal> = emptyList(),
+        bars: List<Long> = emptyList(),
+        today: LocalDate = LocalDate.of(2026, 10, 7),
+    ): StatsPage {
+        val window = StatsPeriods.window(period, today = today)
+        return StatsPage(
+            period = period,
+            window = window,
+            totals = StatsMath.PeriodTotals(incomeCents = totalIncome, expenseCents = totalExpense),
+            expenseCategories = categories,
+            incomeCategories = incomeCategories,
+            trendBars = bars,
+            trendAxis = StatsTrend.axisOf(period, window),
+        )
+    }
+
     /** 按日柱高：只在给定下标放钱、其余补 0（截图里看着像真数据）。 */
     private fun dailyBars(count: Int, vararg nonZero: Pair<Int, Long>): List<Long> =
         List(count) { 0L }.toMutableList().also { bars -> nonZero.forEach { bars[it.first] = it.second } }
@@ -66,14 +89,17 @@ class StatsScreenScreenshotTest {
         composeRule.setContent {
             PennedTheme {
                 StatsContent(
-                    period = month,
-                    window = StatsPeriods.window(month, today = today),
-                    totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 32300),
-                    expenseCategories = expenseCategories,
-                    incomeCategories = incomeCategories,
-                    // 31 天按日柱：标签稀疏（每 6 根一个），月统计不写周几、只标 月/日
-                    trendBars = dailyBars(31, 3 to 1600L, 11 to 3000L, 19 to 9500L, 28 to 4200L),
-                    trendAxis = StatsTrend.axisOf(month, StatsPeriods.window(month, today = today)),
+                    view = StatsView.MONTH,
+                    pages = mapOf(
+                        StatsView.MONTH to pageOf(
+                            period = month,
+                            totalIncome = 350000,
+                            categories = expenseCategories,
+                            incomeCategories = incomeCategories,
+                            // 31 天按日柱：标签稀疏（每 6 根一个），月统计不写周几、只标 月/日
+                            bars = dailyBars(31, 3 to 1600L, 11 to 3000L, 19 to 9500L, 28 to 4200L),
+                        ),
+                    ),
                     stripMonths = stripMonths(YearMonth.of(2026, 10)),
                     stripYears = stripYears(),
                     today = today,
@@ -108,13 +134,14 @@ class StatsScreenScreenshotTest {
         composeRule.setContent {
             PennedTheme {
                 StatsContent(
-                    period = period,
-                    window = StatsPeriods.window(period, today = today),
-                    totals = StatsMath.PeriodTotals(incomeCents = 0, expenseCents = 32300),
-                    expenseCategories = expenseCategories,
-                    incomeCategories = emptyList(),
-                    trendBars = dailyBars(31, 4 to 1580L, 17 to 3900L, 24 to 2200L),
-                    trendAxis = StatsTrend.axisOf(period, StatsPeriods.window(period, today = today)),
+                    view = StatsView.MONTH,
+                    pages = mapOf(
+                        StatsView.MONTH to pageOf(
+                            period = period,
+                            categories = expenseCategories,
+                            bars = dailyBars(31, 4 to 1580L, 17 to 3900L, 24 to 2200L),
+                        ),
+                    ),
                     stripMonths = stripMonths(YearMonth.of(2025, 12)),
                     stripYears = stripYears(),
                     today = today,
@@ -132,14 +159,17 @@ class StatsScreenScreenshotTest {
         composeRule.setContent {
             PennedTheme {
                 StatsContent(
-                    period = month,
-                    window = StatsPeriods.window(month, today = today),
-                    totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 32300),
-                    expenseCategories = expenseCategories,
-                    incomeCategories = incomeCategories,
-                    // 收入侧：一笔工资落在 10 号
-                    trendBars = dailyBars(31, 9 to 350000L),
-                    trendAxis = StatsTrend.axisOf(month, StatsPeriods.window(month, today = today)),
+                    view = StatsView.MONTH,
+                    pages = mapOf(
+                        StatsView.MONTH to pageOf(
+                            period = month,
+                            totalIncome = 350000,
+                            categories = expenseCategories,
+                            incomeCategories = incomeCategories,
+                            // 收入侧：一笔工资落在 10 号
+                            bars = dailyBars(31, 9 to 350000L),
+                        ),
+                    ),
                     type = TxType.INCOME,
                     today = today,
                 )
@@ -158,11 +188,15 @@ class StatsScreenScreenshotTest {
         composeRule.setContent {
             PennedTheme {
                 StatsContent(
-                    period = StatsPeriod.Month(YearMonth.of(2026, 10)),
-                    window = StatsPeriods.window(StatsPeriod.Month(YearMonth.of(2026, 10)), today = today),
-                    totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 0),
-                    expenseCategories = emptyList(),
-                    incomeCategories = incomeCategories,
+                    view = StatsView.MONTH,
+                    pages = mapOf(
+                        StatsView.MONTH to pageOf(
+                            period = StatsPeriod.Month(YearMonth.of(2026, 10)),
+                            totalExpense = 0,
+                            totalIncome = 350000,
+                            incomeCategories = incomeCategories,
+                        ),
+                    ),
                     type = TxType.EXPENSE,
                     today = today,
                 )
@@ -180,14 +214,15 @@ class StatsScreenScreenshotTest {
         composeRule.setContent {
             PennedTheme {
                 StatsContent(
-                    period = period,
-                    window = StatsPeriods.window(period, today = today),
-                    totals = StatsMath.PeriodTotals(incomeCents = 0, expenseCents = 32300),
-                    expenseCategories = expenseCategories,
-                    incomeCategories = emptyList(),
-                    // 近七日＝7 根日柱，横轴两行（周几 / 月/日）
-                    trendBars = listOf(0, 1600, 0, 0, 3000, 0, 250),
-                    trendAxis = StatsTrend.axisOf(period, StatsPeriods.window(period, today = today)),
+                    view = StatsView.LAST_7_DAYS,
+                    pages = mapOf(
+                        StatsView.LAST_7_DAYS to pageOf(
+                            period = period,
+                            categories = expenseCategories,
+                            // 近七日＝7 根日柱，横轴两行（周几 / 月/日）
+                            bars = listOf(0, 1600, 0, 0, 3000, 0, 250),
+                        ),
+                    ),
                     today = today,
                 )
             }
@@ -206,14 +241,17 @@ class StatsScreenScreenshotTest {
         composeRule.setContent {
             PennedTheme {
                 StatsContent(
-                    period = period,
-                    window = StatsPeriods.window(period, today = today),
-                    totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 32300),
-                    expenseCategories = expenseCategories,
-                    incomeCategories = incomeCategories,
-                    // 年统计的趋势＝12 个月柱，只有 3 月与 10 月有数据
-                    trendBars = List(12) { 0L }.toMutableList().also { it[2] = 420000; it[9] = 32300 },
-                    trendAxis = StatsTrend.axisOf(period, StatsPeriods.window(period, today = today)),
+                    view = StatsView.YEAR,
+                    pages = mapOf(
+                        StatsView.YEAR to pageOf(
+                            period = period,
+                            totalIncome = 350000,
+                            categories = expenseCategories,
+                            incomeCategories = incomeCategories,
+                            // 年统计的趋势＝12 个月柱，只有 3 月与 10 月有数据
+                            bars = List(12) { 0L }.toMutableList().also { it[2] = 420000; it[9] = 32300 },
+                        ),
+                    ),
                     stripMonths = stripMonths(),
                     stripYears = stripYears(2026),
                     today = today,
@@ -240,14 +278,17 @@ class StatsScreenScreenshotTest {
         composeRule.setContent {
             PennedTheme {
                 StatsContent(
-                    period = period,
-                    window = StatsPeriods.window(period, today = today),
-                    totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 32300),
-                    expenseCategories = expenseCategories,
-                    incomeCategories = incomeCategories,
-                    // 15 天区间：按日 15 根，横轴两行
-                    trendBars = List(15) { 0L }.toMutableList().also { it[3] = 1600; it[9] = 3000 },
-                    trendAxis = StatsTrend.axisOf(period, StatsPeriods.window(period, today = today)),
+                    view = StatsView.CUSTOM,
+                    pages = mapOf(
+                        StatsView.CUSTOM to pageOf(
+                            period = period,
+                            totalIncome = 350000,
+                            categories = expenseCategories,
+                            incomeCategories = incomeCategories,
+                            // 15 天区间：按日 15 根，横轴两行
+                            bars = dailyBars(15, 3 to 1600L, 9 to 3000L),
+                        ),
+                    ),
                     today = today,
                 )
             }
@@ -269,13 +310,14 @@ class StatsScreenScreenshotTest {
         composeRule.setContent {
             PennedTheme {
                 StatsContent(
-                    period = period,
-                    window = StatsPeriods.window(period, today = today),
-                    totals = StatsMath.PeriodTotals(incomeCents = 0, expenseCents = 32300),
-                    expenseCategories = expenseCategories,
-                    incomeCategories = emptyList(),
-                    trendBars = dailyBars(365, 20 to 1600L, 120 to 5200L, 250 to 3000L, 350 to 9500L),
-                    trendAxis = StatsTrend.axisOf(period, StatsPeriods.window(period, today = today)),
+                    view = StatsView.CUSTOM,
+                    pages = mapOf(
+                        StatsView.CUSTOM to pageOf(
+                            period = period,
+                            categories = expenseCategories,
+                            bars = dailyBars(365, 20 to 1600L, 120 to 5200L, 250 to 3000L, 350 to 9500L),
+                        ),
+                    ),
                     today = today,
                 )
             }
@@ -293,13 +335,14 @@ class StatsScreenScreenshotTest {
         composeRule.setContent {
             PennedTheme {
                 StatsContent(
-                    period = period,
-                    window = StatsPeriods.window(period, today = today),
-                    totals = StatsMath.PeriodTotals(incomeCents = 0, expenseCents = 32300),
-                    expenseCategories = expenseCategories,
-                    incomeCategories = emptyList(),
-                    trendBars = dailyBars(31, 0 to 1234L, 3 to 1600L, 11 to 3000L, 19 to 9500L),
-                    trendAxis = StatsTrend.axisOf(period, StatsPeriods.window(period, today = today)),
+                    view = StatsView.MONTH,
+                    pages = mapOf(
+                        StatsView.MONTH to pageOf(
+                            period = period,
+                            categories = expenseCategories,
+                            bars = dailyBars(31, 0 to 1234L, 3 to 1600L, 11 to 3000L, 19 to 9500L),
+                        ),
+                    ),
                     stripMonths = stripMonths(YearMonth.of(2026, 10)),
                     stripYears = stripYears(),
                     today = today,
@@ -320,12 +363,10 @@ class StatsScreenScreenshotTest {
         composeRule.setContent {
             PennedTheme {
                 StatsContent(
-                    period = period,
-                    window = StatsPeriods.window(period, today = today),
-                    totals = StatsMath.PeriodTotals(0, 0),
-                    expenseCategories = emptyList(),
-                    incomeCategories = emptyList(),
-                    emptyTitle = StatsPeriods.emptyTitle(period, today = today),
+                    view = StatsView.LAST_7_DAYS,
+                    pages = mapOf(
+                        StatsView.LAST_7_DAYS to pageOf(period = period, totalExpense = 0),
+                    ),
                     today = today,
                 )
             }

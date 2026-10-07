@@ -14,6 +14,7 @@ import dev.penned.app.domain.StatsMath
 import dev.penned.app.domain.StatsPeriod
 import dev.penned.app.domain.StatsPeriods
 import dev.penned.app.domain.StatsStrip
+import dev.penned.app.domain.StatsView
 import dev.penned.app.ui.theme.PennedTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -139,11 +140,14 @@ class YearMonthPickerTest {
         composeRule.setContent {
             PennedTheme {
                 StatsContent(
-                    period = period,
-                    window = StatsPeriods.window(period, today = LocalDate.of(2026, 10, 7)),
-                    totals = StatsMath.PeriodTotals(incomeCents = 0, expenseCents = 32300),
-                    expenseCategories = emptyList(),
-                    incomeCategories = emptyList(),
+                    view = StatsView.MONTH,
+                    pages = mapOf(
+                        StatsView.MONTH to StatsPage(
+                            period = period,
+                            window = StatsPeriods.window(period, today = LocalDate.of(2026, 10, 7)),
+                            totals = StatsMath.PeriodTotals(incomeCents = 0, expenseCents = 32300),
+                        ),
+                    ),
                     // 条上不给月份格：弹窗里的年份数字才唯一，能直接比上下顺序
                     stripMonths = emptyList(),
                     stripYears = stripYears,
