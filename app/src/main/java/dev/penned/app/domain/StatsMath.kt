@@ -85,6 +85,14 @@ object StatsMath {
         }
 
     /**
+     * 这个节点还有下钻空间吗：一级分类若有子分类的行，就先出「子分类占比/数据」；
+     * 否则（二级分类，或一级下没有子分类）出流水列表。分类树只有两级，
+     * 二级分类恒为叶子。
+     */
+    fun hasChildren(rows: List<TxWithCategory>, type: TxType, name: String, parent: String?): Boolean =
+        parent == null && rows.any { it.type == type && !it.excludeFromStats && it.categoryParentName == name }
+
+    /**
      * 节点下的子分类聚合（分类详细页）：按二级分类名分组，降序；
      * 直接记在节点上的行聚成一个与节点同名的桶（点击不再下钻）。
      * 这里**不做** topN 合并——一个节点下通常没几个子分类，全列出来更有用。

@@ -2,6 +2,8 @@ package dev.penned.app.domain
 
 import dev.penned.app.data.db.dao.TxWithCategory
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDateTime
 import java.time.YearMonth
@@ -116,8 +118,7 @@ class StatsMathTest {
     }
 
     @Test
-    fun `child totals keep the direct bucket and skip the others merge`() {
-        val rows = listOf(
+    fun `child totals keep the direct bucket and skip the others merge`() {        val rows = listOf(
             row("1", "2026-10-01T10:00", 2000, name = "食品餐饮"),
             row("2", "2026-10-02T10:00", 3000, name = "晚餐", parent = "食品餐饮"),
             row("3", "2026-10-03T10:00", 3000, name = "午餐", parent = "食品餐饮"),
@@ -129,6 +130,27 @@ class StatsMathTest {
         assertEquals(listOf("晚餐", "午餐", "食品餐饮", "水果"), children.map { it.name })
         assertEquals(listOf(3000L, 3000L, 2000L, 1000L), children.map { it.cents })
         assertEquals(1.0f, children.sumOf { it.fraction.toDouble() }.toFloat(), 0.0001f)
+    }
+
+    @Test
+    fun `has children only for top level categories with sub rows`() {
+        val rows = listOf(
+            row("1", "2026-10-01T10:00", 2000, name = "食品餐饮"),
+            row("2", "2026-10-02T10:00", 3000, name = "晚餐", parent = "食品餐饮"),
+            row("3", "2026-10-03T10:00", 1500, name = "购物消费"),
+        )
+        // 一级分类有子分类的行 → 可下钻；只有直挂行的分类 → 叶子（出流水列表）
+        assertTrue(StatsMath.hasChildren(rows, TxType.EXPENSE, "食品餐饮", parent = null))
+        assertFalse(StatsMath.hasChildren(rows, TxType.EXPENSE, "购物消费", parent = null))
+        // 二级分类恒为叶子（分类树只有两级）
+        assertFalse(StatsMath.hasChildren(rows, TxType.EXPENSE, "晚餐", parent = "食品餐饮"))
+        // 不计入收支/别的类型的子行不算下钻空间
+        val onlyExcluded = listOf(
+            row("1", "2026-10-01T10:00", 2000, name = "食品餐饮"),
+            row("2", "2026-10-02T10:00", 3000, name = "晚餐", parent = "食品餐饮", excluded = true),
+            row("3", "2026-10-03T10:00", 3000, name = "晚餐", parent = "食品餐饮", type = TxType.INCOME),
+        )
+        assertFalse(StatsMath.hasChildren(onlyExcluded, TxType.EXPENSE, "食品餐饮", parent = null))
     }
 
     // —— 逐日 / 逐月 ——

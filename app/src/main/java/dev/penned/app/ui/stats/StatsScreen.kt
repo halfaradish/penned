@@ -61,6 +61,7 @@ import java.time.YearMonth
 fun StatsScreen(
     viewModel: StatsViewModel,
     modifier: Modifier = Modifier,
+    onOpenCategory: (CategoryTarget, StatsWindow) -> Unit = { _, _ -> },
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     StatsContent(
@@ -76,6 +77,7 @@ fun StatsScreen(
         onPrev = viewModel::prev,
         onNext = viewModel::next,
         onPickRange = viewModel::setCustomRange,
+        onOpenCategory = { target -> onOpenCategory(target, state.window) },
         modifier = modifier,
     )
 }
@@ -97,6 +99,7 @@ fun StatsContent(
     onPrev: () -> Unit = {},
     onNext: () -> Unit = {},
     onPickRange: (Long, Long) -> Unit = { _, _ -> },
+    onOpenCategory: (CategoryTarget) -> Unit = {},
     modifier: Modifier = Modifier,
     today: LocalDate = LocalDate.now(),
 ) {
@@ -209,8 +212,11 @@ fun StatsContent(
                 title = "${unit}数据",
                 categories = shown,
                 type = type,
-                // 下钻在 AI-4 接上；「其他」合并桶与「未分类」不是真实分类，永不点
-                drillable = { false },
+                // 「其他」合并桶与「未分类」不是分类，不可点；其余行点进分类详细页
+                drillable = {
+                    it.name != StatsMath.OTHERS && it.name != StatsMath.UNCATEGORIZED
+                },
+                onOpenCategory = { name -> onOpenCategory(CategoryTarget(type, name, parent = null)) },
             )
         }
     }

@@ -50,7 +50,9 @@ import dev.penned.app.ui.home.SearchScreen
 import dev.penned.app.ui.lock.PinManageScreen
 import dev.penned.app.ui.lock.PinViewModel
 import dev.penned.app.ui.mine.MineScreen
+import dev.penned.app.ui.stats.CategoryDetailScreen
 import dev.penned.app.ui.stats.StatsScreen
+import dev.penned.app.ui.stats.categoryDetailRoute
 import dev.penned.app.ui.stats.StatsViewModel
 import dev.penned.app.ui.stub.StubScreen
 
@@ -267,7 +269,50 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                 val vm: StatsViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
                     initializer = { StatsViewModel(app) },
                 )
-                StatsScreen(viewModel = vm)
+                StatsScreen(
+                    viewModel = vm,
+                    onOpenCategory = { target, window ->
+                        navController.navigate(categoryDetailRoute(target, window))
+                    },
+                )
+            }
+            // 分类详细页：统计页「支出/收入数据」行点进来，可逐级下钻，窗口跟着参数走
+            composable(
+                route = "stats/category?type={type}&name={name}&parent={parent}" +
+                    "&from={from}&to={to}&days={days}&label={label}",
+                arguments = listOf(
+                    navArgument("type") { type = NavType.StringType },
+                    navArgument("name") { type = NavType.StringType },
+                    navArgument("parent") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("from") { type = NavType.LongType },
+                    navArgument("to") { type = NavType.LongType },
+                    navArgument("days") { type = NavType.IntType },
+                    navArgument("label") { type = NavType.StringType; defaultValue = "" },
+                ),
+            ) { entry ->
+                val args = entry.arguments
+                val fromMinute = args?.getLong("from") ?: 0L
+                val toMinute = args?.getLong("to") ?: 0L
+                val dayCount = args?.getInt("days") ?: 1
+                val periodLabel = args?.getString("label").orEmpty()
+                CategoryDetailScreen(
+                    type = dev.penned.app.domain.TxType.entries
+                        .firstOrNull { it.name == args?.getString("type") }
+                        ?: dev.penned.app.domain.TxType.EXPENSE,
+                    name = args?.getString("name").orEmpty(),
+                    parent = args?.getString("parent")?.ifEmpty { null },
+                    fromMinute = fromMinute,
+                    toMinute = toMinute,
+                    days = dayCount,
+                    periodLabel = periodLabel,
+                    onBack = { navController.popBackStack() },
+                    onOpenCategory = { target ->
+                        navController.navigate(
+                            categoryDetailRoute(target, fromMinute, toMinute, dayCount, periodLabel),
+                        )
+                    },
+                    onOpenTx = { id -> navController.navigate("detail/$id") },
+                )
             }
         }
     }
