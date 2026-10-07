@@ -196,9 +196,11 @@ class DarkThemeScreensTest {
 
     @Test
     fun darkStats() {
+        val period = dev.penned.app.domain.StatsPeriod.Month(java.time.YearMonth.of(2026, 9))
         dark {
             StatsContent(
-                month = java.time.YearMonth.of(2026, 9),
+                period = period,
+                window = dev.penned.app.domain.StatsPeriods.window(period),
                 totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 295570),
                 expenseCategories = listOf(
                     StatsMath.CategoryTotal("食品餐饮", 180000, 110, 0.61f),

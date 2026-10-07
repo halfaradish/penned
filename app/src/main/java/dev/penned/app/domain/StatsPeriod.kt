@@ -145,6 +145,15 @@ object StatsPeriods {
         is StatsPeriod.Custom -> "该时间段没有收支记录"
     }
 
+    /** 单个日期文案（自定义区间的两个 chip 用）：同年只到月日，非本年带年份。 */
+    fun dayLabel(epochDay: Long, today: LocalDate): String {
+        val date = LocalDate.ofEpochDay(epochDay)
+        return buildString {
+            if (date.year != today.year) append(date.year).append('年')
+            append(date.monthValue).append('月').append(date.dayOfMonth).append('日')
+        }
+    }
+
     private fun rangeWindow(
         start: LocalDate,
         end: LocalDate,

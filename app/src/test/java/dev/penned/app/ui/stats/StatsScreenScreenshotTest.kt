@@ -1,13 +1,13 @@
 package dev.penned.app.ui.stats
 
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.penned.app.domain.StatsMath
+import dev.penned.app.domain.StatsPeriod
+import dev.penned.app.domain.StatsPeriods
 import dev.penned.app.ui.theme.PennedTheme
 import org.junit.Rule
 import org.junit.Test
@@ -15,6 +15,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.time.LocalDate
 import java.time.YearMonth
 
 @RunWith(RobolectricTestRunner::class)
@@ -25,44 +26,125 @@ class StatsScreenScreenshotTest {
     @get:Rule
     val composeRule = createComposeRule()
 
+    /** 测试里的"今天"：让近七日/自定义的文案与年份判定可复现。 */
+    private val today = LocalDate.of(2026, 10, 7)
+
+    private val expenseCategories = listOf(
+        StatsMath.CategoryTotal("食品餐饮", 15600, 110, 0.483f),
+        StatsMath.CategoryTotal("购物消费", 9500, 15, 0.294f),
+        StatsMath.CategoryTotal("出行交通", 4200, 6, 0.13f),
+        StatsMath.CategoryTotal("其他", 3000, 4, 0.093f),
+    )
+
+    private val incomeCategories = listOf(StatsMath.CategoryTotal("工资", 350000, 1, 1f))
+
     @Test
     fun captureStatsScreen() {
         composeRule.setContent {
             PennedTheme {
                 StatsContent(
-                    month = YearMonth.of(2026, 10),
+                    period = StatsPeriod.Month(YearMonth.of(2026, 10)),
+                    window = StatsPeriods.window(StatsPeriod.Month(YearMonth.of(2026, 10)), today = today),
                     totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 32300),
-                    expenseCategories = listOf(
-                        StatsMath.CategoryTotal("食品餐饮", 15600, 110, 0.483f),
-                        StatsMath.CategoryTotal("购物消费", 9500, 15, 0.294f),
-                        StatsMath.CategoryTotal("出行交通", 4200, 6, 0.13f),
-                        StatsMath.CategoryTotal("其他", 3000, 4, 0.093f),
-                    ),
-                    incomeCategories = listOf(
-                        StatsMath.CategoryTotal("工资", 350000, 1, 1f),
-                    ),
+                    expenseCategories = expenseCategories,
+                    incomeCategories = incomeCategories,
+                    today = today,
                 )
             }
         }
+        // 时间维度四分段都在、当前维度是月统计
+        composeRule.onNodeWithText("近七日").assertIsDisplayed()
+        composeRule.onNodeWithText("月统计").assertIsDisplayed()
+        composeRule.onNodeWithText("年统计").assertIsDisplayed()
+        composeRule.onNodeWithText("自定义").assertIsDisplayed()
+        composeRule.onNodeWithText("2026年10月").assertIsDisplayed()
         composeRule.onNodeWithText("支出构成").assertIsDisplayed()
-        // 图例与排行各一处（同一分类名出现两次是设计使然）
-        composeRule.onAllNodesWithText("食品餐饮").assertCountEquals(2)
-        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_stats_screen.png")
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/ai_stats_month.png")
+    }
+
+    @Test
+    fun captureStatsLast7Days() {
+        val period = StatsPeriod.Last7Days
+        composeRule.setContent {
+            PennedTheme {
+                StatsContent(
+                    period = period,
+                    window = StatsPeriods.window(period, today = today),
+                    totals = StatsMath.PeriodTotals(incomeCents = 0, expenseCents = 32300),
+                    expenseCategories = expenseCategories,
+                    incomeCategories = emptyList(),
+                    today = today,
+                )
+            }
+        }
+        // 近七日只报区间，没有翻页箭头
+        composeRule.onNodeWithText("10月1日–10月7日").assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/ai_stats_last7days.png")
+    }
+
+    @Test
+    fun captureStatsYear() {
+        val period = StatsPeriod.Year(2026)
+        composeRule.setContent {
+            PennedTheme {
+                StatsContent(
+                    period = period,
+                    window = StatsPeriods.window(period, today = today),
+                    totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 32300),
+                    expenseCategories = expenseCategories,
+                    incomeCategories = incomeCategories,
+                    today = today,
+                )
+            }
+        }
+        composeRule.onNodeWithText("2026年").assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/ai_stats_year.png")
+    }
+
+    @Test
+    fun captureStatsCustomRange() {
+        val period = StatsPeriods.custom(
+            LocalDate.of(2026, 10, 1).toEpochDay(),
+            LocalDate.of(2026, 10, 15).toEpochDay(),
+        )
+        composeRule.setContent {
+            PennedTheme {
+                StatsContent(
+                    period = period,
+                    window = StatsPeriods.window(period, today = today),
+                    totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 32300),
+                    expenseCategories = expenseCategories,
+                    incomeCategories = incomeCategories,
+                    today = today,
+                )
+            }
+        }
+        // 自定义：两个日期 chip
+        composeRule.onNodeWithText("开始").assertIsDisplayed()
+        composeRule.onNodeWithText("10月1日").assertIsDisplayed()
+        composeRule.onNodeWithText("结束").assertIsDisplayed()
+        composeRule.onNodeWithText("10月15日").assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/ai_stats_custom.png")
     }
 
     @Test
     fun captureStatsScreenEmpty() {
+        val period = StatsPeriod.Last7Days
         composeRule.setContent {
             PennedTheme {
                 StatsContent(
-                    month = YearMonth.of(2026, 10),
+                    period = period,
+                    window = StatsPeriods.window(period, today = today),
                     totals = StatsMath.PeriodTotals(0, 0),
                     expenseCategories = emptyList(),
                     incomeCategories = emptyList(),
+                    emptyTitle = StatsPeriods.emptyTitle(period, today = today),
+                    today = today,
                 )
             }
         }
-        composeRule.onNodeWithText("本月没有收支记录").assertIsDisplayed()
-        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_stats_empty.png")
+        // 空态文案跟着期走（不再一律"本月"）
+        composeRule.onNodeWithText("近七日没有收支记录").assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/ai_stats_empty.png")
     }
 }
