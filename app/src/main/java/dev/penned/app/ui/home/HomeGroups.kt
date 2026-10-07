@@ -4,6 +4,7 @@ import dev.penned.app.data.db.dao.TxWithCategory
 import dev.penned.app.domain.TxType
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 
 /**
@@ -18,6 +19,12 @@ object HomeGroups {
         val incomeCents: Long,
         val expenseCents: Long,
         val items: List<TxWithCategory>,
+    )
+
+    /** 一个自然月 = 首页的一张卡片（卡片不再设标题行，月份靠卡片边界划分）。 */
+    data class MonthGroup(
+        val yearMonth: YearMonth,
+        val days: List<DayGroup>,
     )
 
     data class MonthTotals(val incomeCents: Long, val expenseCents: Long)
@@ -36,6 +43,13 @@ object HomeGroups {
         }
     }
 
+    /** 按月分组（月份降序、月内日降序、日内行降序）；合计口径与 [groupByDay] 一致。 */
+    fun groupByMonth(rows: List<TxWithCategory>, zone: ZoneId = ZoneId.systemDefault()): List<MonthGroup> =
+        groupByDay(rows, zone)
+            .groupBy { YearMonth.from(LocalDate.ofEpochDay(it.epochDay)) }
+            .map { (yearMonth, days) -> MonthGroup(yearMonth, days) }
+            .sortedByDescending { it.yearMonth }
+
     fun monthTotals(
         rows: List<TxWithCategory>,
         year: Int,
@@ -52,17 +66,42 @@ object HomeGroups {
         )
     }
 
-    fun dayLabel(epochDay: Long, zone: ZoneId = ZoneId.systemDefault()): String {
+    /**
+     * 日头条文案：`今天 10月6日 周二` / `10月5日 周一` / 非本年 `2025年12月31日 周三`。
+     * 非本年必须带年份（同名日期跨年会歧义），此时也不再带「今天/昨天/前天」——
+     * 「昨天」跨到上一年只出现在 1 月 1 日，「昨天 2025年12月31日」读起来别扭，完整日期更清楚。
+     */
+    fun dayLabel(
+        epochDay: Long,
+        zone: ZoneId = ZoneId.systemDefault(),
+        today: LocalDate = LocalDate.now(zone),
+    ): String {
         val date = LocalDate.ofEpochDay(epochDay)
-        val today = LocalDate.now(zone).toEpochDay()
-        val relative = when (epochDay) {
-            today -> "今天"
-            today - 1 -> "昨天"
-            today - 2 -> "前天"
-            else -> null
+        val sameYear = date.year == today.year
+        val relative = if (!sameYear) {
+            null
+        } else {
+            when (epochDay) {
+                today.toEpochDay() -> "今天"
+                today.toEpochDay() - 1 -> "昨天"
+                today.toEpochDay() - 2 -> "前天"
+                else -> null
+            }
         }
-        val base = "${date.monthValue}月${date.dayOfMonth}日"
-        return if (relative != null) "$base $relative" else base
+        val datePart = buildString {
+            if (!sameYear) append(date.year).append('年')
+            append(date.monthValue).append('月').append(date.dayOfMonth).append('日')
+        }
+        return listOfNotNull(relative, datePart, weekLabel(date)).joinToString(" ")
+    }
+
+    /** 周几：周一…周日。 */
+    private fun weekLabel(date: LocalDate): String = "周" + "一二三四五六日"[date.dayOfWeek.value - 1]
+
+    /** 流水行的时段（24 小时制、补零）：`09:05`。 */
+    fun clockLabel(epochMinute: Long, zone: ZoneId = ZoneId.systemDefault()): String {
+        val time = Instant.ofEpochSecond(epochMinute * 60).atZone(zone).toLocalTime()
+        return "%02d:%02d".format(time.hour, time.minute)
     }
 
     data class CategoryTotal(val name: String, val cents: Long, val fraction: Float)
