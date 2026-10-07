@@ -55,7 +55,10 @@ class StatsTrendTest {
 
     @Test
     fun `axis is monthly for the year view`() {
-        assertEquals(TrendAxis.Months, StatsTrend.axisOf(StatsPeriod.Year(2026), windowOf(StatsPeriod.Year(2026))))
+        assertEquals(
+            TrendAxis.Months(2026),
+            StatsTrend.axisOf(StatsPeriod.Year(2026), windowOf(StatsPeriod.Year(2026))),
+        )
     }
 
     @Test

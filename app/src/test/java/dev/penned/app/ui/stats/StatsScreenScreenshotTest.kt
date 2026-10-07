@@ -1,12 +1,15 @@
 package dev.penned.app.ui.stats
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performTouchInput
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.penned.app.domain.StatsMath
 import dev.penned.app.domain.StatsPeriod
@@ -210,7 +213,7 @@ class StatsScreenScreenshotTest {
                     incomeCategories = incomeCategories,
                     // 年统计的趋势＝12 个月柱，只有 3 月与 10 月有数据
                     trendBars = List(12) { 0L }.toMutableList().also { it[2] = 420000; it[9] = 32300 },
-                    trendAxis = TrendAxis.Months,
+                    trendAxis = TrendAxis.Months(2026),
                     stripMonths = stripMonths(),
                     stripYears = stripYears(2026),
                     today = today,
@@ -281,6 +284,34 @@ class StatsScreenScreenshotTest {
         composeRule.onNodeWithText("9月").assertIsDisplayed()
         composeRule.onAllNodesWithText("周四").assertCountEquals(0)
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/al_stats_long_range.png")
+    }
+
+    @Test
+    fun captureStatsTooltip() {
+        // 按住最左边那根柱（第 0 根，按在刻度栏右侧也算第 0 根）→ 浮层给出日期 + 金额
+        val period = StatsPeriod.Month(YearMonth.of(2026, 10))
+        composeRule.setContent {
+            PennedTheme {
+                StatsContent(
+                    period = period,
+                    window = StatsPeriods.window(period, today = today),
+                    totals = StatsMath.PeriodTotals(incomeCents = 0, expenseCents = 32300),
+                    expenseCategories = expenseCategories,
+                    incomeCategories = emptyList(),
+                    trendBars = dailyBars(31, 0 to 1234L, 3 to 1600L, 11 to 3000L, 19 to 9500L),
+                    trendAxis = dayAxis(LocalDate.of(2026, 10, 1), 31),
+                    stripMonths = stripMonths(YearMonth.of(2026, 10)),
+                    stripYears = stripYears(),
+                    today = today,
+                )
+            }
+        }
+        composeRule.onNodeWithTag(CHART_TAG).performTouchInput { down(Offset(2f, center.y)) }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("10月1日").assertIsDisplayed()
+        composeRule.onNodeWithText("支出 12.34").assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/am_stats_tooltip.png")
+        composeRule.onNodeWithTag(CHART_TAG).performTouchInput { up() }
     }
 
     @Test

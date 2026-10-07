@@ -11,15 +11,17 @@ sealed interface TrendAxis {
     /** 按日：窗口内每一天一根柱，[startEpochDay] 起共 [count] 天。 */
     data class Days(val startEpochDay: Long, val count: Int) : TrendAxis
 
-    /** 按月：本年 1~12 月各一根。 */
-    data object Months : TrendAxis
+    /** 按月：该年 1~12 月各一根（[year] 供按住浮层写完整年月）。 */
+    data class Months(val year: Int) : TrendAxis
 }
 
 /** 趋势卡的纯口径（表驱动测试）：横轴类型 + 每根柱的金额。 */
 object StatsTrend {
 
-    fun axisOf(period: StatsPeriod, window: StatsWindow): TrendAxis =
-        if (period is StatsPeriod.Year) TrendAxis.Months else TrendAxis.Days(window.startEpochDay, window.dayCount)
+    fun axisOf(period: StatsPeriod, window: StatsWindow): TrendAxis = when (period) {
+        is StatsPeriod.Year -> TrendAxis.Months(period.year)
+        else -> TrendAxis.Days(window.startEpochDay, window.dayCount)
+    }
 
     /** 柱高数据：按日窗口走 [StatsMath.dailyTotals]，年统计走 [StatsMath.monthlyTotals]（都零填充）。 */
     fun bars(
@@ -28,9 +30,9 @@ object StatsTrend {
         period: StatsPeriod,
         window: StatsWindow,
         zone: ZoneId = ZoneId.systemDefault(),
-    ): List<Long> = when (val axis = axisOf(period, window)) {
-        is TrendAxis.Days -> StatsMath.dailyTotals(rows, type, axis.startEpochDay, axis.count, zone)
-        TrendAxis.Months -> StatsMath.monthlyTotals(rows, type, (period as StatsPeriod.Year).year, zone)
+    ): List<Long> = when {
+        period is StatsPeriod.Year -> StatsMath.monthlyTotals(rows, type, period.year, zone)
+        else -> StatsMath.dailyTotals(rows, type, window, zone)
     }
 
     /** 卡片标题：跟着卡头的支出/收入切换走（与「支出占比/支出数据」同一命名法，非支出即收入）。 */

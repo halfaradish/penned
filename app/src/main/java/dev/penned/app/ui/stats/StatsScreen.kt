@@ -100,7 +100,7 @@ fun StatsContent(
     incomeCategories: List<StatsMath.CategoryTotal>,
     emptyTitle: String = "本期没有收支记录",
     trendBars: List<Long> = emptyList(),
-    trendAxis: TrendAxis = TrendAxis.Months,
+    trendAxis: TrendAxis = TrendAxis.Months(YearMonth.now().year),
     stripMonths: List<YearMonth> = emptyList(),
     stripYears: List<Int> = emptyList(),
     type: TxType = TxType.EXPENSE,
@@ -210,8 +210,9 @@ fun StatsContent(
             StatsBarChartCard(
                 title = StatsTrend.title(type),
                 bars = trendBars,
-                xLabels = trendAxisLabels(trendAxis),
+                xLabels = trendAxisLabels(trendAxis, today),
                 color = unitColor,
+                seriesLabel = unit,
             )
             StatsDonutCard(
                 title = "${unit}占比",

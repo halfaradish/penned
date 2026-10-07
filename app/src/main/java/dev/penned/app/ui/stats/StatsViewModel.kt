@@ -44,7 +44,7 @@ class StatsViewModel(private val app: PennedApplication) : ViewModel() {
         /** 趋势卡的柱高（四个视图都有：按日 / 年统计按 12 个月），跟着 [type] 走。 */
         val trendBars: List<Long> = emptyList(),
         /** 趋势卡的横轴类型（按日窗口 / 年统计的 12 个月）。 */
-        val trendAxis: TrendAxis = TrendAxis.Months,
+        val trendAxis: TrendAxis = TrendAxis.Months(YearMonth.now().year),
         val emptyTitle: String = StatsPeriods.emptyTitle(period),
         /** 时间切换条：月（新→旧，含选中月），月统计视图用。 */
         val stripMonths: List<YearMonth> = emptyList(),

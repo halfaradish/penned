@@ -52,6 +52,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 
@@ -195,8 +196,9 @@ fun CategoryDetailContent(
                     StatsBarChartCard(
                         title = "${unit}统计",
                         bars = bars,
-                        xLabels = dayAxisLabels(startEpochDay, bars.size).asOneLineLabels(),
+                        xLabels = dayAxisLabels(startEpochDay, bars.size, LocalDate.now(zone)),
                         color = if (isExpense) expenseColor() else incomeColor(),
+                        seriesLabel = unit,
                     )
                 }
             }
