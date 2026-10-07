@@ -72,6 +72,7 @@ fun StatsScreen(
         expenseCategories = state.expenseCategories,
         incomeCategories = state.incomeCategories,
         emptyTitle = state.emptyTitle,
+        monthlyBars = state.monthlyBars,
         onSelectView = viewModel::selectView,
         onSelectType = viewModel::selectType,
         onPrev = viewModel::prev,
@@ -93,6 +94,7 @@ fun StatsContent(
     expenseCategories: List<StatsMath.CategoryTotal>,
     incomeCategories: List<StatsMath.CategoryTotal>,
     emptyTitle: String = "本期没有收支记录",
+    monthlyBars: List<Long> = emptyList(),
     type: TxType = TxType.EXPENSE,
     onSelectView: (StatsView) -> Unit = {},
     onSelectType: (TxType) -> Unit = {},
@@ -217,6 +219,16 @@ fun StatsContent(
                     it.name != StatsMath.OTHERS && it.name != StatsMath.UNCATEGORIZED
                 },
                 onOpenCategory = { name -> onOpenCategory(CategoryTarget(type, name, parent = null)) },
+            )
+        }
+
+        // 年统计多一张「月度趋势」：同一套自绘柱状图，跟着上面的支出/收入切换走
+        if (period is StatsPeriod.Year) {
+            StatsBarChartCard(
+                title = "月度趋势",
+                bars = monthlyBars,
+                xLabels = monthAxisLabels(),
+                color = unitColor,
             )
         }
     }

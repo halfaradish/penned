@@ -143,11 +143,14 @@ class StatsScreenScreenshotTest {
                     totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 32300),
                     expenseCategories = expenseCategories,
                     incomeCategories = incomeCategories,
+                    // 年统计的月度趋势：12 个月，只有 3 月与 10 月有数据
+                    monthlyBars = List(12) { 0L }.toMutableList().also { it[2] = 420000; it[9] = 32300 },
                     today = today,
                 )
             }
         }
         composeRule.onNodeWithText("2026年").assertIsDisplayed()
+        composeRule.onNodeWithText("月度趋势").assertIsDisplayed()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/ai_stats_year.png")
     }
 

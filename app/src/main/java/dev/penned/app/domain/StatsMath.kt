@@ -117,12 +117,21 @@ object StatsMath {
         type: TxType,
         window: StatsWindow,
         zone: ZoneId = ZoneId.systemDefault(),
+    ): List<Long> = dailyTotals(rows, type, window.startEpochDay, window.dayCount, zone)
+
+    /** [dailyTotals] 的展开形态：详细页手里只有分钟区间与天数，不必凑出一个 StatsWindow。 */
+    fun dailyTotals(
+        rows: List<TxWithCategory>,
+        type: TxType,
+        startEpochDay: Long,
+        dayCount: Int,
+        zone: ZoneId = ZoneId.systemDefault(),
     ): List<Long> {
-        val days = window.dayCount
+        val days = dayCount.coerceAtLeast(1)
         val out = LongArray(days)
         rows.forEach { row ->
             if (row.type != type || row.excludeFromStats) return@forEach
-            val index = (epochMinuteToLocalDate(row.dateEpochMinute, zone).toEpochDay() - window.startEpochDay).toInt()
+            val index = (epochMinuteToLocalDate(row.dateEpochMinute, zone).toEpochDay() - startEpochDay).toInt()
             if (index in 0 until days) out[index] += row.amountCents
         }
         return out.toList()

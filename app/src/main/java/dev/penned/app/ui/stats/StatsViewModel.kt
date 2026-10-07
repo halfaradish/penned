@@ -34,6 +34,8 @@ class StatsViewModel(private val app: PennedApplication) : ViewModel() {
         val expenseCategories: List<StatsMath.CategoryTotal> = emptyList(),
         val incomeCategories: List<StatsMath.CategoryTotal> = emptyList(),
         val rows: List<TxWithCategory> = emptyList(),
+        /** 年统计的「月度趋势」：12 个月合计（别的维度用不上，留空）。 */
+        val monthlyBars: List<Long> = emptyList(),
         val emptyTitle: String = StatsPeriods.emptyTitle(period),
     )
 
@@ -68,6 +70,11 @@ class StatsViewModel(private val app: PennedApplication) : ViewModel() {
             expenseCategories = StatsMath.categoryTotals(rows, TxType.EXPENSE),
             incomeCategories = StatsMath.categoryTotals(rows, TxType.INCOME),
             rows = rows,
+            monthlyBars = if (p is StatsPeriod.Year) {
+                StatsMath.monthlyTotals(rows, type, p.year)
+            } else {
+                emptyList()
+            },
             emptyTitle = StatsPeriods.emptyTitle(p),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState())

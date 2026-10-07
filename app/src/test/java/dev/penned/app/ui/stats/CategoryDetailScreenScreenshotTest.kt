@@ -31,6 +31,8 @@ class CategoryDetailScreenScreenshotTest {
 
     private val zone = ZoneId.of("Asia/Shanghai")
 
+    private val octStartDay = java.time.LocalDate.of(2026, 10, 1).toEpochDay()
+
     private fun tx(id: String, isoDateTime: String, cents: Long, name: String, parent: String, note: String? = null) =
         TxWithCategory(
             id = id, type = TxType.EXPENSE, amountCents = cents, accountId = null, categoryId = null,
@@ -58,7 +60,9 @@ class CategoryDetailScreenScreenshotTest {
                     summary = StatsMath.summary(rows, TxType.EXPENSE, dayCount = 31),
                     children = StatsMath.childTotals(rows, TxType.EXPENSE),
                     days = HomeGroups.groupByDay(rows),
+                    bars = StatsMath.dailyTotals(rows, TxType.EXPENSE, octStartDay, 31),
                     isLeaf = false,
+                    startEpochDay = octStartDay,
                 )
             }
         }
@@ -67,6 +71,7 @@ class CategoryDetailScreenScreenshotTest {
         composeRule.onNodeWithText("账单数量").assertIsDisplayed()
         composeRule.onNodeWithText("5笔").assertIsDisplayed()
         composeRule.onNodeWithText("统计范围 2026年10月").assertIsDisplayed()
+        composeRule.onNodeWithText("支出统计").assertIsDisplayed()
         composeRule.onNodeWithText("支出占比").assertIsDisplayed()
         composeRule.onNodeWithText("支出数据").assertIsDisplayed()
         // 晚餐：图例一处 + 数据行一处；「食品餐饮」直挂桶不可点但也列在数据里（另一处是顶栏标题）
@@ -91,11 +96,15 @@ class CategoryDetailScreenScreenshotTest {
                     summary = StatsMath.summary(rows, TxType.EXPENSE, dayCount = 31),
                     children = StatsMath.childTotals(rows, TxType.EXPENSE),
                     days = HomeGroups.groupByDay(rows),
+                    bars = StatsMath.dailyTotals(rows, TxType.EXPENSE, octStartDay, 31),
                     isLeaf = true,
+                    startEpochDay = octStartDay,
                 )
             }
         }
         composeRule.onNodeWithText("共支出").assertIsDisplayed()
+        // 叶子节点也有按日柱状图（参考图 4：支出统计在流水之上）
+        composeRule.onNodeWithText("支出统计").assertIsDisplayed()
         // 3 条流水按日分组（顶栏标题也叫"晚餐"，所以按行标题断言条数）
         composeRule.onAllNodesWithText("食品餐饮 · 晚餐").assertCountEquals(3)
         // 叶子节点没有"子分类数据"卡
@@ -114,11 +123,15 @@ class CategoryDetailScreenScreenshotTest {
                     summary = StatsMath.NodeSummary(0, 0, 0),
                     children = emptyList(),
                     days = emptyList(),
+                    bars = List(31) { 0L },
                     isLeaf = true,
+                    startEpochDay = octStartDay,
                 )
             }
         }
         composeRule.onNodeWithText("本期没有该分类的记录").assertIsDisplayed()
+        // 没有记录就不出柱状图卡
+        composeRule.onNodeWithText("支出统计").assertDoesNotExist()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/ai_stats_category_empty.png")
     }
 }

@@ -51,6 +51,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 
@@ -71,9 +72,15 @@ class CategoryDetailViewModel(
         val summary: StatsMath.NodeSummary = StatsMath.NodeSummary(0, 0, 0),
         val children: List<StatsMath.CategoryTotal> = emptyList(),
         val days: List<HomeGroups.DayGroup> = emptyList(),
+        /** 按日合计（柱状图）：长度 = 期自然日数，没记录的日子补 0。 */
+        val bars: List<Long> = emptyList(),
         /** 叶子节点出流水列表；有子分类就先出「子分类占比 + 数据」。 */
         val isLeaf: Boolean = true,
     )
+
+    /** 期首日的 epochDay：柱状图的 x 轴锚点（窗口都从当日 00:00 起算）。 */
+    val startEpochDay: Long =
+        Instant.ofEpochSecond(fromMinute * 60).atZone(ZoneId.systemDefault()).toLocalDate().toEpochDay()
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val state: StateFlow<UiState> = app.settings.currentBookId
@@ -90,6 +97,7 @@ class CategoryDetailViewModel(
                 summary = StatsMath.summary(node, target.type, dayCount),
                 children = StatsMath.childTotals(node, target.type),
                 days = HomeGroups.groupByDay(node),
+                bars = StatsMath.dailyTotals(node, target.type, startEpochDay, dayCount),
                 isLeaf = !StatsMath.hasChildren(rows, target.type, target.name, target.parent),
             )
         }
@@ -122,7 +130,9 @@ fun CategoryDetailScreen(
         summary = state.summary,
         children = state.children,
         days = state.days,
+        bars = state.bars,
         isLeaf = state.isLeaf,
+        startEpochDay = viewModel.startEpochDay,
         onOpenCategory = onOpenCategory,
         onOpenTx = onOpenTx,
         onBack = onBack,
@@ -138,7 +148,9 @@ fun CategoryDetailContent(
     summary: StatsMath.NodeSummary,
     children: List<StatsMath.CategoryTotal>,
     days: List<HomeGroups.DayGroup>,
+    bars: List<Long> = emptyList(),
     isLeaf: Boolean,
+    startEpochDay: Long = 0L,
     onOpenCategory: (CategoryTarget) -> Unit = {},
     onOpenTx: (String) -> Unit = {},
     onBack: () -> Unit = {},
@@ -175,6 +187,18 @@ fun CategoryDetailContent(
                         bottom = PennedSpacing.xs,
                     ),
                 )
+            }
+
+            // 按日柱状图（参考图的「支出统计」）：有记录才出这张卡
+            if (bars.any { it > 0 }) {
+                item(key = "chart") {
+                    StatsBarChartCard(
+                        title = "${unit}统计",
+                        bars = bars,
+                        xLabels = dayAxisLabels(startEpochDay, bars.size),
+                        color = if (isExpense) expenseColor() else incomeColor(),
+                    )
+                }
             }
 
             if (isLeaf && days.isEmpty()) {
@@ -303,6 +327,8 @@ private fun HeroCell(label: String, value: String, ink: androidx.compose.ui.grap
     }
 }
 
+private val OCT_START_DAY = java.time.LocalDate.of(2026, 10, 1).toEpochDay()
+
 @Preview(showBackground = true, name = "分类详细-一级", widthDp = 400, heightDp = 780)
 @Composable
 private fun CategoryDetailParentPreview() {
@@ -319,7 +345,9 @@ private fun CategoryDetailParentPreview() {
             summary = StatsMath.summary(rows, TxType.EXPENSE, dayCount = 31),
             children = StatsMath.childTotals(rows, TxType.EXPENSE),
             days = HomeGroups.groupByDay(rows),
+            bars = StatsMath.dailyTotals(rows, TxType.EXPENSE, OCT_START_DAY, 31),
             isLeaf = false,
+            startEpochDay = OCT_START_DAY,
         )
     }
 }
@@ -339,7 +367,9 @@ private fun CategoryDetailLeafPreview() {
             summary = StatsMath.summary(rows, TxType.EXPENSE, dayCount = 31),
             children = StatsMath.childTotals(rows, TxType.EXPENSE),
             days = HomeGroups.groupByDay(rows),
+            bars = StatsMath.dailyTotals(rows, TxType.EXPENSE, OCT_START_DAY, 31),
             isLeaf = true,
+            startEpochDay = OCT_START_DAY,
         )
     }
 }
