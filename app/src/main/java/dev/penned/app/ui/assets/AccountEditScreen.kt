@@ -18,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -35,6 +36,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -43,6 +45,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.penned.app.PennedApplication
 import dev.penned.app.data.db.entity.AccountEntity
+import dev.penned.app.data.db.entity.AccountBookRefEntity
+import dev.penned.app.data.db.entity.BookEntity
 import dev.penned.app.domain.AccountType
 import dev.penned.app.domain.Money
 import dev.penned.app.ui.components.CategoryAvatar
@@ -59,6 +63,7 @@ import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.PennedTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -79,8 +84,12 @@ data class AccountEditUiState(
     val initialText: String = "",
     /** 备注（选填，只作个人备忘）。 */
     val remark: String = "",
-    /** 生效账本：true = 所有账本可见（余额跨账本合并），false = 仅所属账本（D027）。 */
+    /** 生效账本：true = 所有账本可见（含以后新建的），false = 所属账本 + [extraBookIds]（D028）。 */
     val scopeAllBooks: Boolean = false,
+    /** 可选账本（用于勾选）与所属账本；[extraBookIds] 是额外勾选的账本。 */
+    val books: List<BookEntity> = emptyList(),
+    val ownerBookId: String? = null,
+    val extraBookIds: Set<String> = emptySet(),
     /** 编辑已有账户时：其名下流水数（>0 不给删，删除键置灰并说明原因）。 */
     val pendingTxCount: Int = 0,
     /** 删除时才发现有流水（竞态）的兜底说明。 */
@@ -94,6 +103,15 @@ data class AccountEditUiState(
     val canDelete: Boolean get() = isEdit && pendingTxCount == 0
 
     val balanceCents: Long get() = Money.parseToCents(initialText) ?: 0L
+
+    /** 生效账本行的摘要：全部账本，或者列出生效的账本名（所属账本恒定在列）。 */
+    val bookSummary: String
+        get() = when {
+            scopeAllBooks -> "全部账本"
+            else -> books.filter { it.id == ownerBookId || it.id in extraBookIds }
+                .joinToString("、") { it.name }
+                .ifEmpty { "仅本账本" }
+        }
 
     /** 落库的名称：用户没填就用预设名，自定义格退到类型名。 */
     fun resolvedName(): String = name.trim().ifBlank { presetLabel ?: accountTypeLabel(type) }
@@ -120,11 +138,19 @@ class AccountEditViewModel(
     val state: StateFlow<AccountEditUiState> = _state
 
     init {
-        if (editId != null) viewModelScope.launch { load(editId) }
+        viewModelScope.launch {
+            val books = db.bookDao().observeAll().first()
+            val account = editId?.let { db.accountDao().get(it) }
+            val ownerBookId = account?.bookId ?: app.settings.currentBookId.firstOrNull()
+            if (account == null) {
+                update { it.copy(books = books, ownerBookId = ownerBookId) }
+            } else {
+                load(account, books, db.accountDao().bookIdsFor(account.id).toSet())
+            }
+        }
     }
 
-    private suspend fun load(id: String) {
-        val account = db.accountDao().get(id) ?: return
+    private suspend fun load(account: AccountEntity, books: List<BookEntity>, extraBookIds: Set<String>) {
         val group = AccountGroup.of(account.type)
         // 名字与预设完全一致才当作预设（导入的账户也叫现金，能对上）
         val preset = ACCOUNT_PRESETS[group].orEmpty().firstOrNull { it.label == account.name }
@@ -141,7 +167,10 @@ class AccountEditViewModel(
             },
             remark = account.remark.orEmpty(),
             scopeAllBooks = account.scopeAllBooks,
-            pendingTxCount = db.transactionDao().countByAccount(id),
+            books = books,
+            ownerBookId = account.bookId,
+            extraBookIds = extraBookIds,
+            pendingTxCount = db.transactionDao().countByAccount(account.id),
         )
     }
 
@@ -166,6 +195,14 @@ class AccountEditViewModel(
         update { it.copy(scopeAllBooks = allBooks) }
     }
 
+    /** 勾选/取消某个账本（所属账本不可取消，UI 已置灰）。 */
+    fun toggleBook(bookId: String) {
+        update {
+            val extras = if (bookId in it.extraBookIds) it.extraBookIds - bookId else it.extraBookIds + bookId
+            it.copy(extraBookIds = extras)
+        }
+    }
+
     fun save(onDone: () -> Unit) {
         viewModelScope.launch {
             val s = _state.value
@@ -173,11 +210,12 @@ class AccountEditViewModel(
             val name = s.resolvedName()
             val remark = s.remark.trim().ifEmpty { null }
             val existingId = s.accountId
-            if (existingId == null) {
+            val accountId = if (existingId == null) {
                 val bookId = app.settings.currentBookId.firstOrNull() ?: return@launch
+                val id = UUID.randomUUID().toString()
                 db.accountDao().upsert(
                     AccountEntity(
-                        id = UUID.randomUUID().toString(),
+                        id = id,
                         bookId = bookId,
                         name = name,
                         type = s.type,
@@ -189,6 +227,7 @@ class AccountEditViewModel(
                         deviceId = app.deviceId,
                     )
                 )
+                id
             } else {
                 // 读回落库实体再改这几个字段：groupName/currencyCode 等本页不碰的字段原样保留
                 val original = db.accountDao().get(existingId) ?: return@launch
@@ -202,9 +241,29 @@ class AccountEditViewModel(
                         updatedAt = now,
                     )
                 )
+                existingId
             }
+            saveBookRefs(accountId, s, now)
             onDone()
         }
+    }
+
+    /** 生效账本落库：先整批软删再 upsert 勾选的（取消勾选即收窄；全部账本时不写引用）。 */
+    private suspend fun saveBookRefs(accountId: String, s: AccountEditUiState, now: Long) {
+        db.accountDao().clearRefs(accountId, now)
+        if (s.scopeAllBooks) return
+        val refs = s.extraBookIds
+            .filter { it != s.ownerBookId }
+            .map {
+                AccountBookRefEntity(
+                    accountId = accountId,
+                    bookId = it,
+                    createdAt = now,
+                    updatedAt = now,
+                    deviceId = app.deviceId,
+                )
+            }
+        if (refs.isNotEmpty()) db.accountDao().upsertRefs(refs)
     }
 
     /** 页面内删除：走同一条 [deleteAccountIfEmpty]；被拦下就把原因写回状态。 */
@@ -250,6 +309,7 @@ fun AccountEditScreen(
         onInitialChange = viewModel::setInitial,
         onRemarkChange = viewModel::setRemark,
         onScopeChange = viewModel::setScopeAllBooks,
+        onToggleBook = viewModel::toggleBook,
         onSave = { viewModel.save(onDone = onBack) },
         onDelete = if (state.isEdit) ({ confirmDelete = true }) else null,
         modifier = modifier,
@@ -280,6 +340,7 @@ fun AccountEditContent(
     modifier: Modifier = Modifier,
     onRemarkChange: (String) -> Unit = {},
     onScopeChange: (Boolean) -> Unit = {},
+    onToggleBook: (String) -> Unit = {},
     onDelete: (() -> Unit)? = null,
 ) {
     val focusRequester = remember { FocusRequester() }
@@ -309,10 +370,11 @@ fun AccountEditContent(
     if (showScopePicker) {
         ScopePickerSheet(
             allBooks = state.scopeAllBooks,
-            onPick = {
-                onScopeChange(it)
-                showScopePicker = false
-            },
+            books = state.books,
+            ownerBookId = state.ownerBookId,
+            extraBookIds = state.extraBookIds,
+            onToggleAll = { onScopeChange(!state.scopeAllBooks) },
+            onToggleBook = onToggleBook,
             onDismiss = { showScopePicker = false },
         )
     }
@@ -379,12 +441,12 @@ fun AccountEditContent(
                     PennedDivider()
                     PickerRow(
                         label = "生效账本",
-                        value = if (state.scopeAllBooks) "全部账本" else "仅本账本",
+                        value = state.bookSummary,
                         onClick = { showScopePicker = true },
                     )
                     if (state.scopeAllBooks) {
                         Text(
-                            "所有账本都能看到这个账户，余额按各账本流水合并计算",
+                            "所有账本都能看到这个账户，含以后新建的账本",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(
@@ -465,35 +527,78 @@ private fun PickerRow(
     }
 }
 
-/** 生效账本选择：二选一（D027）。 */
+/** 生效账本多选（D028）：全部账本开关 + 逐账本勾选；所属账本恒定可见、置灰。 */
 @Composable
 private fun ScopePickerSheet(
     allBooks: Boolean,
-    onPick: (Boolean) -> Unit,
+    books: List<BookEntity>,
+    ownerBookId: String?,
+    extraBookIds: Set<String>,
+    onToggleAll: () -> Unit,
+    onToggleBook: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     PennedSheet(onDismiss = onDismiss, title = "生效账本") {
-        listOf(
-            false to "仅本账本",
-            true to "全部账本",
-        ).forEach { (value, label) ->
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = PennedDimens.rowMinHeight)
-                    .clickable { onPick(value) }
-                    .padding(horizontal = PennedSpacing.xl),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                if (value == allBooks) {
-                    Text(
-                        "已选",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+        BookCheckRow(
+            name = "全部账本",
+            checked = allBooks,
+            onToggle = onToggleAll,
+        )
+        if (!allBooks) {
+            PennedDivider()
+            books.forEach { book ->
+                val isOwner = book.id == ownerBookId
+                BookCheckRow(
+                    name = book.name,
+                    checked = isOwner || book.id in extraBookIds,
+                    enabled = !isOwner,
+                    tag = if (isOwner) "所属" else null,
+                    onToggle = { onToggleBook(book.id) },
+                )
             }
+            Text(
+                "所属账本恒定可见；勾选其它账本，这个账户在那边也能用",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = PennedSpacing.xl, vertical = PennedSpacing.sm),
+            )
+        }
+    }
+}
+
+/** 一行带勾选框的账本。 */
+@Composable
+private fun BookCheckRow(
+    name: String,
+    checked: Boolean,
+    onToggle: () -> Unit,
+    enabled: Boolean = true,
+    tag: String? = null,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = PennedDimens.rowMinHeight)
+            .clickable(enabled = enabled, onClick = onToggle)
+            .padding(horizontal = PennedSpacing.xl),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(checked = checked, onCheckedChange = null, enabled = enabled)
+        Spacer(Modifier.width(PennedSpacing.md))
+        Text(
+            name,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (tag != null) {
+            Text(
+                tag,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
