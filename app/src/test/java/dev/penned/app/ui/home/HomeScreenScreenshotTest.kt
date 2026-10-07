@@ -1,12 +1,16 @@
 package dev.penned.app.ui.home
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performScrollToNode
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.penned.app.data.db.dao.TxWithCategory
 import dev.penned.app.domain.TxType
@@ -70,10 +74,47 @@ class HomeScreenScreenshotTest {
         budgetSummary = budget,
     )
 
+    private fun tx(
+        id: String,
+        date: LocalDate,
+        type: TxType,
+        cents: Long,
+        name: String?,
+        parent: String?,
+        note: String?,
+        hour: Int = 12,
+        minute: Int = 30,
+    ) = TxWithCategory(
+        id = id,
+        type = type,
+        amountCents = cents,
+        accountId = null,
+        categoryId = null,
+        dateEpochMinute = date.atTime(hour, minute).atZone(zone).toEpochSecond() / 60,
+        note = note,
+        categoryName = name,
+        categoryParentName = parent,
+        categoryIconKey = null,
+        targetAccountName = null,
+        excludeFromStats = false,
+    )
+
+    /** 本月一号 / 今天 / 上月一号 / 去年同一天：一张月卡一个月份，最后一张要带年份。 */
+    private fun monthRows(): List<TxWithCategory> {
+        val today = LocalDate.now(zone)
+        val firstOfMonth = today.withDayOfMonth(1)
+        return listOf(
+            tx("cur-1", firstOfMonth, TxType.EXPENSE, 1200, "晚餐", "食品餐饮", "本月一号", hour = 19, minute = 30),
+            tx("cur-2", today, TxType.INCOME, 300000, "工资", null, null, hour = 8, minute = 5),
+            tx("prev-1", firstOfMonth.minusMonths(1), TxType.EXPENSE, 4500, "打车", "出行交通", null),
+            tx("old-1", firstOfMonth.minusYears(1), TxType.EXPENSE, 9900, "夜宵", "食品餐饮", "去年的账"),
+        )
+    }
+
     @Test
     fun captureHomeTop() {
         composeRule.setContent { PennedTheme { content() } }
-        // 合并卡：月汇总与预算同一张卡
+        // 月汇总卡（本月）：支/收/结余三列
         composeRule.onNodeWithText("支出").assertIsDisplayed()
         composeRule.onNodeWithText("收入").assertIsDisplayed()
         composeRule.onNodeWithText("结余").assertIsDisplayed()
@@ -82,9 +123,53 @@ class HomeScreenScreenshotTest {
         composeRule.onNodeWithText("已用").assertIsDisplayed()
         composeRule.onNodeWithText("剩余").assertIsDisplayed()
         composeRule.onNodeWithText("添加一条新记账").assertIsDisplayed()
+        // 当天日头条：相对词在最前（参考图口径）；行内时段
+        composeRule.onNodeWithText("今天", substring = true).assertIsDisplayed()
+        composeRule.onAllNodesWithText("12:30").onFirst().assertIsDisplayed()
         // 按钮还在视野里 → FAB 不出现
         composeRule.onNodeWithTag("home-fab").assertDoesNotExist()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_home_top.png")
+    }
+
+    @Test
+    fun captureMonthCards() {
+        composeRule.setContent { PennedTheme { HomeContent(bookName = "日常账本", rows = monthRows(), onAdd = {}) } }
+        val today = LocalDate.now(zone)
+        val firstOfMonth = today.withDayOfMonth(1)
+        // 月卡没有标题行：本月这一卡的日头条不带年份
+        composeRule.onNodeWithText("${firstOfMonth.year}年", substring = true).assertDoesNotExist()
+        // 当日收入不为 0 → 日头条带「收」
+        composeRule.onNodeWithText("收 3,000.00", substring = true).assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/af_home_month_cards.png")
+    }
+
+    @Test
+    fun crossYearDayHeaderCarriesYear() {
+        composeRule.setContent { PennedTheme { HomeContent(bookName = "日常账本", rows = monthRows(), onAdd = {}) } }
+        val lastYearDay = LocalDate.now(zone).withDayOfMonth(1).minusYears(1)
+        // 去年的那张卡：日头条带 yyyy年（截图基线见 captureMonthCards）
+        composeRule.onNodeWithTag("home-list")
+            .performScrollToNode(hasText("${lastYearDay.year}年", substring = true))
+        composeRule.onNodeWithText(
+            "${lastYearDay.year}年${lastYearDay.monthValue}月${lastYearDay.dayOfMonth}日",
+            substring = true,
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun dayHeaderHidesZeroIncome() {
+        val day = LocalDate.now(zone)
+        composeRule.setContent {
+            PennedTheme {
+                HomeContent(
+                    bookName = "日常账本",
+                    rows = listOf(tx("only-expense", day, TxType.EXPENSE, 1800, "晚餐", "食品餐饮", null)),
+                    onAdd = {},
+                )
+            }
+        }
+        // 只有支出的一天：整条日头条就是「支 18.00」——精确匹配即证明没有「收」那一段
+        composeRule.onNodeWithText("支 18.00").assertIsDisplayed()
     }
 
     @Test

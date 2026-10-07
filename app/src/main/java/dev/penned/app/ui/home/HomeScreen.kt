@@ -18,7 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
@@ -59,9 +59,12 @@ import dev.penned.app.ui.components.DayHeaderRow
 import dev.penned.app.ui.components.EmptyState
 import dev.penned.app.ui.components.PennedButton
 import dev.penned.app.ui.components.PennedCard
+import dev.penned.app.ui.components.PennedCardSection
+import dev.penned.app.ui.components.PennedCardSectionPosition
 import dev.penned.app.ui.components.PennedDialog
 import dev.penned.app.ui.components.SwipeToDeleteRow
 import dev.penned.app.ui.icons.PennedIcons
+import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.PennedTheme
 import dev.penned.app.ui.theme.expenseColor
@@ -78,6 +81,7 @@ private const val SUMMARY_CARD_KEY = "month-card"
 private const val BUDGET_CARD_KEY = "budget-card"
 private const val HOME_LIST_TAG = "home-list"
 private const val HOME_FAB_TAG = "home-fab"
+
 
 @Composable
 fun HomeScreen(
@@ -282,42 +286,86 @@ fun HomeContent(
                             )
                         }
                     } else {
-                        HomeGroups.groupByDay(rows, zone).forEach { group ->
-                            stickyHeader(key = "day-${group.epochDay}") {
-                                DayHeaderRow(
-                                    label = HomeGroups.dayLabel(group.epochDay, zone),
-                                    incomeCents = group.incomeCents,
-                                    expenseCents = group.expenseCents,
-                                    background = true,
-                                )
+                        // 一个月 = 一张卡（卡里没有标题行，月份靠卡片边界分）；卡由
+                        // 「顶段 + 日头条/行 + 底段」拼成，日头条吸顶时也带着卡片的边线。
+                        val months = HomeGroups.groupByMonth(rows, zone)
+                        months.forEach { month ->
+                            item(key = "month-top-${month.yearMonth}") {
+                                PennedCardSection(
+                                    position = PennedCardSectionPosition.Top,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = PennedSpacing.lg),
+                                ) {
+                                    Spacer(Modifier.height(PennedSpacing.xs))
+                                }
                             }
-                            items(group.items, key = { it.id }) { row ->
-                                if (selectionMode) {
-                                    TransactionRow(
-                                        row = row,
-                                        selectionMode = true,
-                                        selected = row.id in selectedIds,
-                                        onClick = { onToggleSelect(row.id) },
-                                        onLongClick = { onLongPressRow(row.id) },
-                                        modifier = Modifier.animateItem(),
-                                    )
-                                } else {
-                                    SwipeToDeleteRow(
-                                        onDelete = { onDeleteRow(row.id) },
-                                        modifier = Modifier.animateItem(),
+                            month.days.forEach { day ->
+                                stickyHeader(key = "day-${day.epochDay}") {
+                                    PennedCardSection(
+                                        position = PennedCardSectionPosition.Middle,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = PennedSpacing.lg),
                                     ) {
-                                        TransactionRow(
-                                            row = row,
-                                            selectionMode = false,
-                                            selected = false,
-                                            onClick = { onOpenRow(row.id) },
-                                            onLongClick = { onLongPressRow(row.id) },
+                                        DayHeaderRow(
+                                            label = HomeGroups.dayLabel(day.epochDay, zone),
+                                            incomeCents = day.incomeCents,
+                                            expenseCents = day.expenseCents,
                                         )
                                     }
-                                    HorizontalDivider(
-                                        modifier = Modifier.padding(horizontal = PennedSpacing.lg),
-                                        color = MaterialTheme.colorScheme.outlineVariant,
-                                    )
+                                }
+                                itemsIndexed(day.items, key = { _, row -> row.id }) { rowIndex, row ->
+                                    val isLastRowOfDay = rowIndex == day.items.lastIndex
+                                    PennedCardSection(
+                                        position = PennedCardSectionPosition.Middle,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .animateItem()
+                                            .padding(horizontal = PennedSpacing.lg),
+                                    ) {
+                                        if (selectionMode) {
+                                            TransactionRow(
+                                                row = row,
+                                                selectionMode = true,
+                                                selected = row.id in selectedIds,
+                                                onClick = { onToggleSelect(row.id) },
+                                                onLongClick = { onLongPressRow(row.id) },
+                                            )
+                                        } else {
+                                            SwipeToDeleteRow(
+                                                onDelete = { onDeleteRow(row.id) },
+                                                rowBackground = MaterialTheme.colorScheme.surface,
+                                            ) {
+                                                TransactionRow(
+                                                    row = row,
+                                                    selectionMode = false,
+                                                    selected = false,
+                                                    onClick = { onOpenRow(row.id) },
+                                                    onLongClick = { onLongPressRow(row.id) },
+                                                )
+                                            }
+                                            // 日与日之间靠日头条分开，最后一行不再画线
+                                            if (!isLastRowOfDay) {
+                                                HorizontalDivider(
+                                                    modifier = Modifier.padding(start = PennedDimens.rowTextIndent),
+                                                    color = MaterialTheme.colorScheme.outlineVariant,
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            item(key = "month-bottom-${month.yearMonth}") {
+                                PennedCardSection(
+                                    position = PennedCardSectionPosition.Bottom,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = PennedSpacing.lg)
+                                        // 卡间距 12：留在卡片外，圆角贴着卡边走
+                                        .padding(bottom = PennedSpacing.md),
+                                ) {
+                                    Spacer(Modifier.height(PennedSpacing.xs))
                                 }
                             }
                         }
@@ -524,6 +572,9 @@ private fun HomeDataPreview() {
         tx("1", minuteOf(2026, 10, 4, 19, 30), TxType.EXPENSE, 1600, "晚餐", "食品餐饮", "北苑餐厅"),
         tx("2", minuteOf(2026, 10, 4, 8, 10), TxType.INCOME, 150000, "工资", null, null),
         tx("3", minuteOf(2026, 10, 3, 12, 0), TxType.EXPENSE, 700, "午餐", "食品餐饮", "西门"),
+        // 上个月 = 另一张卡；跨年的日头带 yyyy年
+        tx("4", minuteOf(2026, 9, 30, 21, 5), TxType.EXPENSE, 3200, "打车", "出行交通", null),
+        tx("5", minuteOf(2025, 12, 31, 23, 50), TxType.EXPENSE, 1200, "夜宵", "食品餐饮", "夜市"),
     )
     PennedTheme {
         HomeContent(

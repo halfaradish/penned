@@ -48,6 +48,7 @@ import dev.penned.app.ui.components.DayHeaderRow
 import dev.penned.app.ui.components.PennedCard
 import dev.penned.app.ui.components.PennedTopBar
 import dev.penned.app.ui.icons.PennedIcons
+import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
 import java.time.ZoneId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -171,7 +172,7 @@ fun SearchContent(
                                     modifier = Modifier.animateItem(),
                                 )
                                 HorizontalDivider(
-                                    modifier = Modifier.padding(horizontal = PennedSpacing.lg),
+                                    modifier = Modifier.padding(start = PennedDimens.rowTextIndent),
                                     color = MaterialTheme.colorScheme.outlineVariant,
                                 )
                             }

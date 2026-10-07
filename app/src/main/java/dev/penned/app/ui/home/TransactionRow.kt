@@ -59,11 +59,13 @@ internal fun TransactionRow(
             .heightIn(min = PennedDimens.rowMinHeight)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.sm),
-        verticalAlignment = Alignment.CenterVertically,
+        // 顶端对齐：金额贴在标题那一行，不随行有多高而上下浮动（参考图口径）
+        verticalAlignment = Alignment.Top,
     ) {
         if (selectionMode) {
             Box(
                 Modifier
+                    .align(Alignment.CenterVertically)
                     .size(22.dp)
                     .background(
                         if (selected) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent,
@@ -91,13 +93,18 @@ internal fun TransactionRow(
         }
         CategoryAvatar(avatarName)
         Spacer(Modifier.width(PennedSpacing.md))
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).padding(top = 1.dp)) {
             Text(
                 title,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                HomeGroups.clockLabel(row.dateEpochMinute),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (!row.note.isNullOrBlank()) {
                 Text(
@@ -110,6 +117,6 @@ internal fun TransactionRow(
             }
         }
         Spacer(Modifier.width(PennedSpacing.md))
-        MoneyText(row.amountCents, type = row.type)
+        MoneyText(row.amountCents, type = row.type, modifier = Modifier.padding(top = 1.dp))
     }
 }
