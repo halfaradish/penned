@@ -42,9 +42,12 @@ class StatsTrendTest {
             TrendAxis.Days(startEpochDay = LocalDate.of(2026, 10, 1).toEpochDay(), count = 7),
             StatsTrend.axisOf(StatsPeriod.Last7Days, windowOf(StatsPeriod.Last7Days)),
         )
-        // 月统计：当月自然日数
+        // 月统计：当月自然日数；横轴不写周几（稀疏标签下周几是噪声）
         val month = StatsPeriod.Month(YearMonth.of(2026, 10))
-        assertEquals(TrendAxis.Days(LocalDate.of(2026, 10, 1).toEpochDay(), 31), StatsTrend.axisOf(month, windowOf(month)))
+        assertEquals(
+            TrendAxis.Days(LocalDate.of(2026, 10, 1).toEpochDay(), 31, showWeekday = false),
+            StatsTrend.axisOf(month, windowOf(month)),
+        )
         // 自定义：区间天数（两端都含）
         val custom = StatsPeriods.custom(
             LocalDate.of(2026, 9, 10).toEpochDay(),

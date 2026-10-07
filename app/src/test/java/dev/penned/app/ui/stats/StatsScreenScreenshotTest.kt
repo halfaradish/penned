@@ -15,7 +15,7 @@ import dev.penned.app.domain.StatsMath
 import dev.penned.app.domain.StatsPeriod
 import dev.penned.app.domain.StatsPeriods
 import dev.penned.app.domain.StatsStrip
-import dev.penned.app.domain.TrendAxis
+import dev.penned.app.domain.StatsTrend
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.theme.PennedTheme
 import org.junit.Rule
@@ -54,8 +54,6 @@ class StatsScreenScreenshotTest {
     private fun dailyBars(count: Int, vararg nonZero: Pair<Int, Long>): List<Long> =
         List(count) { 0L }.toMutableList().also { bars -> nonZero.forEach { bars[it.first] = it.second } }
 
-    private fun dayAxis(startDay: LocalDate, count: Int) = TrendAxis.Days(startDay.toEpochDay(), count)
-
     private fun stripMonths(include: YearMonth? = null): List<YearMonth> =
         StatsStrip.months(earliest, YearMonth.from(today), include)
 
@@ -64,17 +62,18 @@ class StatsScreenScreenshotTest {
 
     @Test
     fun captureStatsScreen() {
+        val month = StatsPeriod.Month(YearMonth.of(2026, 10))
         composeRule.setContent {
             PennedTheme {
                 StatsContent(
-                    period = StatsPeriod.Month(YearMonth.of(2026, 10)),
-                    window = StatsPeriods.window(StatsPeriod.Month(YearMonth.of(2026, 10)), today = today),
+                    period = month,
+                    window = StatsPeriods.window(month, today = today),
                     totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 32300),
                     expenseCategories = expenseCategories,
                     incomeCategories = incomeCategories,
-                    // 31 天按日柱：标签稀疏（每 6 根一个），横轴两行
+                    // 31 天按日柱：标签稀疏（每 6 根一个），月统计不写周几、只标 月/日
                     trendBars = dailyBars(31, 3 to 1600L, 11 to 3000L, 19 to 9500L, 28 to 4200L),
-                    trendAxis = dayAxis(LocalDate.of(2026, 10, 1), 31),
+                    trendAxis = StatsTrend.axisOf(month, StatsPeriods.window(month, today = today)),
                     stripMonths = stripMonths(YearMonth.of(2026, 10)),
                     stripYears = stripYears(),
                     today = today,
@@ -115,7 +114,7 @@ class StatsScreenScreenshotTest {
                     expenseCategories = expenseCategories,
                     incomeCategories = emptyList(),
                     trendBars = dailyBars(31, 4 to 1580L, 17 to 3900L, 24 to 2200L),
-                    trendAxis = dayAxis(LocalDate.of(2025, 12, 1), 31),
+                    trendAxis = StatsTrend.axisOf(period, StatsPeriods.window(period, today = today)),
                     stripMonths = stripMonths(YearMonth.of(2025, 12)),
                     stripYears = stripYears(),
                     today = today,
@@ -129,17 +128,18 @@ class StatsScreenScreenshotTest {
 
     @Test
     fun captureStatsIncomeSide() {
+        val month = StatsPeriod.Month(YearMonth.of(2026, 10))
         composeRule.setContent {
             PennedTheme {
                 StatsContent(
-                    period = StatsPeriod.Month(YearMonth.of(2026, 10)),
-                    window = StatsPeriods.window(StatsPeriod.Month(YearMonth.of(2026, 10)), today = today),
+                    period = month,
+                    window = StatsPeriods.window(month, today = today),
                     totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 32300),
                     expenseCategories = expenseCategories,
                     incomeCategories = incomeCategories,
                     // 收入侧：一笔工资落在 10 号
                     trendBars = dailyBars(31, 9 to 350000L),
-                    trendAxis = dayAxis(LocalDate.of(2026, 10, 1), 31),
+                    trendAxis = StatsTrend.axisOf(month, StatsPeriods.window(month, today = today)),
                     type = TxType.INCOME,
                     today = today,
                 )
@@ -187,7 +187,7 @@ class StatsScreenScreenshotTest {
                     incomeCategories = emptyList(),
                     // 近七日＝7 根日柱，横轴两行（周几 / 月/日）
                     trendBars = listOf(0, 1600, 0, 0, 3000, 0, 250),
-                    trendAxis = TrendAxis.Days(LocalDate.of(2026, 10, 1).toEpochDay(), 7),
+                    trendAxis = StatsTrend.axisOf(period, StatsPeriods.window(period, today = today)),
                     today = today,
                 )
             }
@@ -213,7 +213,7 @@ class StatsScreenScreenshotTest {
                     incomeCategories = incomeCategories,
                     // 年统计的趋势＝12 个月柱，只有 3 月与 10 月有数据
                     trendBars = List(12) { 0L }.toMutableList().also { it[2] = 420000; it[9] = 32300 },
-                    trendAxis = TrendAxis.Months(2026),
+                    trendAxis = StatsTrend.axisOf(period, StatsPeriods.window(period, today = today)),
                     stripMonths = stripMonths(),
                     stripYears = stripYears(2026),
                     today = today,
@@ -247,7 +247,7 @@ class StatsScreenScreenshotTest {
                     incomeCategories = incomeCategories,
                     // 15 天区间：按日 15 根，横轴两行
                     trendBars = List(15) { 0L }.toMutableList().also { it[3] = 1600; it[9] = 3000 },
-                    trendAxis = TrendAxis.Days(LocalDate.of(2026, 10, 1).toEpochDay(), 15),
+                    trendAxis = StatsTrend.axisOf(period, StatsPeriods.window(period, today = today)),
                     today = today,
                 )
             }
@@ -275,7 +275,7 @@ class StatsScreenScreenshotTest {
                     expenseCategories = expenseCategories,
                     incomeCategories = emptyList(),
                     trendBars = dailyBars(365, 20 to 1600L, 120 to 5200L, 250 to 3000L, 350 to 9500L),
-                    trendAxis = dayAxis(start, 365),
+                    trendAxis = StatsTrend.axisOf(period, StatsPeriods.window(period, today = today)),
                     today = today,
                 )
             }
@@ -299,7 +299,7 @@ class StatsScreenScreenshotTest {
                     expenseCategories = expenseCategories,
                     incomeCategories = emptyList(),
                     trendBars = dailyBars(31, 0 to 1234L, 3 to 1600L, 11 to 3000L, 19 to 9500L),
-                    trendAxis = dayAxis(LocalDate.of(2026, 10, 1), 31),
+                    trendAxis = StatsTrend.axisOf(period, StatsPeriods.window(period, today = today)),
                     stripMonths = stripMonths(YearMonth.of(2026, 10)),
                     stripYears = stripYears(),
                     today = today,

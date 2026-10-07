@@ -8,8 +8,13 @@ import java.time.ZoneId
  * 卡片位置与口径见 docs/界面重构方案.md 第十四节。
  */
 sealed interface TrendAxis {
-    /** 按日：窗口内每一天一根柱，[startEpochDay] 起共 [count] 天。 */
-    data class Days(val startEpochDay: Long, val count: Int) : TrendAxis
+    /**
+     * 按日：窗口内每一天一根柱，[startEpochDay] 起共 [count] 天。
+     * [showWeekday] 决定横轴第一行要不要写周几——只有"每天都标得出标签"的短窗口才值得写
+     * （近七日、短自定义区间是一串连续的周几）；月统计 28~31 天、标签只能稀疏标，
+     * 周几看着是噪声，就只留 `月/日` 一行。
+     */
+    data class Days(val startEpochDay: Long, val count: Int, val showWeekday: Boolean = true) : TrendAxis
 
     /** 按月：该年 1~12 月各一根（[year] 供按住浮层写完整年月）。 */
     data class Months(val year: Int) : TrendAxis
@@ -20,6 +25,7 @@ object StatsTrend {
 
     fun axisOf(period: StatsPeriod, window: StatsWindow): TrendAxis = when (period) {
         is StatsPeriod.Year -> TrendAxis.Months(period.year)
+        is StatsPeriod.Month -> TrendAxis.Days(window.startEpochDay, window.dayCount, showWeekday = false)
         else -> TrendAxis.Days(window.startEpochDay, window.dayCount)
     }
 

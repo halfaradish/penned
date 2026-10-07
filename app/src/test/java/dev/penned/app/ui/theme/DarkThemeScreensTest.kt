@@ -210,10 +210,7 @@ class DarkThemeScreensTest {
                 incomeCategories = listOf(StatsMath.CategoryTotal("工资", 350000, 1, 1f)),
                 // 趋势卡：2026-09 按日（30 天），月中有几笔
                 trendBars = List(30) { 0L }.toMutableList().also { it[3] = 12600; it[11] = 8000; it[26] = 35570 },
-                trendAxis = dev.penned.app.domain.TrendAxis.Days(
-                    java.time.LocalDate.of(2026, 9, 1).toEpochDay(),
-                    30,
-                ),
+                trendAxis = dev.penned.app.domain.StatsTrend.axisOf(period, dev.penned.app.domain.StatsPeriods.window(period)),
                 stripMonths = dev.penned.app.domain.StatsStrip.months(
                     earliest = java.time.YearMonth.of(2024, 3),
                     today = java.time.YearMonth.of(2026, 10),

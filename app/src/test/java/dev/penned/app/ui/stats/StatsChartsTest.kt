@@ -81,6 +81,15 @@ class StatsChartsTest {
     }
 
     @Test
+    fun `trend axis drops the weekday line for the month view`() {
+        // 月统计：只有 月/日 一行，但浮层日期照旧
+        val month = trendAxisLabels(TrendAxis.Days(LocalDate.of(2026, 10, 1).toEpochDay(), 31, showWeekday = false), today)
+        assertEquals(31, month.size)
+        assertEquals(AxisLabel(bottom = "10/1", tooltip = "10月1日"), month.first())
+        assertEquals(null, month.first().top)
+    }
+
+    @Test
     fun `trend axis falls back to one line month labels on long windows`() {
         // 超过两个月：日号会重复，退回单行月份（与分类详细页同口径）
         val year = trendAxisLabels(TrendAxis.Days(LocalDate.of(2025, 9, 1).toEpochDay(), 365), today)

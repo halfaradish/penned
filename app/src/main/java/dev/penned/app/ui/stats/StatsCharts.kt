@@ -428,7 +428,8 @@ internal fun dayAxisLabels(
 }
 
 /**
- * 趋势卡的横轴（AL/AM 轮）：按日窗口给两行——上行周几、下行 `月/日`（`周四` / `9/24`）；
+ * 趋势卡的横轴（AL/AM 轮）：按日窗口给两行——上行周几、下行 `月/日`（`周四` / `9/24`），
+ * 月统计不写周几（稀疏标签下周几是噪声）就只留 `月/日` 一行；
  * 超过两个月（[TWO_LINE_DAY_LIMIT]）退回单行月份（与分类详细页同口径，日号会重复）；
  * 年统计的月轴单行 `1月…12月`。每格都带按住浮层用的日期（[AxisLabel.tooltip]）。
  */
@@ -438,7 +439,7 @@ internal fun trendAxisLabels(axis: TrendAxis, today: LocalDate = LocalDate.now()
             val date = LocalDate.ofEpochDay(axis.startEpochDay + index)
             AxisLabel(
                 bottom = "${date.monthValue}/${date.dayOfMonth}",
-                top = AddDate.weekdayLabel(date),
+                top = if (axis.showWeekday) AddDate.weekdayLabel(date) else null,
                 tooltip = StatsPeriods.dayLabel(date.toEpochDay(), today),
             )
         }
