@@ -37,14 +37,18 @@ object StatsMath {
         )
     }
 
-    /** 分类占比（统计页首屏）：降序、topN 之后合并为「其他」，fraction 相对该类型总额。 */
+    /**
+     * 分类占比（统计页首屏）：按**一级分类**汇总（二级分类并进它的父分类，与参考图一致——
+     * 「食品餐饮 60.10%」含晚餐/午餐/早餐），降序、topN 之后合并为「其他」，
+     * fraction 相对该类型总额。无分类的行单列「未分类」。
+     */
     fun categoryTotals(
         rows: List<TxWithCategory>,
         type: TxType,
         topN: Int = 6,
     ): List<CategoryTotal> {
         val byCategory = rows.filter { it.type == type && !it.excludeFromStats }
-            .groupBy { it.categoryName ?: UNCATEGORIZED }
+            .groupBy { topLevelName(it) }
             .mapValues { (_, items) -> items.sumOf { it.amountCents } to items.size }
             .filterValues { (cents, _) -> cents > 0 }
         val total = byCategory.values.sumOf { it.first }
@@ -63,6 +67,10 @@ object StatsMath {
             result + CategoryTotal(OTHERS, restCents, restCount, restCents.toFloat() / total)
         }
     }
+
+    /** 行所属的一级分类名：二级分类并进父分类（与 [nodeRows] 的一级节点筛选同一口径）。 */
+    fun topLevelName(row: TxWithCategory): String =
+        row.categoryParentName ?: row.categoryName ?: UNCATEGORIZED
 
     /**
      * 下钻节点的流水：顶层节点（parent == null）含它自己的行 + 子分类的行；

@@ -88,6 +88,25 @@ class StatsMathTest {
         assertEquals(700L, totals.first { it.name == "未分类" }.cents)
     }
 
+    @Test
+    fun `category totals merge child categories into their top level parent`() {
+        // 参考图口径：「食品餐饮 60.10%」含晚餐/午餐；二级分类不在首屏单独占行
+        val rows = listOf(
+            row("1", "2026-10-01T10:00", 2000, name = "食品餐饮"),
+            row("2", "2026-10-02T10:00", 3000, name = "晚餐", parent = "食品餐饮"),
+            row("3", "2026-10-03T10:00", 4000, name = "午餐", parent = "食品餐饮"),
+            row("4", "2026-10-04T10:00", 1000, name = "水电煤", parent = "居家生活"),
+        )
+        val totals = StatsMath.categoryTotals(rows, TxType.EXPENSE)
+        assertEquals(listOf("食品餐饮", "居家生活"), totals.map { it.name })
+        assertEquals(listOf(9000L, 1000L), totals.map { it.cents })
+        assertEquals(listOf(3, 1), totals.map { it.count })
+        // 下钻口径一致：一级节点筛出来的行 == 首屏那一行
+        assertEquals(9000L, StatsMath.nodeRows(rows, TxType.EXPENSE, "食品餐饮", null).sumOf { it.amountCents })
+        assertEquals("食品餐饮", StatsMath.topLevelName(rows[1]))
+        assertEquals("未分类", StatsMath.topLevelName(row("9", "2026-10-09T10:00", 5, name = null)))
+    }
+
     // —— 下钻节点筛选 ——
 
     @Test
