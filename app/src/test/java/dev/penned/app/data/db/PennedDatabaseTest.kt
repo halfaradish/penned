@@ -189,6 +189,68 @@ class PennedDatabaseTest {
     }
 
     @Test
+    fun `account book refs widen visibility without changing the balance`() = runTest {
+        // D028：生效账本勾选多个账本 → 该账户在那些账本也可见；取消勾选即收窄；余额是钱包口径，不随可见性变
+        val bookA = DefaultSeed.seedIfEmpty(db, "device-a", now = 1000L)!!
+        val bookB = dev.penned.app.data.db.entity.BookEntity(
+            id = "book-b", name = "test", sortOrder = 1, createdAt = 2000L, updatedAt = 2000L, deviceId = "device-a",
+        )
+        val bookC = dev.penned.app.data.db.entity.BookEntity(
+            id = "book-c", name = "另一个", sortOrder = 2, createdAt = 2000L, updatedAt = 2000L, deviceId = "device-a",
+        )
+        db.bookDao().upsert(bookB)
+        db.bookDao().upsert(bookC)
+        db.accountDao().upsert(
+            AccountEntity(
+                id = "acc-1", bookId = bookA.id, name = "微信", type = AccountType.DEBIT,
+                initialBalanceCents = 10_000, createdAt = 1000L, updatedAt = 1000L, deviceId = "device-a",
+            )
+        )
+
+        // 只勾了 bookB
+        db.accountDao().upsertRefs(
+            listOf(
+                dev.penned.app.data.db.entity.AccountBookRefEntity(
+                    accountId = "acc-1", bookId = bookB.id, createdAt = 1L, updatedAt = 1L, deviceId = "d",
+                )
+            )
+        )
+        assertEquals(listOf("acc-1"), db.accountDao().observeWithBalance(bookA.id).first().map { it.id })
+        assertEquals(listOf("acc-1"), db.accountDao().observeWithBalance(bookB.id).first().map { it.id })
+        assertTrue(db.accountDao().observeWithBalance(bookC.id).first().isEmpty())
+
+        // 在 bookB 里花 12.00：两个账本看到的余额一致（同一个钱包）
+        db.transactionDao().upsert(
+            TransactionEntity(
+                id = "t-b", bookId = bookB.id, type = TxType.EXPENSE, amountCents = 1_200, accountId = "acc-1",
+                dateEpochMinute = 10, creatorDeviceId = "d", createdAt = 1L, updatedAt = 1L, deviceId = "d",
+            )
+        )
+        assertEquals(8_800L, db.accountDao().observeWithBalance(bookB.id).first().single().balanceCents)
+        assertEquals(8_800L, db.accountDao().observeWithBalance(bookA.id).first().single().balanceCents)
+
+        // 取消勾选 bookB → 那里看不到它了，余额不变
+        db.accountDao().clearRefs("acc-1", now = 2000L)
+        assertTrue(db.accountDao().observeWithBalance(bookB.id).first().isEmpty())
+        assertEquals(8_800L, db.accountDao().observeWithBalance(bookA.id).first().single().balanceCents)
+
+        // 重新勾选（先 clear 再 upsert 是幂等的：同一主键被覆盖回 deleted = 0）
+        db.accountDao().upsertRefs(
+            listOf(
+                dev.penned.app.data.db.entity.AccountBookRefEntity(
+                    accountId = "acc-1", bookId = bookB.id, createdAt = 3000L, updatedAt = 3000L, deviceId = "d",
+                )
+            )
+        )
+        assertEquals(listOf("acc-1"), db.accountDao().observeWithBalance(bookB.id).first().map { it.id })
+
+        // 删账本 → 引用级联软删
+        db.accountDao().softDeleteRefsByBook(bookB.id, now = 4000L)
+        assertEquals(emptyList<String>(), db.accountDao().bookIdsFor("acc-1"))
+        assertTrue(db.accountDao().observeWithBalance(bookB.id).first().isEmpty())
+    }
+
+    @Test
     fun `account transaction count covers both transfer legs and ignores deleted rows`() = runTest {
         val book = DefaultSeed.seedIfEmpty(db, "device-a", now = 1000L)!!
         fun tx(id: String, type: TxType, accountId: String?, targetAccountId: String? = null) = TransactionEntity(

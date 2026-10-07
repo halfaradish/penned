@@ -11,6 +11,18 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
     }
 }
 
+/** v4→v5：账户-生效账本多对多表（D028：生效账本可勾选多个账本）。 */
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `account_books` (`accountId` TEXT NOT NULL, `bookId` TEXT NOT NULL, " +
+                "`createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, " +
+                "`deviceId` TEXT NOT NULL, PRIMARY KEY(`accountId`, `bookId`))"
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_account_books_bookId` ON `account_books` (`bookId`)")
+    }
+}
+
 /** v3→v4：账户加备注与生效账本（D027：备注只作备忘；scopeAllBooks 默认 0 = 老账户仍只在自己账本可见）。 */
 val MIGRATION_3_4 = object : Migration(3, 4) {
     override fun migrate(db: SupportSQLiteDatabase) {

@@ -71,7 +71,7 @@ class MigrationTest {
             )
         }
         val real = Room.databaseBuilder(context, PennedDatabase::class.java, dbName)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
             .allowMainThreadQueries()
             .build()
         try {
@@ -112,7 +112,7 @@ class MigrationTest {
             )
         }
         val real = Room.databaseBuilder(context, PennedDatabase::class.java, dbName)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
             .allowMainThreadQueries()
             .build()
         try {
@@ -146,7 +146,7 @@ class MigrationTest {
             )
         }
         val real = Room.databaseBuilder(context, PennedDatabase::class.java, dbName)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
             .allowMainThreadQueries()
             .build()
         try {
@@ -159,6 +159,38 @@ class MigrationTest {
                 // 新列默认值：备注空、生效账本仍是"仅本账本"（老账户行为不变）
                 assertNull(account.remark)
                 assertFalse(account.scopeAllBooks)
+            }
+        } finally {
+            real.close()
+        }
+    }
+
+    @Test
+    fun `migrate 4 to 5 creates account book refs table and keeps data`() {
+        createLegacyDatabase(4) { db ->
+            db.execSQL(
+                "INSERT INTO books (id, name, sortOrder, createdAt, updatedAt, deleted, deviceId) " +
+                    "VALUES ('b1', '测试账本', 0, 1, 1, 0, 'd')"
+            )
+            db.execSQL(
+                "INSERT INTO accounts (id, bookId, name, type, groupName, initialBalanceCents, currencyCode, " +
+                    "archived, remark, scopeAllBooks, createdAt, updatedAt, deleted, deviceId) " +
+                    "VALUES ('a1', 'b1', '现金', 'CASH', NULL, 100000, 'CNY', 0, '尾号 6688', 0, 1, 1, 0, 'd')"
+            )
+        }
+        val real = Room.databaseBuilder(context, PennedDatabase::class.java, dbName)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            runTest {
+                // 旧数据保留（含 v4 新列的值）
+                val account = real.accountDao().get("a1")!!
+                assertEquals("现金", account.name)
+                assertEquals("尾号 6688", account.remark)
+                assertEquals(100_000L, real.accountDao().observeWithBalance("b1").first().single().balanceCents)
+                // 新表可用且初始为空：账户仍只在自己账本可见
+                assertEquals(emptyList<String>(), real.accountDao().bookIdsFor("a1"))
             }
         } finally {
             real.close()

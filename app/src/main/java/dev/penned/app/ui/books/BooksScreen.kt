@@ -121,6 +121,7 @@ class BooksViewModel(private val app: PennedApplication) : ViewModel() {
                 db.bookDao().softDelete(id, now)
                 db.transactionDao().softDeleteByBook(id, now)
                 db.accountDao().softDeleteByBook(id, now)
+                db.accountDao().softDeleteRefsByBook(id, now)
                 db.categoryDao().softDeleteByBook(id, now)
                 db.budgetDao().softDeleteByBook(id, now)
                 db.importBatchDao().softDeleteByBook(id, now)

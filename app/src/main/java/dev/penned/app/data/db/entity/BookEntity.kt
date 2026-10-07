@@ -31,10 +31,30 @@ data class AccountEntity(
     /** 备注（选填）。D027：只作个人备忘，不参与任何计算。 */
     val remark: String? = null,
     /**
-     * 生效账本（D027）：true = 每个账本都能看到该账户，余额按跨账本流水合并；
-     * false（默认，也是迁移前所有老账户的行为）= 只在 [bookId] 所属账本可见。
+     * 生效账本（D027/D028）：true = 每个账本都能看到该账户（含以后新建的）；
+     * false（默认，也是迁移前所有老账户的行为）= 只在 [bookId] 所属账本 + [AccountBookRefEntity] 里勾选的账本可见。
      */
     val scopeAllBooks: Boolean = false,
+    val createdAt: Long,
+    val updatedAt: Long,
+    val deleted: Boolean = false,
+    val deviceId: String,
+)
+
+/**
+ * 账户-生效账本多对多（D028）。
+ *
+ * 只在 `AccountEntity.scopeAllBooks = false` 时有意义：每行表示"该账户也在这个账本里可见"。
+ * 所属账本（`AccountEntity.bookId`）恒定可见、不进这张表。
+ */
+@Entity(
+    tableName = "account_books",
+    primaryKeys = ["accountId", "bookId"],
+    indices = [Index("bookId")],
+)
+data class AccountBookRefEntity(
+    val accountId: String,
+    val bookId: String,
     val createdAt: Long,
     val updatedAt: Long,
     val deleted: Boolean = false,
