@@ -12,8 +12,11 @@ import androidx.compose.material3.SwipeToDismissBoxDefaults
 import androidx.compose.material3.SwipeToDismissBoxState
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -26,7 +29,10 @@ import dev.penned.app.ui.theme.expenseColor
 import kotlinx.coroutines.launch
 
 /**
- * 左滑删除（D024 交互范式二）：滑到阈值即软删并触发一次触感。
+ * 左滑删除（D024 交互范式二，D031 起加二次确认）：滑到阈值先弹确认，确认后才软删并触发一次触感。
+ *
+ * 为什么要确认：滑一下就直接删太容易误伤（用户实测反馈"往左滑就直接删掉了，没有防护"），
+ * 底部的「撤销」条是事后补救，不能替代事前确认。批量删除（多选后点「删除」）是有意为之的动作，仍直接删 + 撤销。
  *
  * 两个坑：
  * - 行要自带 [rowBackground] 底色，不盖住会在没滑动时透出红底；
@@ -40,6 +46,8 @@ fun SwipeToDeleteRow(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
     rowBackground: Color = MaterialTheme.colorScheme.background,
+    confirmTitle: String = "确认删除？",
+    confirmSubject: String? = null,
     content: @Composable () -> Unit,
 ) {
     val haptics = LocalHapticFeedback.current
@@ -51,6 +59,7 @@ fun SwipeToDeleteRow(
             positionalThreshold = threshold,
         )
     }
+    var confirming by remember { mutableStateOf(false) }
     SwipeToDismissBox(
         state = state,
         modifier = modifier,
@@ -58,7 +67,7 @@ fun SwipeToDeleteRow(
         onDismiss = { value ->
             if (value == SwipeToDismissBoxValue.EndToStart) {
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                onDelete()
+                confirming = true
                 scope.launch { state.snapTo(SwipeToDismissBoxValue.Settled) }
             }
         },
@@ -77,5 +86,17 @@ fun SwipeToDeleteRow(
         },
     ) {
         Box(Modifier.fillMaxSize().background(rowBackground)) { content() }
+    }
+
+    if (confirming) {
+        ConfirmDialog(
+            onDismiss = { confirming = false },
+            title = confirmTitle,
+            text = listOfNotNull(confirmSubject, "删除后可在底部提示条里撤销").joinToString("\n"),
+            onConfirm = {
+                confirming = false
+                onDelete()
+            },
+        )
     }
 }

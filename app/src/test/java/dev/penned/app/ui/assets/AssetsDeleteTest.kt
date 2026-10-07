@@ -111,6 +111,9 @@ class AssetsDeleteTest {
         composeRule.onAllNodesWithText("138.00").assertCountEquals(3)
 
         composeRule.onNodeWithText("误建账户").performTouchInput { swipeLeft() }
+        // 左滑先弹二次确认（D031），确认后才删
+        composeRule.onNodeWithText("删除「误建账户」？").assertIsDisplayed()
+        composeRule.onNodeWithText("删除").performClick()
         composeRule.waitUntil(5_000) { count("误建账户") == 0 }
         composeRule.onNodeWithText("已删除 1 个账户").assertIsDisplayed()
         // 净资产跟着少掉被删账户的钱；库里是软删
@@ -133,6 +136,8 @@ class AssetsDeleteTest {
         launch(app)
 
         composeRule.onNodeWithText("在用账户").performTouchInput { swipeLeft() }
+        composeRule.onNodeWithText("删除「在用账户」？").assertIsDisplayed()
+        composeRule.onNodeWithText("删除").performClick()
         composeRule.waitUntil(5_000) { count("「在用账户」还有 1 笔流水，先处理流水再删除") == 1 }
         composeRule.waitForIdle()
         assertFalse(runBlocking { app.database.accountDao().get("acc-used")!!.deleted })

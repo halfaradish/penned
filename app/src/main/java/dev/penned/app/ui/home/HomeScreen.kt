@@ -351,6 +351,8 @@ fun HomeContent(
                                             SwipeToDeleteRow(
                                                 onDelete = { onDeleteRow(row.id) },
                                                 rowBackground = MaterialTheme.colorScheme.surface,
+                                                confirmTitle = "删除这条流水？",
+                                                confirmSubject = txSummary(row),
                                             ) {
                                                 TransactionRow(
                                                     row = row,

@@ -478,6 +478,9 @@ private fun AccountGroupCard(
                     SwipeToDeleteRow(
                         onDelete = { onDeleteAccount(account) },
                         rowBackground = MaterialTheme.colorScheme.surface,
+                        confirmTitle = "删除「${account.name}」？",
+                        // 藏金额时确认弹窗也不能漏出余额
+                        confirmSubject = "余额 " + (if (masked) MASK else Money.format(account.balanceCents)),
                     ) {
                         AccountRow(
                             account = account,
