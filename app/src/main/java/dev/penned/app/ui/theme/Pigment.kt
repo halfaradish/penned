@@ -7,7 +7,7 @@ import androidx.compose.ui.graphics.Color
  * 分类颜料盘（D024，取代 D019 的哈希色相）：
  * 八色等彩度等明度，落在同一视觉重量上，不再互相打架。
  * 分配按名字稳定哈希落槽（同名同色）；统计页环形图/占比条复用同一套。
- * 转账/未分类**不是分类**，走 [neutralLight]/[neutralDark] 的中性墨灰，与八色区分开。
+ * 转账/未分类/统计页的合并桶「其他」**不是分类**，走 [neutralLight]/[neutralDark] 的中性墨灰。
  */
 object PennedPigment {
 
@@ -35,16 +35,19 @@ object PennedPigment {
         Color(0xFFD6A3C0),
     )
 
-    /** 转账 / 未分类的中性色（不参与哈希）。 */
+    /** 转账 / 未分类 / 合并桶「其他」的中性色（不参与哈希）。 */
     val neutralLight = Color(0xFF586360)
     val neutralDark = Color(0xFFAEBAB6)
 
     const val TRANSFER = "转账"
     const val UNKNOWN = "未分类"
 
-    /** 落在八色里的返回 0..7；转账/未分类返回 -1（中性）。 */
+    /** 合并桶不是分类，配色与转账/未分类同待遇（AI 轮）。 */
+    const val OTHERS = dev.penned.app.domain.StatsMath.OTHERS
+
+    /** 落在八色里的返回 0..7；转账/未分类/「其他」返回 -1（中性）。 */
     fun slotOf(name: String): Int = when (name) {
-        TRANSFER, UNKNOWN, "?" -> -1
+        TRANSFER, UNKNOWN, OTHERS, "?" -> -1
         else -> (name.hashCode().toLong() and 0xFFFFFFFFL).rem(light.size.toLong()).toInt()
     }
 }

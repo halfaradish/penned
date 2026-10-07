@@ -29,6 +29,7 @@ class StatsViewModel(private val app: PennedApplication) : ViewModel() {
     data class UiState(
         val period: StatsPeriod = StatsPeriod.Month(YearMonth.now()),
         val window: StatsWindow = StatsPeriods.window(period),
+        val type: TxType = TxType.EXPENSE,
         val totals: StatsMath.PeriodTotals = StatsMath.PeriodTotals(0, 0),
         val expenseCategories: List<StatsMath.CategoryTotal> = emptyList(),
         val incomeCategories: List<StatsMath.CategoryTotal> = emptyList(),
@@ -38,6 +39,12 @@ class StatsViewModel(private val app: PennedApplication) : ViewModel() {
 
     /** 当前统计期（默认本月）。 */
     val period = MutableStateFlow<StatsPeriod>(StatsPeriod.Month(YearMonth.now()))
+
+    /**
+     * 占比/数据卡看的是支出还是收入。用户的选择在切期后保留
+     * （该侧本期没数据时卡内给提示，不自动抢用户的选择）。
+     */
+    val type = MutableStateFlow(TxType.EXPENSE)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val rows = combine(app.settings.currentBookId, period) { bookId, p -> bookId to p }
@@ -52,10 +59,11 @@ class StatsViewModel(private val app: PennedApplication) : ViewModel() {
         }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val state: StateFlow<UiState> = combine(rows, period) { rows, p ->
+    val state: StateFlow<UiState> = combine(rows, period, type) { rows, p, type ->
         UiState(
             period = p,
             window = StatsPeriods.window(p),
+            type = type,
             totals = StatsMath.totals(rows),
             expenseCategories = StatsMath.categoryTotals(rows, TxType.EXPENSE),
             incomeCategories = StatsMath.categoryTotals(rows, TxType.INCOME),
@@ -63,6 +71,10 @@ class StatsViewModel(private val app: PennedApplication) : ViewModel() {
             emptyTitle = StatsPeriods.emptyTitle(p),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState())
+
+    fun selectType(value: TxType) {
+        if (value == TxType.EXPENSE || value == TxType.INCOME) type.value = value
+    }
 
     /** 切时间维度：以当前期的最后一天为锚（点当前维度不自重置）。 */
     fun selectView(view: StatsView) {

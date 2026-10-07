@@ -8,6 +8,7 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import dev.penned.app.domain.StatsMath
 import dev.penned.app.domain.StatsPeriod
 import dev.penned.app.domain.StatsPeriods
+import dev.penned.app.domain.TxType
 import dev.penned.app.ui.theme.PennedTheme
 import org.junit.Rule
 import org.junit.Test
@@ -58,8 +59,57 @@ class StatsScreenScreenshotTest {
         composeRule.onNodeWithText("年统计").assertIsDisplayed()
         composeRule.onNodeWithText("自定义").assertIsDisplayed()
         composeRule.onNodeWithText("2026年10月").assertIsDisplayed()
-        composeRule.onNodeWithText("支出构成").assertIsDisplayed()
+        // 占比 + 数据合成切换式：默认支出侧，行里带笔数与占比
+        composeRule.onNodeWithText("支出占比").assertIsDisplayed()
+        composeRule.onNodeWithText("支出数据").assertIsDisplayed()
+        composeRule.onNodeWithText("110笔  48%").assertIsDisplayed()
+        // 收入不再是一整段卡片，只在卡头切换里出现
+        composeRule.onNodeWithText("收入构成").assertDoesNotExist()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/ai_stats_month.png")
+    }
+
+    @Test
+    fun captureStatsIncomeSide() {
+        composeRule.setContent {
+            PennedTheme {
+                StatsContent(
+                    period = StatsPeriod.Month(YearMonth.of(2026, 10)),
+                    window = StatsPeriods.window(StatsPeriod.Month(YearMonth.of(2026, 10)), today = today),
+                    totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 32300),
+                    expenseCategories = expenseCategories,
+                    incomeCategories = incomeCategories,
+                    type = TxType.INCOME,
+                    today = today,
+                )
+            }
+        }
+        // 切到收入：标题、环心、数据行整卡跟着换
+        composeRule.onNodeWithText("收入占比").assertIsDisplayed()
+        composeRule.onNodeWithText("总收入").assertIsDisplayed()
+        composeRule.onNodeWithText("收入数据").assertIsDisplayed()
+        composeRule.onNodeWithText("1笔  100%").assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/ai_stats_income.png")
+    }
+
+    @Test
+    fun captureStatsSideWithoutData() {
+        composeRule.setContent {
+            PennedTheme {
+                StatsContent(
+                    period = StatsPeriod.Month(YearMonth.of(2026, 10)),
+                    window = StatsPeriods.window(StatsPeriod.Month(YearMonth.of(2026, 10)), today = today),
+                    totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 0),
+                    expenseCategories = emptyList(),
+                    incomeCategories = incomeCategories,
+                    type = TxType.EXPENSE,
+                    today = today,
+                )
+            }
+        }
+        // 支出侧本期没数据：卡内给句话，切换器还在原处
+        composeRule.onNodeWithText("本期没有支出记录").assertIsDisplayed()
+        composeRule.onNodeWithText("支出占比").assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/ai_stats_empty_side.png")
     }
 
     @Test

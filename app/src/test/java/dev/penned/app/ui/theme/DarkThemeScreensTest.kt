@@ -210,7 +210,7 @@ class DarkThemeScreensTest {
                 incomeCategories = listOf(StatsMath.CategoryTotal("工资", 350000, 1, 1f)),
             )
         }
-        composeRule.onNodeWithText("支出构成").assertIsDisplayed()
+        composeRule.onNodeWithText("支出占比").assertIsDisplayed()
         capture("stats")
     }
 
