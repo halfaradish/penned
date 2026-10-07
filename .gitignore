@@ -20,3 +20,6 @@ Thumbs.db
 
 # local
 docs/local
+
+# agent 会话草稿（计划文件等，别进仓库）
+.zcode/
