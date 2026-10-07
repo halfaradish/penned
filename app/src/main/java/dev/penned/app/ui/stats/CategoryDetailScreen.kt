@@ -195,7 +195,7 @@ fun CategoryDetailContent(
                     StatsBarChartCard(
                         title = "${unit}统计",
                         bars = bars,
-                        xLabels = dayAxisLabels(startEpochDay, bars.size),
+                        xLabels = dayAxisLabels(startEpochDay, bars.size).asOneLineLabels(),
                         color = if (isExpense) expenseColor() else incomeColor(),
                     )
                 }

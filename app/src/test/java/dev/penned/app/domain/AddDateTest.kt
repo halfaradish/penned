@@ -20,6 +20,18 @@ class AddDateTest {
     }
 
     @Test
+    fun `weekday label maps all seven days`() {
+        // 2026-10-05 是周一，往后一周把七个值走全
+        val monday = LocalDate.of(2026, 10, 5)
+        assertEquals(
+            listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日"),
+            (0..6).map { AddDate.weekdayLabel(monday.plusDays(it.toLong())) },
+        )
+        // 跨年也对（2027-01-01 是周五）
+        assertEquals("周五", AddDate.weekdayLabel(LocalDate.of(2027, 1, 1)))
+    }
+
+    @Test
     fun `epoch minute uses current time with picked day`() {
         val now = ZonedDateTime.of(2026, 10, 6, 21, 5, 30, 0, zone)
         // 未选日期：当前分钟

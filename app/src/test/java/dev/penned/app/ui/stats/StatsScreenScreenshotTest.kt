@@ -12,6 +12,7 @@ import dev.penned.app.domain.StatsMath
 import dev.penned.app.domain.StatsPeriod
 import dev.penned.app.domain.StatsPeriods
 import dev.penned.app.domain.StatsStrip
+import dev.penned.app.domain.TrendAxis
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.theme.PennedTheme
 import org.junit.Rule
@@ -46,6 +47,12 @@ class StatsScreenScreenshotTest {
     /** 切换条的跨度起点：2024-03 起有流水，条会一直排到本月。 */
     private val earliest = YearMonth.of(2024, 3)
 
+    /** 按日柱高：只在给定下标放钱、其余补 0（截图里看着像真数据）。 */
+    private fun dailyBars(count: Int, vararg nonZero: Pair<Int, Long>): List<Long> =
+        List(count) { 0L }.toMutableList().also { bars -> nonZero.forEach { bars[it.first] = it.second } }
+
+    private fun dayAxis(startDay: LocalDate, count: Int) = TrendAxis.Days(startDay.toEpochDay(), count)
+
     private fun stripMonths(include: YearMonth? = null): List<YearMonth> =
         StatsStrip.months(earliest, YearMonth.from(today), include)
 
@@ -62,6 +69,9 @@ class StatsScreenScreenshotTest {
                     totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 32300),
                     expenseCategories = expenseCategories,
                     incomeCategories = incomeCategories,
+                    // 31 天按日柱：标签稀疏（每 6 根一个），横轴两行
+                    trendBars = dailyBars(31, 3 to 1600L, 11 to 3000L, 19 to 9500L, 28 to 4200L),
+                    trendAxis = dayAxis(LocalDate.of(2026, 10, 1), 31),
                     stripMonths = stripMonths(YearMonth.of(2026, 10)),
                     stripYears = stripYears(),
                     today = today,
@@ -78,6 +88,8 @@ class StatsScreenScreenshotTest {
         composeRule.onNodeWithText("本月").assertIsDisplayed()
         composeRule.onNodeWithText("上月").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("上一期").assertDoesNotExist()
+        // 趋势卡在汇总卡下方（在占比卡之前）
+        composeRule.onNodeWithText("支出趋势").assertIsDisplayed()
         // 占比 + 数据合成切换式：默认支出侧，行里带笔数与占比
         composeRule.onNodeWithText("支出占比").assertIsDisplayed()
         composeRule.onNodeWithText("支出数据").assertIsDisplayed()
@@ -99,6 +111,8 @@ class StatsScreenScreenshotTest {
                     totals = StatsMath.PeriodTotals(incomeCents = 0, expenseCents = 32300),
                     expenseCategories = expenseCategories,
                     incomeCategories = emptyList(),
+                    trendBars = dailyBars(31, 4 to 1580L, 17 to 3900L, 24 to 2200L),
+                    trendAxis = dayAxis(LocalDate.of(2025, 12, 1), 31),
                     stripMonths = stripMonths(YearMonth.of(2025, 12)),
                     stripYears = stripYears(),
                     today = today,
@@ -120,6 +134,9 @@ class StatsScreenScreenshotTest {
                     totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 32300),
                     expenseCategories = expenseCategories,
                     incomeCategories = incomeCategories,
+                    // 收入侧：一笔工资落在 10 号
+                    trendBars = dailyBars(31, 9 to 350000L),
+                    trendAxis = dayAxis(LocalDate.of(2026, 10, 1), 31),
                     type = TxType.INCOME,
                     today = today,
                 )
@@ -165,12 +182,18 @@ class StatsScreenScreenshotTest {
                     totals = StatsMath.PeriodTotals(incomeCents = 0, expenseCents = 32300),
                     expenseCategories = expenseCategories,
                     incomeCategories = emptyList(),
+                    // 近七日＝7 根日柱，横轴两行（周几 / 月/日）
+                    trendBars = listOf(0, 1600, 0, 0, 3000, 0, 250),
+                    trendAxis = TrendAxis.Days(LocalDate.of(2026, 10, 1).toEpochDay(), 7),
                     today = today,
                 )
             }
         }
-        // 近七日只报区间，没有翻页箭头
-        composeRule.onNodeWithText("10月1日–10月7日").assertIsDisplayed()
+        // 区间文案行已去掉（窗口信息由趋势卡横轴承担）
+        composeRule.onNodeWithText("10月1日–10月7日").assertDoesNotExist()
+        composeRule.onNodeWithText("支出趋势").assertIsDisplayed()
+        composeRule.onNodeWithText("周四").assertIsDisplayed()
+        composeRule.onNodeWithText("10/1").assertIsDisplayed()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/ai_stats_last7days.png")
     }
 
@@ -185,8 +208,9 @@ class StatsScreenScreenshotTest {
                     totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 32300),
                     expenseCategories = expenseCategories,
                     incomeCategories = incomeCategories,
-                    // 年统计的月度趋势：12 个月，只有 3 月与 10 月有数据
-                    monthlyBars = List(12) { 0L }.toMutableList().also { it[2] = 420000; it[9] = 32300 },
+                    // 年统计的趋势＝12 个月柱，只有 3 月与 10 月有数据
+                    trendBars = List(12) { 0L }.toMutableList().also { it[2] = 420000; it[9] = 32300 },
+                    trendAxis = TrendAxis.Months,
                     stripMonths = stripMonths(),
                     stripYears = stripYears(2026),
                     today = today,
@@ -197,7 +221,10 @@ class StatsScreenScreenshotTest {
         composeRule.onAllNodesWithText("2026").assertCountEquals(1)
         composeRule.onNodeWithText("2025").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("下一期").assertDoesNotExist()
-        composeRule.onNodeWithText("月度趋势").assertIsDisplayed()
+        // 趋势卡挪到汇总卡下方（不再是页面底部的「月度趋势」）
+        composeRule.onNodeWithText("支出趋势").assertIsDisplayed()
+        composeRule.onNodeWithText("月度趋势").assertDoesNotExist()
+        composeRule.onNodeWithText("1月").assertIsDisplayed()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/ai_stats_year.png")
     }
 
@@ -215,6 +242,9 @@ class StatsScreenScreenshotTest {
                     totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 32300),
                     expenseCategories = expenseCategories,
                     incomeCategories = incomeCategories,
+                    // 15 天区间：按日 15 根，横轴两行
+                    trendBars = List(15) { 0L }.toMutableList().also { it[3] = 1600; it[9] = 3000 },
+                    trendAxis = TrendAxis.Days(LocalDate.of(2026, 10, 1).toEpochDay(), 15),
                     today = today,
                 )
             }
@@ -224,6 +254,7 @@ class StatsScreenScreenshotTest {
         composeRule.onNodeWithText("10月1日").assertIsDisplayed()
         composeRule.onNodeWithText("结束").assertIsDisplayed()
         composeRule.onNodeWithText("10月15日").assertIsDisplayed()
+        composeRule.onNodeWithText("支出趋势").assertIsDisplayed()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/ai_stats_custom.png")
     }
 

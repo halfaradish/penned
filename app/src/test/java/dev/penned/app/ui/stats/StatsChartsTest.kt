@@ -1,5 +1,6 @@
 package dev.penned.app.ui.stats
 
+import dev.penned.app.domain.TrendAxis
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.LocalDate
@@ -54,5 +55,41 @@ class StatsChartsTest {
     @Test
     fun `month axis labels are twelve months`() {
         assertEquals(listOf("1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"), monthAxisLabels())
+    }
+
+    @Test
+    fun `trend axis uses two lines for short day windows`() {
+        // 近七日（2026-10-01 起）：上行周几、下行 月/日
+        val week = trendAxisLabels(TrendAxis.Days(LocalDate.of(2026, 10, 1).toEpochDay(), 7))
+        assertEquals(7, week.size)
+        assertEquals(AxisLabel(bottom = "10/1", top = "周四"), week.first())
+        assertEquals(AxisLabel(bottom = "10/7", top = "周三"), week.last())
+
+        // 跨月也照样两行（9/28 周一 … 10/4 周日）
+        val crossMonth = trendAxisLabels(TrendAxis.Days(LocalDate.of(2026, 9, 28).toEpochDay(), 7))
+        assertEquals(AxisLabel(bottom = "9/28", top = "周一"), crossMonth.first())
+        assertEquals(AxisLabel(bottom = "10/4", top = "周日"), crossMonth.last())
+    }
+
+    @Test
+    fun `trend axis falls back to one line month labels on long windows`() {
+        // 超过两个月：日号会重复，退回单行月份（与分类详细页同口径）
+        val year = trendAxisLabels(TrendAxis.Days(LocalDate.of(2026, 1, 1).toEpochDay(), 365))
+        assertEquals(365, year.size)
+        assertEquals(AxisLabel(bottom = "1月", top = null), year.first())
+        assertEquals(AxisLabel(bottom = "12月", top = null), year.last())
+
+        // 恰好 62 天仍是两行（2026-09-01 是周二）
+        val twoMonths = trendAxisLabels(TrendAxis.Days(LocalDate.of(2026, 9, 1).toEpochDay(), 62))
+        assertEquals("9/1", twoMonths.first().bottom)
+        assertEquals("周二", twoMonths.first().top)
+    }
+
+    @Test
+    fun `trend axis uses single line month labels for the year view`() {
+        val months = trendAxisLabels(TrendAxis.Months)
+        assertEquals(12, months.size)
+        assertEquals(AxisLabel(bottom = "1月", top = null), months.first())
+        assertEquals(AxisLabel(bottom = "12月", top = null), months.last())
     }
 }

@@ -1,6 +1,7 @@
 package dev.penned.app.ui.home
 
 import dev.penned.app.data.db.dao.TxWithCategory
+import dev.penned.app.domain.AddDate
 import dev.penned.app.domain.TxType
 import java.time.Instant
 import java.time.LocalDate
@@ -93,11 +94,8 @@ object HomeGroups {
             if (!sameYear) append(date.year).append('年')
             append(date.monthValue).append('月').append(date.dayOfMonth).append('日')
         }
-        return listOfNotNull(relative, datePart, weekLabel(date)).joinToString(" ")
+        return listOfNotNull(relative, datePart, AddDate.weekdayLabel(date)).joinToString(" ")
     }
-
-    /** 周几：周一…周日。 */
-    private fun weekLabel(date: LocalDate): String = "周" + "一二三四五六日"[date.dayOfWeek.value - 1]
 
     /** 月标题（卡片最上面一行）：`2026/10`，只到月、不补零、不带收支。 */
     fun monthLabel(year: Int, month: Int): String = "$year/$month"

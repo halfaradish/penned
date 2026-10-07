@@ -52,6 +52,9 @@ object AddDate {
         return LocalDate.ofEpochDay(targetDay).atTime(time.hour, time.minute).atZone(zone).toEpochSecond() / 60
     }
 
+    /** 周几：`周一`…`周日`（首页日头条与统计趋势图的横轴共用同一份映射）。 */
+    fun weekdayLabel(date: LocalDate): String = "周" + "一二三四五六日"[date.dayOfWeek.value - 1]
+
     /** LocalDate ↔ DatePicker 的 UTC 毫秒换算。 */
     fun dayToPickerMillis(epochDay: Long): Long = epochDay * 86_400_000L
 

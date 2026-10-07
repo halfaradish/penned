@@ -8,8 +8,10 @@ import dev.penned.app.domain.StatsMath
 import dev.penned.app.domain.StatsPeriod
 import dev.penned.app.domain.StatsPeriods
 import dev.penned.app.domain.StatsStrip
+import dev.penned.app.domain.StatsTrend
 import dev.penned.app.domain.StatsView
 import dev.penned.app.domain.StatsWindow
+import dev.penned.app.domain.TrendAxis
 import dev.penned.app.domain.TxType
 import java.time.Instant
 import java.time.YearMonth
@@ -39,8 +41,10 @@ class StatsViewModel(private val app: PennedApplication) : ViewModel() {
         val expenseCategories: List<StatsMath.CategoryTotal> = emptyList(),
         val incomeCategories: List<StatsMath.CategoryTotal> = emptyList(),
         val rows: List<TxWithCategory> = emptyList(),
-        /** 年统计的「月度趋势」：12 个月合计（别的维度用不上，留空）。 */
-        val monthlyBars: List<Long> = emptyList(),
+        /** 趋势卡的柱高（四个视图都有：按日 / 年统计按 12 个月），跟着 [type] 走。 */
+        val trendBars: List<Long> = emptyList(),
+        /** 趋势卡的横轴类型（按日窗口 / 年统计的 12 个月）。 */
+        val trendAxis: TrendAxis = TrendAxis.Months,
         val emptyTitle: String = StatsPeriods.emptyTitle(period),
         /** 时间切换条：月（新→旧，含选中月），月统计视图用。 */
         val stripMonths: List<YearMonth> = emptyList(),
@@ -91,19 +95,17 @@ class StatsViewModel(private val app: PennedApplication) : ViewModel() {
     @OptIn(ExperimentalCoroutinesApi::class)
     val state: StateFlow<UiState> = combine(rows, period, type, earliestMonth) { rows, p, type, earliest ->
         val asOf = YearMonth.now()
+        val window = StatsPeriods.window(p)
         UiState(
             period = p,
-            window = StatsPeriods.window(p),
+            window = window,
             type = type,
             totals = StatsMath.totals(rows),
             expenseCategories = StatsMath.categoryTotals(rows, TxType.EXPENSE),
             incomeCategories = StatsMath.categoryTotals(rows, TxType.INCOME),
             rows = rows,
-            monthlyBars = if (p is StatsPeriod.Year) {
-                StatsMath.monthlyTotals(rows, type, p.year)
-            } else {
-                emptyList()
-            },
+            trendBars = StatsTrend.bars(rows, type, p, window),
+            trendAxis = StatsTrend.axisOf(p, window),
             emptyTitle = StatsPeriods.emptyTitle(p),
             stripMonths = StatsStrip.months(earliest, asOf, include = (p as? StatsPeriod.Month)?.yearMonth),
             stripYears = StatsStrip.years(earliest, asOf, include = (p as? StatsPeriod.Year)?.year),

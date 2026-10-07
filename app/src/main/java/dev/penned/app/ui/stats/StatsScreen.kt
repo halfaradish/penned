@@ -36,8 +36,10 @@ import dev.penned.app.domain.Money
 import dev.penned.app.domain.StatsMath
 import dev.penned.app.domain.StatsPeriod
 import dev.penned.app.domain.StatsPeriods
+import dev.penned.app.domain.StatsTrend
 import dev.penned.app.domain.StatsView
 import dev.penned.app.domain.StatsWindow
+import dev.penned.app.domain.TrendAxis
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.components.EmptyState
 import dev.penned.app.ui.components.PennedCard
@@ -72,7 +74,8 @@ fun StatsScreen(
         expenseCategories = state.expenseCategories,
         incomeCategories = state.incomeCategories,
         emptyTitle = state.emptyTitle,
-        monthlyBars = state.monthlyBars,
+        trendBars = state.trendBars,
+        trendAxis = state.trendAxis,
         stripMonths = state.stripMonths,
         stripYears = state.stripYears,
         onSelectView = viewModel::selectView,
@@ -96,7 +99,8 @@ fun StatsContent(
     expenseCategories: List<StatsMath.CategoryTotal>,
     incomeCategories: List<StatsMath.CategoryTotal>,
     emptyTitle: String = "本期没有收支记录",
-    monthlyBars: List<Long> = emptyList(),
+    trendBars: List<Long> = emptyList(),
+    trendAxis: TrendAxis = TrendAxis.Months,
     stripMonths: List<YearMonth> = emptyList(),
     stripYears: List<Int> = emptyList(),
     type: TxType = TxType.EXPENSE,
@@ -201,6 +205,14 @@ fun StatsContent(
                 )
             }
         } else {
+            // 趋势卡坐落在汇总卡与占比卡之间（四个视图都有：按日 / 年统计按 12 个月），
+            // 跟着卡头的支出/收入切换走
+            StatsBarChartCard(
+                title = StatsTrend.title(type),
+                bars = trendBars,
+                xLabels = trendAxisLabels(trendAxis),
+                color = unitColor,
+            )
             StatsDonutCard(
                 title = "${unit}占比",
                 centerLabel = "总$unit",
@@ -218,16 +230,6 @@ fun StatsContent(
                     it.name != StatsMath.OTHERS && it.name != StatsMath.UNCATEGORIZED
                 },
                 onOpenCategory = { name -> onOpenCategory(CategoryTarget(type, name, parent = null)) },
-            )
-        }
-
-        // 年统计多一张「月度趋势」：同一套自绘柱状图，跟着上面的支出/收入切换走
-        if (period is StatsPeriod.Year) {
-            StatsBarChartCard(
-                title = "月度趋势",
-                bars = monthlyBars,
-                xLabels = monthAxisLabels(),
-                color = unitColor,
             )
         }
     }
@@ -289,8 +291,8 @@ fun StatsContent(
 private enum class RangeEnd { START, END }
 
 /**
- * 期选择行：月/年出**时间切换条**（可横滑，AK 轮替代箭头翻页）、近七日只报区间文案、
- * 自定义出两个日期 chip。
+ * 期选择行：月/年出**时间切换条**（可横滑，AK 轮替代箭头翻页）、自定义出两个日期 chip。
+ * 近七日**不出行**——窗口就是"含今天的 7 天"，区间信息交给趋势卡的横轴（`9/24`…）表达。
  */
 @Composable
 private fun PeriodSelector(
@@ -337,14 +339,7 @@ private fun PeriodSelector(
                 )
             }
         }
-        is StatsPeriod.Last7Days -> Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(PennedDimens.iconButton + PennedSpacing.sm),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(window.label, style = MaterialTheme.typography.titleMedium)
-        }
+        is StatsPeriod.Last7Days -> Unit
     }
 }
 
