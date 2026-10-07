@@ -114,17 +114,7 @@ fun StatsContent(
             .verticalScroll(rememberScrollState())
             .padding(bottom = PennedSpacing.xxl),
     ) {
-        // Tab 页页头（随内容滚走）：大标题 + 时间维度分段 + 期选择行
-        Text(
-            "统计",
-            style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier.padding(
-                start = PennedSpacing.lg,
-                end = PennedSpacing.lg,
-                top = PennedSpacing.md,
-                bottom = PennedSpacing.sm,
-            ),
-        )
+        // 时间维度分段直接当首行（2026-10-07：去掉冗余的「统计」页头大标题——底栏 Tab 已写着"统计"）
         PennedSegmentedTabs(
             options = StatsView.entries.toList(),
             selected = period.view,
@@ -132,7 +122,7 @@ fun StatsContent(
             label = { it.label },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = PennedSpacing.lg),
+                .padding(top = PennedSpacing.md, start = PennedSpacing.lg, end = PennedSpacing.lg),
         )
         PeriodSelector(
             period = period,
