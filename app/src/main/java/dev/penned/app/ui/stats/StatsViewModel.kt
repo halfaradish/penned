@@ -5,7 +5,8 @@ import androidx.lifecycle.viewModelScope
 import dev.penned.app.PennedApplication
 import dev.penned.app.data.db.dao.TxWithCategory
 import dev.penned.app.domain.BudgetMath
-import dev.penned.app.ui.home.HomeGroups
+import dev.penned.app.domain.StatsMath
+import dev.penned.app.domain.TxType
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -14,20 +15,19 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
-import java.time.LocalDate
 import java.time.YearMonth
 
 /**
  * 统计页第一版（specs/M1.md 第二批）：月汇总 + 分类占比 + 分类排行。
- * 聚合复用 HomeGroups（D004：从流水重算）。
+ * 聚合复用 domain/StatsMath（D004：从流水重算）；时间维度与切换式见 AI 轮。
  */
 class StatsViewModel(private val app: PennedApplication) : ViewModel() {
 
     data class UiState(
         val month: YearMonth = YearMonth.now(),
-        val totals: HomeGroups.MonthTotals = HomeGroups.MonthTotals(0, 0),
-        val expenseCategories: List<HomeGroups.CategoryTotal> = emptyList(),
-        val incomeCategories: List<HomeGroups.CategoryTotal> = emptyList(),
+        val totals: StatsMath.PeriodTotals = StatsMath.PeriodTotals(0, 0),
+        val expenseCategories: List<StatsMath.CategoryTotal> = emptyList(),
+        val incomeCategories: List<StatsMath.CategoryTotal> = emptyList(),
         val rows: List<TxWithCategory> = emptyList(),
     )
 
@@ -40,7 +40,7 @@ class StatsViewModel(private val app: PennedApplication) : ViewModel() {
                 flowOf(emptyList())
             } else {
                 val window = BudgetMath.monthWindowMinute(ym.year, ym.monthValue)
-                app.database.transactionDao().observeMonthTxsWithCategory(bookId, window.first, window.last)
+                app.database.transactionDao().observeRangeTxsWithCategory(bookId, window.first, window.last)
             }
         }
 
@@ -48,9 +48,9 @@ class StatsViewModel(private val app: PennedApplication) : ViewModel() {
     val state: StateFlow<UiState> = combine(rows, month) { rows, ym ->
         UiState(
             month = ym,
-            totals = HomeGroups.monthTotals(rows, ym.year, ym.monthValue),
-            expenseCategories = HomeGroups.categoryTotals(rows, dev.penned.app.domain.TxType.EXPENSE),
-            incomeCategories = HomeGroups.categoryTotals(rows, dev.penned.app.domain.TxType.INCOME),
+            totals = StatsMath.totals(rows),
+            expenseCategories = StatsMath.categoryTotals(rows, TxType.EXPENSE),
+            incomeCategories = StatsMath.categoryTotals(rows, TxType.INCOME),
             rows = rows,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState())

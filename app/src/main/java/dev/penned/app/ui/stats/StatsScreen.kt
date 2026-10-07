@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.penned.app.domain.Money
+import dev.penned.app.domain.StatsMath
 import dev.penned.app.ui.components.CategoryAvatar
 import dev.penned.app.ui.components.EmptyState
 import dev.penned.app.ui.components.MoneyText
@@ -75,9 +76,9 @@ fun StatsScreen(
 @Composable
 fun StatsContent(
     month: YearMonth,
-    totals: HomeGroups.MonthTotals,
-    expenseCategories: List<HomeGroups.CategoryTotal>,
-    incomeCategories: List<HomeGroups.CategoryTotal>,
+    totals: StatsMath.PeriodTotals,
+    expenseCategories: List<StatsMath.CategoryTotal>,
+    incomeCategories: List<StatsMath.CategoryTotal>,
     onPrevMonth: () -> Unit = {},
     onNextMonth: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -174,7 +175,7 @@ private fun SummaryCell(label: String, value: String, valueColor: Color, modifie
 @Composable
 private fun DonutSection(
     title: String,
-    categories: List<HomeGroups.CategoryTotal>,
+    categories: List<StatsMath.CategoryTotal>,
     totalCents: Long,
     totalColor: Color,
 ) {
@@ -288,7 +289,7 @@ private fun DonutSection(
 
 /** 环形图：每类一段，起于 12 点方向；分段间留 2° 缝。 */
 @Composable
-private fun DonutChart(categories: List<HomeGroups.CategoryTotal>, modifier: Modifier = Modifier) {
+private fun DonutChart(categories: List<StatsMath.CategoryTotal>, modifier: Modifier = Modifier) {
     // 颜色先在 composable 上下文里解析：Canvas 的 DrawScope lambda 不是 composable，读不了主题
     val colors = categories.map { categoryColor(it.name) }
     Canvas(modifier = modifier) {

@@ -7,7 +7,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
-import dev.penned.app.ui.home.HomeGroups
+import dev.penned.app.domain.StatsMath
 import dev.penned.app.ui.theme.PennedTheme
 import org.junit.Rule
 import org.junit.Test
@@ -31,15 +31,15 @@ class StatsScreenScreenshotTest {
             PennedTheme {
                 StatsContent(
                     month = YearMonth.of(2026, 10),
-                    totals = HomeGroups.MonthTotals(incomeCents = 350000, expenseCents = 32300),
+                    totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 32300),
                     expenseCategories = listOf(
-                        HomeGroups.CategoryTotal("食品餐饮", 15600, 0.483f),
-                        HomeGroups.CategoryTotal("购物消费", 9500, 0.294f),
-                        HomeGroups.CategoryTotal("出行交通", 4200, 0.13f),
-                        HomeGroups.CategoryTotal("其他", 3000, 0.093f),
+                        StatsMath.CategoryTotal("食品餐饮", 15600, 110, 0.483f),
+                        StatsMath.CategoryTotal("购物消费", 9500, 15, 0.294f),
+                        StatsMath.CategoryTotal("出行交通", 4200, 6, 0.13f),
+                        StatsMath.CategoryTotal("其他", 3000, 4, 0.093f),
                     ),
                     incomeCategories = listOf(
-                        HomeGroups.CategoryTotal("工资", 350000, 1f),
+                        StatsMath.CategoryTotal("工资", 350000, 1, 1f),
                     ),
                 )
             }
@@ -56,7 +56,7 @@ class StatsScreenScreenshotTest {
             PennedTheme {
                 StatsContent(
                     month = YearMonth.of(2026, 10),
-                    totals = HomeGroups.MonthTotals(0, 0),
+                    totals = StatsMath.PeriodTotals(0, 0),
                     expenseCategories = emptyList(),
                     incomeCategories = emptyList(),
                 )

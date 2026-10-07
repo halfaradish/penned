@@ -153,6 +153,10 @@ interface TransactionDao {
     )
     fun observeMonthSpendByCategory(bookId: String, fromMinute: Long, toMinute: Long): Flow<List<CategorySpend>>
 
+    /**
+     * 任意时间窗口（分钟，闭区间）的流水，统计页与分类详细页共用。
+     * 分组/汇总一律在 Kotlin 侧做（[dev.penned.app.domain.StatsMath]），这里只取窗口。
+     */
     @Query(
         """
         SELECT t.id AS id, t.type AS type, t.amountCents AS amountCents,
@@ -170,7 +174,7 @@ interface TransactionDao {
         ORDER BY t.dateEpochMinute DESC
         """
     )
-    fun observeMonthTxsWithCategory(bookId: String, fromMinute: Long, toMinute: Long): Flow<List<TxWithCategory>>
+    fun observeRangeTxsWithCategory(bookId: String, fromMinute: Long, toMinute: Long): Flow<List<TxWithCategory>>
 
     @Query("SELECT COUNT(*) FROM transactions")
     suspend fun count(): Int

@@ -11,6 +11,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.penned.app.PennedApplication
 import dev.penned.app.data.db.dao.TxWithCategory
+import dev.penned.app.domain.StatsMath
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.add.AddTransactionContent
 import dev.penned.app.ui.add.CategoryUi
@@ -198,13 +199,13 @@ class DarkThemeScreensTest {
         dark {
             StatsContent(
                 month = java.time.YearMonth.of(2026, 9),
-                totals = HomeGroups.MonthTotals(incomeCents = 350000, expenseCents = 295570),
+                totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 295570),
                 expenseCategories = listOf(
-                    HomeGroups.CategoryTotal("食品餐饮", 180000, 0.61f),
-                    HomeGroups.CategoryTotal("购物消费", 80000, 0.27f),
-                    HomeGroups.CategoryTotal("其他", 35570, 0.12f),
+                    StatsMath.CategoryTotal("食品餐饮", 180000, 110, 0.61f),
+                    StatsMath.CategoryTotal("购物消费", 80000, 15, 0.27f),
+                    StatsMath.CategoryTotal("其他", 35570, 4, 0.12f),
                 ),
-                incomeCategories = listOf(HomeGroups.CategoryTotal("工资", 350000, 1f)),
+                incomeCategories = listOf(StatsMath.CategoryTotal("工资", 350000, 1, 1f)),
             )
         }
         composeRule.onNodeWithText("支出构成").assertIsDisplayed()
