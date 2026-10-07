@@ -108,6 +108,13 @@ class HomeGroupsTest {
     }
 
     @Test
+    fun `month label is year slash month without padding`() {
+        assertEquals("2026/10", HomeGroups.monthLabel(2026, 10))
+        assertEquals("2026/1", HomeGroups.monthLabel(2026, 1))
+        assertEquals("2025/12", HomeGroups.monthLabel(2025, 12))
+    }
+
+    @Test
     fun `clock label is 24h zero padded`() {
         assertEquals("15:59", HomeGroups.clockLabel(minute("2026-10-06T15:59"), zone))
         assertEquals("00:05", HomeGroups.clockLabel(minute("2026-10-06T00:05"), zone))

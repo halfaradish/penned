@@ -60,6 +60,9 @@ enum class PennedCardSectionPosition { Top, Middle, Bottom, Single }
  * 画法：外框铺 outline 色、内缩一个发丝线的 surface 面；接缝那一侧不内缩（也就不画横线），
  * 于是多段拼起来仍读作一张卡，圆角只出现在顶/底段。
  *
+ * **圆角段必须够高**：Compose 会把圆角半径夹到短边的一半，4dp 高的封顶条上 16dp 圆角实际只画得出 2dp，
+ * 整张卡看着就是直角（首页月卡踩过这个坑）。顶段/底段要交给有内容、够高的那一行，别拿细条凑。
+ *
  * 注意：`modifier` 里的 padding 要放在调用方（圆角跟卡片走，间距留在卡片外）。
  */
 @Composable

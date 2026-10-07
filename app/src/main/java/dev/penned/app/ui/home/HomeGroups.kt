@@ -98,6 +98,9 @@ object HomeGroups {
     /** 周几：周一…周日。 */
     private fun weekLabel(date: LocalDate): String = "周" + "一二三四五六日"[date.dayOfWeek.value - 1]
 
+    /** 月标题（卡片最上面一行）：`2026/10`，只到月、不补零、不带收支。 */
+    fun monthLabel(year: Int, month: Int): String = "$year/$month"
+
     /** 流水行的时段（24 小时制、补零）：`09:05`。 */
     fun clockLabel(epochMinute: Long, zone: ZoneId = ZoneId.systemDefault()): String {
         val time = Instant.ofEpochSecond(epochMinute * 60).atZone(zone).toLocalTime()

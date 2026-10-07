@@ -135,12 +135,13 @@ class HomeScreenScreenshotTest {
     fun captureMonthCards() {
         composeRule.setContent { PennedTheme { HomeContent(bookName = "日常账本", rows = monthRows(), onAdd = {}) } }
         val today = LocalDate.now(zone)
-        val firstOfMonth = today.withDayOfMonth(1)
-        // 月卡没有标题行：本月这一卡的日头条不带年份
-        composeRule.onNodeWithText("${firstOfMonth.year}年", substring = true).assertDoesNotExist()
+        // 月标题行：只显示 yyyy/m
+        composeRule.onNodeWithText("${today.year}/${today.monthValue}").assertIsDisplayed()
+        // 年只在月标题里以 yyyy/m 出现——日头条的日期不带年份（本年）
+        composeRule.onNodeWithText("${today.year}年", substring = true).assertDoesNotExist()
         // 当日收入不为 0 → 日头条带「收」
         composeRule.onNodeWithText("收 3,000.00", substring = true).assertIsDisplayed()
-        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/af_home_month_cards.png")
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/ag_home_month_cards.png")
     }
 
     @Test

@@ -71,6 +71,7 @@ import dev.penned.app.ui.theme.expenseColor
 import dev.penned.app.ui.theme.incomeColor
 import dev.penned.app.ui.theme.primaryInkColor
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -286,21 +287,22 @@ fun HomeContent(
                             )
                         }
                     } else {
-                        // 一个月 = 一张卡（卡里没有标题行，月份靠卡片边界分）；卡由
-                        // 「顶段 + 日头条/行 + 底段」拼成，日头条吸顶时也带着卡片的边线。
+                        // 一个月 = 一张卡。卡由「月标题（顶段，扛圆角）+ 各日（吸顶日头条 + 行）+ 最后一行（底段，扛圆角）」拼成；
+                        // 圆角必须落在够高的段上，见 PennedCardSection 的注释。
                         val months = HomeGroups.groupByMonth(rows, zone)
                         months.forEach { month ->
-                            item(key = "month-top-${month.yearMonth}") {
+                            item(key = "month-title-${month.yearMonth}") {
                                 PennedCardSection(
                                     position = PennedCardSectionPosition.Top,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = PennedSpacing.lg),
                                 ) {
-                                    Spacer(Modifier.height(PennedSpacing.xs))
+                                    MonthTitleRow(month.yearMonth)
                                 }
                             }
-                            month.days.forEach { day ->
+                            month.days.forEachIndexed { dayIndex, day ->
+                                val isLastDay = dayIndex == month.days.lastIndex
                                 stickyHeader(key = "day-${day.epochDay}") {
                                     PennedCardSection(
                                         position = PennedCardSectionPosition.Middle,
@@ -317,12 +319,25 @@ fun HomeContent(
                                 }
                                 itemsIndexed(day.items, key = { _, row -> row.id }) { rowIndex, row ->
                                     val isLastRowOfDay = rowIndex == day.items.lastIndex
+                                    val isLastRowOfCard = isLastDay && isLastRowOfDay
                                     PennedCardSection(
-                                        position = PennedCardSectionPosition.Middle,
+                                        position = if (isLastRowOfCard) {
+                                            PennedCardSectionPosition.Bottom
+                                        } else {
+                                            PennedCardSectionPosition.Middle
+                                        },
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .animateItem()
-                                            .padding(horizontal = PennedSpacing.lg),
+                                            .padding(horizontal = PennedSpacing.lg)
+                                            // 卡间距 12：留在卡片外，圆角贴着卡边走
+                                            .then(
+                                                if (isLastRowOfCard) {
+                                                    Modifier.padding(bottom = PennedSpacing.md)
+                                                } else {
+                                                    Modifier
+                                                }
+                                            ),
                                     ) {
                                         if (selectionMode) {
                                             TransactionRow(
@@ -354,18 +369,6 @@ fun HomeContent(
                                             }
                                         }
                                     }
-                                }
-                            }
-                            item(key = "month-bottom-${month.yearMonth}") {
-                                PennedCardSection(
-                                    position = PennedCardSectionPosition.Bottom,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = PennedSpacing.lg)
-                                        // 卡间距 12：留在卡片外，圆角贴着卡边走
-                                        .padding(bottom = PennedSpacing.md),
-                                ) {
-                                    Spacer(Modifier.height(PennedSpacing.xs))
                                 }
                             }
                         }
@@ -469,6 +472,25 @@ private fun HomeAddFab(visible: Boolean, onClick: () -> Unit, modifier: Modifier
             Icon(PennedIcons.Plus, contentDescription = "记一笔")
         }
     }
+}
+
+/** 月标题（卡片最上面一行）：只显示 `yyyy/m`，不带收支（用户裁决）。 */
+@Composable
+private fun MonthTitleRow(yearMonth: YearMonth, modifier: Modifier = Modifier) {
+    Text(
+        text = HomeGroups.monthLabel(yearMonth.year, yearMonth.monthValue),
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+        // 上宽下窄：标题压住下面的日头条，不留一段空
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(
+                start = PennedSpacing.lg,
+                end = PennedSpacing.lg,
+                top = PennedSpacing.md,
+                bottom = PennedSpacing.sm,
+            ),
+    )
 }
 
 /** 月汇总卡：支出/收入/结余三列（标签一行 + 数值一行）。 */

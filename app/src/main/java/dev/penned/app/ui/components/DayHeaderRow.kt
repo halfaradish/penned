@@ -21,11 +21,15 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.penned.app.domain.Money
 import dev.penned.app.ui.theme.PennedSpacing
+import dev.penned.app.ui.theme.primaryInkColor
 
 /**
- * 日期分组头（首页月卡 / 搜索结果共用）：灰底 + 左侧青绿竖条，
+ * 日期分组头（首页月卡 / 搜索结果共用）：青绿浅底（`primaryContainer`）+ 左侧 `primaryInk` 竖条，
  * 左边「今天 10月6日 周二」、右边「收 X 支 Y」——某侧为 0 就整段不显示（参考图口径）。
  * 底色不透明：吸顶（stickyHeader）时靠它盖住下面滚上来的行。
+ *
+ * 底色用 `primaryContainer` 而不是中性层：中性灰（`surfaceContainer` #EAF0EE）与白卡只差 ~4% 亮度，
+ * 真机上跟卡面糊在一起分不出边界；换成不同色相的青绿浅底才一眼能认。
  */
 @Composable
 fun DayHeaderRow(
@@ -37,24 +41,29 @@ fun DayHeaderRow(
     Row(
         modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceContainer)
-            .padding(start = PennedSpacing.lg, end = PennedSpacing.lg, top = PennedSpacing.sm, bottom = PennedSpacing.sm),
+            .background(MaterialTheme.colorScheme.primaryContainer)
+            // 上下只留 4dp：日头条要压得住，别把版面吃掉
+            .padding(start = PennedSpacing.lg, end = PennedSpacing.lg, top = PennedSpacing.xs, bottom = PennedSpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             Modifier
                 .size(width = 3.dp, height = 16.dp)
                 .clip(RoundedCornerShape(percent = 50))
-                .background(MaterialTheme.colorScheme.primary),
+                .background(primaryInkColor()),
         )
         Spacer(Modifier.width(PennedSpacing.sm))
-        Text(label, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+        Text(
+            label,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
         Spacer(Modifier.weight(1f))
         DayTotals(incomeCents, expenseCents)
     }
 }
 
-/** 日合计：`收`/`支` 前缀用更小更弱的一档，数字等宽；某侧为 0 就不出现。 */
+/** 日合计：`收`/`支` 前缀用更小的一档，数字等宽；某侧为 0 就不出现。 */
 @Composable
 private fun DayTotals(incomeCents: Long, expenseCents: Long, modifier: Modifier = Modifier) {
     val segments = buildList {
@@ -62,7 +71,8 @@ private fun DayTotals(incomeCents: Long, expenseCents: Long, modifier: Modifier 
         if (expenseCents != 0L) add("支" to Money.format(expenseCents))
     }
     if (segments.isEmpty()) return
-    val weak = MaterialTheme.colorScheme.onSurfaceVariant
+    // 弱化靠透明而不是换色：底是青绿，换中性灰会发脏
+    val weak = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
     val prefixStyle = SpanStyle(
         fontSize = MaterialTheme.typography.labelSmall.fontSize,
         fontWeight = MaterialTheme.typography.labelSmall.fontWeight,
