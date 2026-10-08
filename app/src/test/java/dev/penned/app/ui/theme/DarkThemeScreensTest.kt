@@ -86,7 +86,7 @@ class DarkThemeScreensTest {
                 onAdd = {},
             )
         }
-        // 合并卡：月汇总与预算同卡（文案从"本月支出"简化为"支出"）
+        // 本月卡头部展开态（AQ 轮：月汇总＋预算块进了月卡，不再是顶部单独的合并卡）
         composeRule.onNodeWithText("支出").assertIsDisplayed()
         composeRule.onNodeWithText("结余").assertIsDisplayed()
         composeRule.onNodeWithText("转账 · 转入 储蓄卡").assertIsDisplayed()
@@ -348,7 +348,9 @@ class DarkThemeScreensTest {
         amountCents = cents,
         accountId = null,
         categoryId = null,
-        dateEpochMinute = LocalDate.of(2026, 10, 4).atTime(19, 0).atZone(ZoneId.systemDefault()).toEpochSecond() / 60,
+        // 固定在本月 4 日：月汇总块只在"本月"那张卡上默认展开（AQ 轮），写死月份会在跨月后让断言失效
+        dateEpochMinute = LocalDate.now(ZoneId.systemDefault()).withDayOfMonth(1).plusDays(3)
+            .atTime(19, 0).atZone(ZoneId.systemDefault()).toEpochSecond() / 60,
         note = null,
         categoryName = name,
         categoryParentName = parent,
