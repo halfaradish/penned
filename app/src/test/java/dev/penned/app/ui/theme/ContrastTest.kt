@@ -67,6 +67,10 @@ class ContrastTest {
             over(OnPrimaryContainerLight, PrimaryContainerLight, 0.85f),
             PrimaryContainerLight,
         )
+        // 日头条：极淡青灰底 + 墨色日期 + 次要色收支 + 深青竖条（RA 轮 D045）
+        add("日头条 onSurface / 底", OnSurfaceLight, DayHeaderLight)
+        add("日头条 onSurfaceVariant / 底", OnSurfaceVariantLight, DayHeaderLight)
+        add("日头条 竖条 primaryInk / 底", PrimaryInkLight, DayHeaderLight)
         add("expense / surface", ExpenseLight, SurfaceLight)
         add("expense / background", ExpenseLight, BackgroundLight)
         add("income / surface", IncomeLight, SurfaceLight)
@@ -96,6 +100,9 @@ class ContrastTest {
             over(OnPrimaryContainerDark, PrimaryContainerDark, 0.85f),
             PrimaryContainerDark,
         )
+        add("日头条 onSurface / 底（深）", OnSurfaceDark, DayHeaderDark)
+        add("日头条 onSurfaceVariant / 底（深）", OnSurfaceVariantDark, DayHeaderDark)
+        add("日头条 竖条 primaryInk / 底（深）", PrimaryInkDark, DayHeaderDark)
         add("expense / surface（深）", ExpenseDark, SurfaceDark)
         add("expense / background（深）", ExpenseDark, BackgroundDark)
         add("income / surface（深）", IncomeDark, SurfaceDark)
@@ -112,7 +119,7 @@ class ContrastTest {
             add("颜料$i 浅 ink / surface", ink, SurfaceLight)
             add("颜料$i 浅 ink / background", ink, BackgroundLight)
             add(
-                "颜料$i 浅 ink / 12% 淡底",
+                "颜料$i 浅 ink / 8% 淡底",
                 ink,
                 over(ink, SurfaceLight, PennedPigment.TINT_ALPHA_LIGHT),
             )
@@ -120,21 +127,21 @@ class ContrastTest {
         add("中性颜料 浅 / surface", PennedPigment.neutralLight, SurfaceLight)
         add("中性颜料 浅 / background", PennedPigment.neutralLight, BackgroundLight)
         add(
-            "中性颜料 浅 / 12% 淡底",
+            "中性颜料 浅 / 8% 淡底",
             PennedPigment.neutralLight,
             over(PennedPigment.neutralLight, SurfaceLight, PennedPigment.TINT_ALPHA_LIGHT),
         )
         PennedPigment.dark.forEachIndexed { i, ink ->
             add("颜料$i 深 ink / surface", ink, SurfaceDark)
             add(
-                "颜料$i 深 ink / 22% 淡底",
+                "颜料$i 深 ink / 14% 淡底",
                 ink,
                 over(ink, SurfaceDark, PennedPigment.TINT_ALPHA_DARK),
             )
         }
         add("中性颜料 深 / surface", PennedPigment.neutralDark, SurfaceDark)
         add(
-            "中性颜料 深 / 22% 淡底",
+            "中性颜料 深 / 14% 淡底",
             PennedPigment.neutralDark,
             over(PennedPigment.neutralDark, SurfaceDark, PennedPigment.TINT_ALPHA_DARK),
         )
@@ -192,23 +199,25 @@ class ContrastTest {
             hex(ExpenseDark) to "#F28B82",
             hex(IncomeDark) to "#55C9B6",
             hex(ErrorDark) to "#F2B8B5",
+            hex(DayHeaderLight) to "#EDF3F1",
+            hex(DayHeaderDark) to "#1C2523",
             // 分类颜料盘（第四节八槽 + 中性两档）
-            hex(PennedPigment.light[0]) to "#B0234F",
-            hex(PennedPigment.light[1]) to "#B93C0B",
-            hex(PennedPigment.light[2]) to "#0E7A50",
-            hex(PennedPigment.light[3]) to "#0E7490",
-            hex(PennedPigment.light[4]) to "#7B3FC4",
-            hex(PennedPigment.light[5]) to "#3F4FC9",
-            hex(PennedPigment.light[6]) to "#A21CAF",
-            hex(PennedPigment.light[7]) to "#8F6205",
-            hex(PennedPigment.dark[0]) to "#F2A0BE",
-            hex(PennedPigment.dark[1]) to "#F5B183",
-            hex(PennedPigment.dark[2]) to "#7EDCB0",
-            hex(PennedPigment.dark[3]) to "#7FD4EC",
-            hex(PennedPigment.dark[4]) to "#C9A8F0",
-            hex(PennedPigment.dark[5]) to "#A3B0F5",
-            hex(PennedPigment.dark[6]) to "#EFA0DC",
-            hex(PennedPigment.dark[7]) to "#E5C878",
+            hex(PennedPigment.light[0]) to "#9E3556",
+            hex(PennedPigment.light[1]) to "#9B4929",
+            hex(PennedPigment.light[2]) to "#22664C",
+            hex(PennedPigment.light[3]) to "#286576",
+            hex(PennedPigment.light[4]) to "#7B43C0",
+            hex(PennedPigment.light[5]) to "#4655C2",
+            hex(PennedPigment.light[6]) to "#8F3398",
+            hex(PennedPigment.light[7]) to "#806630",
+            hex(PennedPigment.dark[0]) to "#E4AEC2",
+            hex(PennedPigment.dark[1]) to "#E3B595",
+            hex(PennedPigment.dark[2]) to "#84D6B0",
+            hex(PennedPigment.dark[3]) to "#91CADA",
+            hex(PennedPigment.dark[4]) to "#CAB3E6",
+            hex(PennedPigment.dark[5]) to "#B3BBE6",
+            hex(PennedPigment.dark[6]) to "#E3ACD6",
+            hex(PennedPigment.dark[7]) to "#D7C594",
             hex(PennedPigment.neutralLight) to "#5F6672",
             hex(PennedPigment.neutralDark) to "#A8AEBA",
         )

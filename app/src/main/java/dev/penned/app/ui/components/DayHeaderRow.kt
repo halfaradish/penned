@@ -29,8 +29,10 @@ import dev.penned.app.ui.theme.primaryInkColor
  * 左边「今天 10月6日 周二」、右边「收 X 支 Y」——某侧为 0 就整段不显示（参考图口径）。
  * 底色不透明：吸顶（stickyHeader）时靠它盖住下面滚上来的行。
  *
- * 底色用 `primaryContainer` 而不是中性层：中性灰与白卡只差 ~4% 亮度，
- * 真机上跟卡面糊在一起分不出边界；换成不同色相的青绿浅底才一眼能认。
+ * 底色是**极淡青灰**（`surfaceContainerLow`，彩度 6%）：RA 轮之前是 `primaryContainer`
+ * （彩度 30%）整条铺开，用户反馈"太艳、太明亮"。现在"一眼能认"靠三件事一起兜：
+ * 3dp 深青竖条（唯一的小面积色相）+ 墨色日期（字重 titleSmall）+ 比白卡低一档的极淡底。
+ * 若哪天觉得与白卡分不清了，先加 1dp 顶部分隔线，再考虑把底再深一档。
  */
 @Composable
 fun DayHeaderRow(
@@ -42,7 +44,7 @@ fun DayHeaderRow(
     Row(
         modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.primaryContainer)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
             // 上下只留 4dp：日头条要压得住，别把版面吃掉
             .padding(start = PennedSpacing.lg, end = PennedSpacing.lg, top = PennedSpacing.xs, bottom = PennedSpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
@@ -57,7 +59,7 @@ fun DayHeaderRow(
         Text(
             label,
             style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.weight(1f))
         DayTotals(incomeCents, expenseCents)
@@ -72,9 +74,8 @@ private fun DayTotals(incomeCents: Long, expenseCents: Long, modifier: Modifier 
         if (expenseCents != 0L) add("支" to Money.format(expenseCents))
     }
     if (segments.isEmpty()) return
-    // 弱化靠透明而不是换色：底是青绿，换中性灰会发脏。
-    // 85% 是下限——70% 时对比度只有 4.31:1（不足 4.5），见界面规范第三节
-    val weak = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+    // RA 轮起底色是极淡青灰，弱化直接用次要文字色（5.4:1），不再靠 alpha
+    val weak = MaterialTheme.colorScheme.onSurfaceVariant
     val prefixStyle = SpanStyle(
         fontSize = MaterialTheme.typography.labelSmall.fontSize,
         fontWeight = MaterialTheme.typography.labelSmall.fontWeight,

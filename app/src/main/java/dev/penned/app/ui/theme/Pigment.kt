@@ -14,7 +14,8 @@ import androidx.compose.ui.graphics.Color
 object PennedPigment {
 
     /**
-     * 浅色：作实心 ink 或深色字都成立（白底 5.18~6.62:1，自家 12% 淡底上 ≥4.53:1）。
+     * 浅色：作实心 ink 或深色字都成立（白底 4.88~6.83:1，自家 8% 淡底上 ≥4.90:1）。
+     * RA 轮降饱和（D045）：彩度压到 ≤50%（暖色 ≤58%），金色额外提亮一档避免发棕（"沙金"）。
      *
      * **槽位顺序不是色相顺序**——哈希落槽决定了"哪几个真实分类会同屏"，所以槽位与色相要错开配：
      * AR 轮实测发现，按色相排（…紫 267 / 洋红 295）会让「晚餐」与「工资」这两个最常用的分类
@@ -22,35 +23,39 @@ object PennedPigment {
      * 真实分类名落到的槽位两两最小色相差 46°（详见 `docs/界面规范.md` 第四节）。
      */
     val light: List<Color> = listOf(
-        Color(0xFFB0234F), // 0 玫红 341°（食品餐饮/出行交通/休闲娱乐/文化教育/午餐/其他 落这里）
-        Color(0xFFB93C0B), // 1 橙   17°
-        Color(0xFF0E7A50), // 2 翠  157°（休闲零食/转账）
-        Color(0xFF0E7490), // 3 青  193°
-        Color(0xFF7B3FC4), // 4 紫  267°
-        Color(0xFF3F4FC9), // 5 靛  233°（购物消费/居家生活）
-        Color(0xFFA21CAF), // 6 洋红 295°（晚餐）
-        Color(0xFF8F6205), // 7 金   40°（工资/早餐）
+        Color(0xFF9E3556), // 0 玫红 341° 彩度 50%（食品餐饮/出行交通/休闲娱乐/文化教育/午餐/其他 落这里）
+        Color(0xFF9B4929), // 1 橙   17° 彩度 58%
+        Color(0xFF22664C), // 2 翠  157° 彩度 50%（休闲零食/转账）
+        Color(0xFF286576), // 3 青  193° 彩度 49%
+        Color(0xFF7B43C0), // 4 紫  267° 彩度 50%
+        Color(0xFF4655C2), // 5 靛  233° 彩度 50%（购物消费/居家生活）
+        Color(0xFF8F3398), // 6 洋红 295° 彩度 50%（晚餐）
+        Color(0xFF806630), // 7 金   40° 彩度 45%（工资/早餐）
     )
 
-    /** 深色：提亮一档，作 ink 在暗底上均 ≥ 8:1、在 22% 淡底上 ≥5.3:1（顺序同 [light]）。 */
+    /** 深色：提亮一档，作 ink 在暗底上均 ≥ 9:1、在 14% 淡底上 ≥6.9:1（顺序同 [light]）。 */
     val dark: List<Color> = listOf(
-        Color(0xFFF2A0BE),
-        Color(0xFFF5B183),
-        Color(0xFF7EDCB0),
-        Color(0xFF7FD4EC),
-        Color(0xFFC9A8F0),
-        Color(0xFFA3B0F5),
-        Color(0xFFEFA0DC),
-        Color(0xFFE5C878),
+        Color(0xFFE4AEC2),
+        Color(0xFFE3B595),
+        Color(0xFF84D6B0),
+        Color(0xFF91CADA),
+        Color(0xFFCAB3E6),
+        Color(0xFFB3BBE6),
+        Color(0xFFE3ACD6),
+        Color(0xFFD7C594),
     )
 
     /** 转账 / 未分类 / 合并桶「其他」的中性色（不参与哈希）。 */
     val neutralLight = Color(0xFF5F6672)
     val neutralDark = Color(0xFFA8AEBA)
 
-    /** 淡底透明度：浅色 12% / 深色 22%（深色给不足会糊成灰）。 */
-    const val TINT_ALPHA_LIGHT = 0.12f
-    const val TINT_ALPHA_DARK = 0.22f
+    /**
+     * 淡底透明度：浅色 8% / 深色 14%。
+     * RA 轮从 12%/22% 收紧——头像原先是"一块淡色圆"（用户反馈"太艳、太明亮"），
+     * 收紧后是"几乎无色的一圈 + 灰调字形"，分类身份主要靠字形颜色表达。
+     */
+    const val TINT_ALPHA_LIGHT = 0.08f
+    const val TINT_ALPHA_DARK = 0.14f
 
     const val TRANSFER = "转账"
     const val UNKNOWN = "未分类"

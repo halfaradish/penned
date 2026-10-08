@@ -38,6 +38,12 @@ val SurfaceContainerHighLight = Color(0xFFE7EAEF)
 /** 强边界（开关轨道、禁用态）。**装饰性**——按 1.4.11 不承担识别职责，别拿它画有含义的图标。 */
 val OutlineLight = Color(0xFFD5D8DE)
 
+/**
+ * 日头条底（RA 轮 D045）：极淡的青灰——彩度 6%，只是"比白卡低一档"的暗示。
+ * 上一版用 `primaryContainer`（彩度 30%）整条铺开，用户反馈"太艳、太明亮"。
+ */
+val DayHeaderLight = Color(0xFFEDF3F1)
+
 /** 卡片内的行分隔线（卡片本身不描边，D043 原则二）。 */
 val OutlineVariantLight = Color(0xFFEEEFF2)
 
@@ -55,6 +61,9 @@ val PrimaryInkDark = Color(0xFF55C9B6)
 val OnPrimaryDark = Color(0xFF00332C)
 val PrimaryContainerDark = Color(0xFF134E48)
 val OnPrimaryContainerDark = Color(0xFFA8E6DA)
+
+/** 深色日头条底：只比 `surface` 高一档的青灰，不再是深青带。 */
+val DayHeaderDark = Color(0xFF1C2523)
 
 /** 深色下"比卡片再亮一档"的表面（分段控件的选中滑块、需要浮起感的小件）。 */
 val SurfaceBrightDark = Color(0xFF2C3136)
