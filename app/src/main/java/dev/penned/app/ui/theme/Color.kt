@@ -56,6 +56,9 @@ val OnPrimaryDark = Color(0xFF00332C)
 val PrimaryContainerDark = Color(0xFF134E48)
 val OnPrimaryContainerDark = Color(0xFFA8E6DA)
 
+/** 深色下"比卡片再亮一档"的表面（分段控件的选中滑块、需要浮起感的小件）。 */
+val SurfaceBrightDark = Color(0xFF2C3136)
+
 /** 深色不玩纯黑，靠"表面提亮"表达层级。 */
 val BackgroundDark = Color(0xFF0F1113)
 val OnBackgroundDark = Color(0xFFE7E9EC)

@@ -9,7 +9,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.penned.app.ui.theme.PennedDimens
@@ -21,7 +20,7 @@ import dev.penned.app.ui.theme.pigmentTint
 import dev.penned.app.ui.theme.pigmentTintAt
 
 /**
- * 分类头像：颜料 tint 底 + 颜料 ink 首字。
+ * 分类头像：颜料 tint 底 + 颜料 ink 首字（淡底 12% 浅 / 22% 深，见 D043）。
  * 取代首页/统计/资产/分类管理四处各画一遍的"哈希实心圆 + 白字"。
  * [slot] 给账户这类"按类型固定上色"的场景用；不传则按名字哈希取色。
  */
@@ -38,8 +37,9 @@ fun CategoryAvatar(
     val bg = if (selected) ink else if (slot != null) pigmentTintAt(slot) else pigmentTint(name)
     val fg = when {
         !selected -> ink
-        isDarkTheme() -> Color(0xFF0E1211)
-        else -> Color.White
+        // 选中态是实心 ink 底：浅色主题用白字，深色主题用底色（深色盘是提亮过的浅色 ink）
+        isDarkTheme() -> MaterialTheme.colorScheme.background
+        else -> MaterialTheme.colorScheme.surface
     }
     Box(
         modifier = modifier.size(size).background(bg, CircleShape),
@@ -47,7 +47,11 @@ fun CategoryAvatar(
     ) {
         Text(
             text = glyph ?: defaultGlyph(name),
-            style = if (size >= 40.dp) MaterialTheme.typography.titleMedium else MaterialTheme.typography.labelLarge,
+            style = if (size >= PennedDimens.avatarLarge) {
+                MaterialTheme.typography.titleMedium
+            } else {
+                MaterialTheme.typography.labelLarge
+            },
             color = fg,
         )
     }

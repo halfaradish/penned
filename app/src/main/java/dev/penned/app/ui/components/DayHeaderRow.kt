@@ -28,7 +28,7 @@ import dev.penned.app.ui.theme.primaryInkColor
  * 左边「今天 10月6日 周二」、右边「收 X 支 Y」——某侧为 0 就整段不显示（参考图口径）。
  * 底色不透明：吸顶（stickyHeader）时靠它盖住下面滚上来的行。
  *
- * 底色用 `primaryContainer` 而不是中性层：中性灰（`surfaceContainer` #EAF0EE）与白卡只差 ~4% 亮度，
+ * 底色用 `primaryContainer` 而不是中性层：中性灰与白卡只差 ~4% 亮度，
  * 真机上跟卡面糊在一起分不出边界；换成不同色相的青绿浅底才一眼能认。
  */
 @Composable
@@ -71,8 +71,9 @@ private fun DayTotals(incomeCents: Long, expenseCents: Long, modifier: Modifier 
         if (expenseCents != 0L) add("支" to Money.format(expenseCents))
     }
     if (segments.isEmpty()) return
-    // 弱化靠透明而不是换色：底是青绿，换中性灰会发脏
-    val weak = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+    // 弱化靠透明而不是换色：底是青绿，换中性灰会发脏。
+    // 85% 是下限——70% 时对比度只有 4.31:1（不足 4.5），见界面规范第三节
+    val weak = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
     val prefixStyle = SpanStyle(
         fontSize = MaterialTheme.typography.labelSmall.fontSize,
         fontWeight = MaterialTheme.typography.labelSmall.fontWeight,

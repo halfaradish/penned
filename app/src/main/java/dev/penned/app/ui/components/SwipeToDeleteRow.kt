@@ -22,6 +22,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedSpacing
@@ -60,9 +63,13 @@ fun SwipeToDeleteRow(
         )
     }
     var confirming by remember { mutableStateOf(false) }
+    // 左滑对读屏用户完全不可见：补一个自定义无障碍动作，TalkBack 里能直接"删除"（D044）
+    val semantics = Modifier.semantics {
+        customActions = listOf(CustomAccessibilityAction("删除") { confirming = true; true })
+    }
     SwipeToDismissBox(
         state = state,
-        modifier = modifier,
+        modifier = modifier.then(semantics),
         enableDismissFromStartToEnd = false,
         onDismiss = { value ->
             if (value == SwipeToDismissBoxValue.EndToStart) {

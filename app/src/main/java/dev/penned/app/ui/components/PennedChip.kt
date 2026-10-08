@@ -1,8 +1,6 @@
 package dev.penned.app.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -22,10 +20,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
+import dev.penned.app.ui.theme.iconMutedColor
 
 /**
  * 胶囊按钮（信息条 chips、筛选项）：可点则带涟漪，不可点就是静态标签。
- * 取代 SelectableChip / StaticChip / M3 FilterChip 三套并存。
+ * 未选 = `surfaceContainer` 填充**无边框**（旧版描 1dp 边，扁平语言里不需要）；
+ * 选中 = `primaryContainer` + `onPrimaryContainer`（不用 `primaryInk`：在容器上只有 4.46:1）。
  */
 @Composable
 fun PennedChip(
@@ -43,30 +43,29 @@ fun PennedChip(
     val bg = when {
         !enabled -> MaterialTheme.colorScheme.surfaceContainer
         selected -> MaterialTheme.colorScheme.primaryContainer
-        else -> MaterialTheme.colorScheme.surface
+        else -> MaterialTheme.colorScheme.surfaceContainer
     }
     val fg = when {
-        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+        !enabled -> iconMutedColor()
         selected -> MaterialTheme.colorScheme.onPrimaryContainer
-        else -> tint ?: MaterialTheme.colorScheme.onSurfaceVariant
+        tint != null -> tint
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
-    val border = if (selected || !enabled) null else BorderStroke(PennedDimens.hairline, MaterialTheme.colorScheme.outlineVariant)
     Row(
         modifier
             .heightIn(min = 32.dp)
             .clip(shape)
             .background(bg)
-            .then(if (border != null) Modifier.border(border, shape) else Modifier)
             .then(if (onClick != null && enabled) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = PennedSpacing.md, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(PennedSpacing.xs + 2.dp),
     ) {
         if (leading != null) {
             Text(leading, style = MaterialTheme.typography.labelMedium, color = accent)
         }
         if (icon != null) {
-            Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(15.dp))
+            Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(PennedDimens.iconChevron))
         }
         Text(label, style = MaterialTheme.typography.labelMedium, color = fg)
     }
