@@ -18,6 +18,7 @@ import dev.penned.app.ui.components.PennedListRow
 import dev.penned.app.ui.components.SectionCard
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedSpacing
+import dev.penned.app.ui.theme.PennedTextStyles
 
 /** 设置类页面：图标 + 标题 + 副标题 + 右箭头的分组卡（取代原来的裸分隔线列表）。 */
 private val ROW_DIVIDER_INDENT = 64.dp
@@ -42,21 +43,21 @@ fun MineScreen(
     ) {
         Text(
             "一笔一记",
-            style = MaterialTheme.typography.headlineSmall,
+            style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(
                 start = PennedSpacing.lg,
                 end = PennedSpacing.lg,
-                top = PennedSpacing.md,
+                top = PennedSpacing.xl,
             ),
         )
         Text(
             "本地优先 · 无服务器",
-            style = MaterialTheme.typography.bodySmall,
+            style = PennedTextStyles.caption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(
                 start = PennedSpacing.lg,
                 end = PennedSpacing.lg,
-                top = PennedSpacing.xs,
+                top = 2.dp,
             ),
         )
 

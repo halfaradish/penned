@@ -89,7 +89,7 @@ internal fun StatsBarChartCard(
     ) {
         Text(
             title,
-            style = MaterialTheme.typography.titleMedium,
+            style = dev.penned.app.ui.theme.PennedTextStyles.cardTitle,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.height(PennedSpacing.md))

@@ -88,7 +88,7 @@ fun StatsDonutCard(
         ) {
             Text(
                 title,
-                style = MaterialTheme.typography.titleMedium,
+                style = dev.penned.app.ui.theme.PennedTextStyles.cardTitle,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
             )
@@ -182,7 +182,7 @@ fun StatsDataCard(
         ) {
             Text(
                 title,
-                style = MaterialTheme.typography.titleMedium,
+                style = dev.penned.app.ui.theme.PennedTextStyles.cardTitle,
                 color = MaterialTheme.colorScheme.onSurface,
             )
         }

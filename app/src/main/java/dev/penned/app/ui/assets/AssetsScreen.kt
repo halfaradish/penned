@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -53,12 +54,15 @@ import dev.penned.app.data.db.dao.AccountWithBalance
 import dev.penned.app.domain.AccountType
 import dev.penned.app.domain.Money
 import dev.penned.app.ui.components.CategoryAvatar
+import dev.penned.app.ui.components.AnimatedNumberText
 import dev.penned.app.ui.components.EmptyState
+import dev.penned.app.ui.components.PennedSnackbarHost
 import dev.penned.app.ui.components.PennedCard
 import dev.penned.app.ui.components.PennedDivider
 import dev.penned.app.ui.components.SwipeToDeleteRow
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedDimens
+import dev.penned.app.ui.theme.PennedElevation
 import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.expenseColor
 import dev.penned.app.ui.theme.primaryInkColor
@@ -227,14 +231,21 @@ fun AssetsContent(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { if (snackbarHostState != null) SnackbarHost(snackbarHostState) },
+        snackbarHost = { if (snackbarHostState != null) PennedSnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showTypeSheet = true },
-                modifier = Modifier.size(60.dp),
+                modifier = Modifier.size(PennedDimens.fab),
                 shape = CircleShape,
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
+                // 零阴影：浮层靠填充色分层（D043 原则二；此前吃的是 M3 默认 6dp）
+                elevation = FloatingActionButtonDefaults.elevation(
+                    defaultElevation = PennedElevation.floating,
+                    pressedElevation = PennedElevation.floating,
+                    focusedElevation = PennedElevation.floating,
+                    hoveredElevation = PennedElevation.floating,
+                ),
             ) {
                 Icon(PennedIcons.Plus, contentDescription = "添加账户")
             }
@@ -245,18 +256,7 @@ fun AssetsContent(
             modifier = modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(bottom = 96.dp),
         ) {
-            item(key = "title") {
-                Text(
-                    "资产",
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.padding(
-                        start = PennedSpacing.lg,
-                        end = PennedSpacing.lg,
-                        top = PennedSpacing.md,
-                        bottom = PennedSpacing.sm,
-                    ),
-                )
-            }
+            // 页头大标题已去掉：底栏 Tab 已经写着"资产"，同一句话不必出现两次（D035 推广）
             item(key = "net") {
                 NetAssetCard(state = state, masked = masked, onToggleMask = { masked = !masked })
             }
@@ -313,25 +313,34 @@ private fun NetAssetCard(state: AssetsUiState, masked: Boolean, onToggleMask: ()
                     Text(
                         "净资产(元)",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        // 在浅青底上用容器自己的墨色（9.5:1），中性灰压在青底上会发脏
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                     Box(
-                        Modifier.size(36.dp).clickable(onClick = onToggleMask),
+                        Modifier.size(PennedDimens.iconButton).clickable(onClick = onToggleMask),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
                             if (masked) PennedIcons.EyeOff else PennedIcons.Eye,
                             contentDescription = if (masked) "显示金额" else "隐藏金额",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(PennedDimens.iconSmall),
                         )
                     }
                 }
-                Text(
-                    if (masked) MASK else Money.format(state.netCents),
-                    style = MaterialTheme.typography.displaySmall,
-                    color = if (state.netCents < 0) expenseColor() else primaryInkColor(),
-                )
+                if (masked) {
+                    Text(
+                        MASK,
+                        style = MaterialTheme.typography.displaySmall,
+                        color = if (state.netCents < 0) expenseColor() else primaryInkColor(),
+                    )
+                } else {
+                    AnimatedNumberText(
+                        cents = state.netCents,
+                        style = MaterialTheme.typography.displaySmall,
+                        color = if (state.netCents < 0) expenseColor() else primaryInkColor(),
+                    )
+                }
             }
             Column(horizontalAlignment = Alignment.End) {
                 AmountLine("总资产", state.assetCents, masked)

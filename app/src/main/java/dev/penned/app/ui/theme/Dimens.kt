@@ -74,6 +74,9 @@ object PennedDimens {
     /** 悬浮件（FAB、悬浮记账入口收起态）直径。 */
     val fab = 56.dp
 
+    /** 卡头里"支出|收入"这类两段切换器的定宽（放卡头右侧，铺满会喧宾夺主）。 */
+    val segmentToggle = 132.dp
+
     /** 底部 Snackbar 与导航栏的间距。 */
     val fabMargin = 16.dp
 }

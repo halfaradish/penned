@@ -19,20 +19,11 @@ fun StubScreen(
     hint: String,
     modifier: Modifier = Modifier,
 ) {
-    // 不透明页面：下钻推入时父子两页同屏，透明根会让下层页透出来（AP-2）
+    // 不透明页面：下钻推入时父子两页同屏，透明根会让下层页透出来（AP-2）。
+    // 页头大标题已去掉：底栏 Tab 已经写着「日历」，同一句话不必出现两次（D035 推广）
     Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        Text(
-            title,
-            style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier.padding(
-                start = PennedSpacing.lg,
-                end = PennedSpacing.lg,
-                top = PennedSpacing.md,
-                bottom = PennedSpacing.sm,
-            ),
-        )
         EmptyState(
-            title = "这个页面还没做",
+            title = title,
             hint = hint,
             icon = PennedIcons.Calendar,
             modifier = Modifier.padding(top = PennedSpacing.xxl),

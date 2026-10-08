@@ -51,10 +51,13 @@ import dev.penned.app.ui.components.EmptyState
 import dev.penned.app.ui.components.PennedCard
 import dev.penned.app.ui.components.PennedChip
 import dev.penned.app.ui.components.PennedSegmentedTabs
+import dev.penned.app.ui.components.PennedStatCells
+import dev.penned.app.ui.components.StatCell
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedPigment
 import dev.penned.app.ui.theme.PennedSpacing
+import dev.penned.app.ui.theme.PennedTextStyles
 import dev.penned.app.ui.theme.PennedTheme
 import dev.penned.app.ui.theme.expenseColor
 import dev.penned.app.ui.theme.incomeColor
@@ -265,16 +268,13 @@ private fun StatsPageBody(
 
     // 汇总卡
     PennedCard(modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg)) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            SummaryCell("支出", Money.format(page.totals.expenseCents), expenseColor(), Modifier.weight(1f))
-            SummaryCell("收入", Money.format(page.totals.incomeCents), incomeColor(), Modifier.weight(1f))
-            SummaryCell(
-                "结余",
-                Money.format(page.totals.incomeCents - page.totals.expenseCents),
-                MaterialTheme.colorScheme.onSurface,
-                Modifier.weight(1f),
-            )
-        }
+        PennedStatCells(
+            listOf(
+                StatCell("支出", Money.format(page.totals.expenseCents), expenseColor()),
+                StatCell("收入", Money.format(page.totals.incomeCents), incomeColor()),
+                StatCell("结余", Money.format(page.totals.incomeCents - page.totals.expenseCents)),
+            ),
+        )
     }
 
     if (page.expenseCategories.isEmpty() && page.incomeCategories.isEmpty()) {
@@ -299,7 +299,7 @@ private fun StatsPageBody(
             selected = type,
             onSelect = onSelectType,
             label = { if (it == TxType.EXPENSE) "支出" else "收入" },
-            modifier = Modifier.width(132.dp),
+            modifier = Modifier.width(PennedDimens.segmentToggle),
         )
     }
     if (shown.isEmpty()) {
@@ -308,7 +308,7 @@ private fun StatsPageBody(
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "${unit}占比",
-                    style = MaterialTheme.typography.titleMedium,
+                    style = PennedTextStyles.cardTitle,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
                 )
@@ -416,18 +416,6 @@ private fun PeriodSelector(
 private fun StatsPeriod.startDayOrNull(): Long? = (this as? StatsPeriod.Custom)?.startEpochDay
 
 private fun StatsPeriod.endDayOrNull(): Long? = (this as? StatsPeriod.Custom)?.endEpochDay
-
-@Composable
-private fun SummaryCell(label: String, value: String, valueColor: Color, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.titleMedium, color = valueColor)
-    }
-}
 
 @Preview(showBackground = true, name = "统计-月统计", widthDp = 400, heightDp = 780)
 @Composable
