@@ -13,15 +13,18 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedPigment
-import dev.penned.app.ui.theme.isDarkTheme
-import dev.penned.app.ui.theme.pigmentInk
-import dev.penned.app.ui.theme.pigmentInkAt
-import dev.penned.app.ui.theme.pigmentTint
-import dev.penned.app.ui.theme.pigmentTintAt
+import dev.penned.app.ui.theme.pigmentFill
+import dev.penned.app.ui.theme.pigmentFillAt
+import dev.penned.app.ui.theme.pigmentOnFillAt
+import dev.penned.app.ui.theme.pigmentSelectedAt
 
 /**
- * 分类头像：颜料 tint 底 + 颜料 ink 首字（淡底 12% 浅 / 22% 深，见 D043）。
- * 取代首页/统计/资产/分类管理四处各画一遍的"哈希实心圆 + 白字"。
+ * 分类头像：**实心颜料块 + 同色相深档字形**（D046 起）。
+ * 取代 AR/RA 两轮的"淡底 + ink 字"——那两版一个太艳一个太灰，用户都不认。
+ * 现在的口径是用户给的参考（课表课程格子）：块面亮而干净（S74/L70，浅深两个主题同一份），
+ * 字形用同色相的深档（在自家块面上 4.6:1），所以块面本身就承担了"这是什么分类"。
+ *
+ * [selected] 换成深档实心 + 白字：和亮档块面差一整个明度档，选中一眼看得出（记一笔宫格用）。
  * [slot] 给账户这类"按类型固定上色"的场景用；不传则按名字哈希取色。
  */
 @Composable
@@ -33,16 +36,11 @@ fun CategoryAvatar(
     glyph: String? = null,
     slot: Int? = null,
 ) {
-    val ink = if (slot != null) pigmentInkAt(slot) else pigmentInk(name)
-    val bg = if (selected) ink else if (slot != null) pigmentTintAt(slot) else pigmentTint(name)
-    val fg = when {
-        !selected -> ink
-        // 选中态是实心 ink 底：浅色主题用白字，深色主题用底色（深色盘是提亮过的浅色 ink）
-        isDarkTheme() -> MaterialTheme.colorScheme.background
-        else -> MaterialTheme.colorScheme.surface
-    }
+    val s = slot ?: PennedPigment.slotOf(name)
+    val background = if (selected) pigmentSelectedAt(s) else pigmentFillAt(s)
+    val foreground = if (selected) PennedPigment.onFillWhite else pigmentOnFillAt(s)
     Box(
-        modifier = modifier.size(size).background(bg, CircleShape),
+        modifier = modifier.size(size).background(background, CircleShape),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -52,7 +50,7 @@ fun CategoryAvatar(
             } else {
                 MaterialTheme.typography.labelLarge
             },
-            color = fg,
+            color = foreground,
         )
     }
 }

@@ -44,7 +44,7 @@ val ACCOUNT_PRESETS: Map<AccountGroup, List<AccountPreset>> = linkedMapOf(
     AccountGroup.DEBT to listOf(AccountPreset("欠款", AccountType.DEBT)),
 )
 
-/** 账户类型的固定颜料槽：信用卡/负债红系、现金赭石、储蓄卡石青、理财石绿。 */
+/** 账户类型的固定颜料槽：信用卡/负债红系、现金橙、储蓄卡紫、理财青。 */
 internal fun accountPigmentSlot(type: AccountType): Int = when (type) {
     AccountType.DEBT -> 6
     AccountType.CREDIT -> 0

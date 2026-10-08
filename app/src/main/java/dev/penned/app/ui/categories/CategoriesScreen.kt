@@ -35,7 +35,6 @@ import dev.penned.app.data.db.entity.CategoryEntity
 import dev.penned.app.domain.CategoryType
 import dev.penned.app.ui.components.PennedTopBar
 import dev.penned.app.ui.components.CategoryAvatar
-import dev.penned.app.ui.theme.categoryColor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
