@@ -23,10 +23,11 @@ object HomeGroups {
         val items: List<TxWithCategory>,
     )
 
-    /** 一个自然月 = 首页的一张卡片（卡片不再设标题行，月份靠卡片边界划分）。 */
+    /** 一个自然月 = 首页的一张卡片（卡片头是月标题行 + 展开时的汇总/预算块）。 */
     data class MonthGroup(
         val yearMonth: YearMonth,
         val days: List<DayGroup>,
+        val totals: MonthTotals,
     )
 
     data class MonthTotals(val incomeCents: Long, val expenseCents: Long)
@@ -49,24 +50,32 @@ object HomeGroups {
     fun groupByMonth(rows: List<TxWithCategory>, zone: ZoneId = ZoneId.systemDefault()): List<MonthGroup> =
         groupByDay(rows, zone)
             .groupBy { YearMonth.from(LocalDate.ofEpochDay(it.epochDay)) }
-            .map { (yearMonth, days) -> MonthGroup(yearMonth, days) }
+            .map { (yearMonth, days) ->
+                MonthGroup(
+                    yearMonth = yearMonth,
+                    days = days,
+                    // 月合计 = 各日合计之和：日合计已经按 D004/D020 口径算过（转账不算、「不计入收支」不算）
+                    totals = MonthTotals(
+                        incomeCents = days.sumOf { it.incomeCents },
+                        expenseCents = days.sumOf { it.expenseCents },
+                    ),
+                )
+            }
             .sortedByDescending { it.yearMonth }
 
-    fun monthTotals(
-        rows: List<TxWithCategory>,
-        year: Int,
-        month: Int,
-        zone: ZoneId = ZoneId.systemDefault(),
-    ): MonthTotals {
-        val inMonth = rows.filter {
-            val d = epochMinuteToLocalDate(it.dateEpochMinute, zone)
-            d.year == year && d.monthValue == month
-        }.filter { !it.excludeFromStats }
-        return MonthTotals(
-            incomeCents = inMonth.sumOf(TxType.INCOME::takeAmount),
-            expenseCents = inMonth.sumOf(TxType.EXPENSE::takeAmount),
-        )
-    }
+    /**
+     * 本月还没流水时的空月卡（只有标题行与汇总/预算块，没有日与行）。
+     * 首页用它把「本月」钉在列表最前面——月汇总与预算都挂在本月卡上，月初不该整块消失。
+     */
+    fun emptyMonth(yearMonth: YearMonth): MonthGroup =
+        MonthGroup(yearMonth, days = emptyList(), totals = MonthTotals(0L, 0L))
+
+    /**
+     * 月卡是否展开：**本月默认展开、其余默认折叠**，点标题行一次翻转。
+     * [toggledMonths] 只记"被点过的月份"，所以跨月（本月变了）时默认态自动跟上。
+     */
+    fun monthExpanded(yearMonth: YearMonth, currentMonth: YearMonth, toggledMonths: Set<YearMonth>): Boolean =
+        (yearMonth == currentMonth) != (yearMonth in toggledMonths)
 
     /**
      * 日头条文案：`今天 10月6日 周二` / `10月5日 周一` / 非本年 `2025年12月31日 周三`。

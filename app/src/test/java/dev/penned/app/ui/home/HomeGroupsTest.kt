@@ -63,9 +63,30 @@ class HomeGroupsTest {
             row("b", minute("2026-09-30T10:00"), TxType.EXPENSE, 999),
             row("c", minute("2026-10-05T10:00"), TxType.INCOME, 5000),
         )
-        val totals = HomeGroups.monthTotals(rows, year = 2026, month = 10, zone = zone)
-        assertEquals(1600L, totals.expenseCents)
-        assertEquals(5000L, totals.incomeCents)
+        val months = HomeGroups.groupByMonth(rows, zone)
+        val october = months.single { it.yearMonth == YearMonth.of(2026, 10) }
+        assertEquals(1600L, october.totals.expenseCents)
+        assertEquals(5000L, october.totals.incomeCents)
+        // 另一张卡各算各的，不会把 10 月的钱算进来
+        val september = months.single { it.yearMonth == YearMonth.of(2026, 9) }
+        assertEquals(999L, september.totals.expenseCents)
+        assertEquals(0L, september.totals.incomeCents)
+    }
+
+    @Test
+    fun `month totals are the sum of its day totals`() {
+        // 月汇总块与日头条读的是同一份数：月合计 = 各日合计之和（含转账/「不计入收支」的排除口径）
+        val rows = listOf(
+            row("a", minute("2026-10-04T19:30"), TxType.EXPENSE, 1600),
+            row("b", minute("2026-10-04T08:00"), TxType.INCOME, 150000),
+            row("c", minute("2026-10-03T12:00"), TxType.EXPENSE, 700),
+            row("d", minute("2026-10-03T13:00"), TxType.TRANSFER, 9999),
+        )
+        val month = HomeGroups.groupByMonth(rows, zone).single()
+        assertEquals(month.days.sumOf { it.expenseCents }, month.totals.expenseCents)
+        assertEquals(month.days.sumOf { it.incomeCents }, month.totals.incomeCents)
+        assertEquals(2300L, month.totals.expenseCents)
+        assertEquals(150000L, month.totals.incomeCents)
     }
 
     @Test
@@ -81,9 +102,9 @@ class HomeGroupsTest {
         assertEquals(1600L, day.expenseCents)    // 5000 不计入
         assertEquals(0L, day.incomeCents)        // 8000 不计入
 
-        val totals = HomeGroups.monthTotals(rows, year = 2026, month = 10, zone = zone)
-        assertEquals(1600L, totals.expenseCents)
-        assertEquals(0L, totals.incomeCents)
+        val month = HomeGroups.groupByMonth(rows, zone).single()
+        assertEquals(1600L, month.totals.expenseCents)
+        assertEquals(0L, month.totals.incomeCents)
     }
 
     @Test
@@ -156,5 +177,37 @@ class HomeGroupsTest {
     @Test
     fun `empty rows produce no month groups`() {
         assertEquals(0, HomeGroups.groupByMonth(emptyList(), zone).size)
+    }
+
+    @Test
+    fun `empty month carries no days and zero totals`() {
+        // 首页把"本月"钉在最前面时用的就是它：月初还没记账也看得到月汇总与预算块
+        val month = HomeGroups.emptyMonth(YearMonth.of(2026, 11))
+        assertEquals(YearMonth.of(2026, 11), month.yearMonth)
+        assertEquals(0, month.days.size)
+        assertEquals(0L, month.totals.incomeCents)
+        assertEquals(0L, month.totals.expenseCents)
+    }
+
+    @Test
+    fun `month expanded defaults to current month and toggles`() {
+        val current = YearMonth.of(2026, 10)
+        val october = YearMonth.of(2026, 10)
+        val september = YearMonth.of(2026, 9)
+        val data = listOf(
+            // 月份、被点过的月份、期望展开
+            Triple(october, emptySet<YearMonth>(), true),        // 本月默认展开
+            Triple(september, emptySet(), false),                // 其他月默认折叠
+            Triple(october, setOf(october), false),              // 点一次 → 折叠
+            Triple(september, setOf(september), true),           // 点一次 → 展开
+            Triple(september, setOf(october), false),            // 点别的月不影响这张
+            Triple(october, setOf(september), true),
+        )
+        data.forEach { (month, toggled, expected) ->
+            assertEquals("$month toggled=$toggled", expected, HomeGroups.monthExpanded(month, current, toggled))
+        }
+        // 跨月：本月变成 11 月后，10 月回到"默认折叠"
+        assertEquals(false, HomeGroups.monthExpanded(october, YearMonth.of(2026, 11), emptySet()))
+        assertEquals(true, HomeGroups.monthExpanded(YearMonth.of(2026, 11), YearMonth.of(2026, 11), emptySet()))
     }
 }

@@ -1,14 +1,14 @@
 package dev.penned.app.ui.home
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,7 +36,6 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,19 +44,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.penned.app.data.db.dao.TxWithCategory
+import dev.penned.app.domain.BudgetMath
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.components.DayHeaderRow
 import dev.penned.app.ui.components.EmptyState
-import dev.penned.app.ui.components.PennedButton
-import dev.penned.app.ui.components.PennedCard
 import dev.penned.app.ui.components.PennedCardSection
 import dev.penned.app.ui.components.PennedCardSectionPosition
 import dev.penned.app.ui.components.PennedDialog
@@ -76,12 +79,8 @@ import java.time.ZoneId
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-/** 列表项 key：FAB 显隐判断靠它（"添加一条新记账"滚出视野后 FAB 接管）。 */
-private const val ADD_BUTTON_KEY = "add-button"
-private const val SUMMARY_CARD_KEY = "month-card"
-private const val BUDGET_CARD_KEY = "budget-card"
+/** 首页列表 tag（滚动退化/位置断言都靠它）。 */
 private const val HOME_LIST_TAG = "home-list"
-private const val HOME_FAB_TAG = "home-fab"
 
 
 @Composable
@@ -233,73 +232,93 @@ fun HomeContent(
 
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 val listState = rememberLazyListState()
-                // 月汇总/预算/添加按钮都是列表项：随内容滚走，滚走后由右下角 FAB 接管"记一笔"
-                val addButtonVisible by remember {
-                    derivedStateOf { listState.layoutInfo.visibleItemsInfo.any { it.key == ADD_BUTTON_KEY } }
+                // 月卡展开态：本月默认展开、其余默认折叠（点标题行翻转）；只记"被点过的月份"
+                var toggledMonths by remember { mutableStateOf(emptySet<YearMonth>()) }
+                // 悬浮记账入口：往下看收成右下角「＋」，往回看复原。初值跟列表位置走——
+                // 切 Tab 回来列表位置被 rememberSaveable 恢复，入口状态也得跟着对，别突然弹回通栏
+                var entryExpanded by remember {
+                    mutableStateOf(listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0)
                 }
-                val showFab = !selectionMode &&
-                    listState.layoutInfo.totalItemsCount > 0 && // 首帧尚未布局时不闪现
-                    !addButtonVisible
+                val collapseAfterPx = with(LocalDensity.current) { AddEntryMotion.collapseAfter.toPx() }
+                val scrollGate = remember(collapseAfterPx) { AddEntryScrollGate(collapseAfterPx) }
+                val scrollConnection = remember(scrollGate, listState) {
+                    object : NestedScrollConnection {
+                        override fun onPostScroll(
+                            consumed: Offset,
+                            available: Offset,
+                            source: NestedScrollSource,
+                        ): Offset {
+                            if (consumed.y != 0f) {
+                                scrollGate.onScroll(consumed.y, atTop = !listState.canScrollBackward)
+                                    ?.let { entryExpanded = it }
+                            }
+                            return Offset.Zero
+                        }
+                    }
+                }
+
+                val currentMonth = YearMonth.from(LocalDate.now(zone))
+                val months = HomeGroups.groupByMonth(rows, zone).let { grouped ->
+                    // 本月还没流水也要给一张卡：月汇总与预算块挂在月卡上，而预算块是预算管理页的唯一入口
+                    if (grouped.any { it.yearMonth == currentMonth }) grouped
+                    else listOf(HomeGroups.emptyMonth(currentMonth)) + grouped
+                }
 
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize().testTag(HOME_LIST_TAG),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag(HOME_LIST_TAG)
+                        .nestedScroll(scrollConnection),
+                    contentPadding = PaddingValues(
                         top = PennedSpacing.sm,
-                        bottom = PennedSpacing.xxl,
+                        // 让最后一行能滚到悬浮入口之上，别被它压住
+                        bottom = AddEntryMotion.collapsedSize + PennedSpacing.lg + PennedSpacing.sm,
                     ),
                 ) {
-                    if (!selectionMode) {
-                        item(key = SUMMARY_CARD_KEY) {
-                            val today = LocalDate.now(zone)
-                            HomeSummaryCard(
-                                totals = HomeGroups.monthTotals(rows, today.year, today.monthValue, zone),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.xs),
-                            )
-                        }
-                        item(key = BUDGET_CARD_KEY) {
-                            HomeBudgetCard(
-                                budgetSummary = budgetSummary,
-                                onOpenBudgets = onOpenBudgets,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.xs),
-                            )
-                        }
-                        item(key = ADD_BUTTON_KEY) {
-                            PennedButton(
-                                text = "添加一条新记账",
-                                onClick = onAdd,
-                                leadingIcon = PennedIcons.Plus,
-                                modifier = Modifier.padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
-                            )
-                        }
-                    }
-
-                    // loading：账本/流水还没读到——不渲染空态，避免冷启动闪"还没有记账"
-                    if (rows.isEmpty() && !loading) {
-                        item(key = "empty") {
-                            EmptyState(
-                                title = "还没有记账",
-                                hint = "点上方按钮记下第一笔",
-                                icon = PennedIcons.Edit,
-                            )
-                        }
-                    } else {
-                        // 一个月 = 一张卡。卡由「月标题（顶段，扛圆角）+ 各日（吸顶日头条 + 行）+ 最后一行（底段，扛圆角）」拼成；
-                        // 圆角必须落在够高的段上，见 PennedCardSection 的注释。
-                        val months = HomeGroups.groupByMonth(rows, zone)
+                    // loading：账本/流水还没读到——整块不渲染（避免冷启动闪"还没有记账"，
+                    // 也避免先画一张空的本月卡、真数据到了再往它上面插月卡：LazyColumn 会按 key
+                    // 锚住原位置，列表就"凭空下移"了一截）
+                    if (!loading) {
+                        // 一个月 = 一张卡。卡由「月标题行（顶段，扛圆角）+ 展开时的汇总/预算块 + 各日（吸顶日头条 + 行）
+                        // + 最后一行（底段，扛圆角）」拼成；圆角必须落在够高的段上，见 PennedCardSection 的注释。
                         months.forEach { month ->
+                            val expanded = HomeGroups.monthExpanded(month.yearMonth, currentMonth, toggledMonths)
+                            val isCurrentMonth = month.yearMonth == currentMonth
+                            val isEmptyMonth = month.days.isEmpty()
                             item(key = "month-title-${month.yearMonth}") {
                                 PennedCardSection(
-                                    position = PennedCardSectionPosition.Top,
+                                    // 空月卡没有日与行，自己就是一张完整的卡（否则底边圆角永远画不出来）
+                                    position = if (isEmptyMonth) {
+                                        PennedCardSectionPosition.Single
+                                    } else {
+                                        PennedCardSectionPosition.Top
+                                    },
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = PennedSpacing.lg),
                                 ) {
-                                    MonthTitleRow(month.yearMonth)
+                                    Column {
+                                        MonthTitleRow(
+                                            yearMonth = month.yearMonth,
+                                            expanded = expanded,
+                                            onToggle = {
+                                                toggledMonths = if (month.yearMonth in toggledMonths) {
+                                                    toggledMonths - month.yearMonth
+                                                } else {
+                                                    toggledMonths + month.yearMonth
+                                                }
+                                            },
+                                        )
+                                        AnimatedVisibility(visible = expanded) {
+                                            MonthOverview(
+                                                totals = month.totals,
+                                                showBudget = isCurrentMonth,
+                                                budgetSummary = budgetSummary,
+                                                onOpenBudgets = onOpenBudgets,
+                                            )
+                                        }
+                                    }
                                 }
                             }
                             month.days.forEachIndexed { dayIndex, day ->
@@ -375,12 +394,23 @@ fun HomeContent(
                                 }
                             }
                         }
+
+                        if (rows.isEmpty()) {
+                            item(key = "empty") {
+                                EmptyState(
+                                    title = "还没有记账",
+                                    hint = "点下方按钮记下第一笔",
+                                    icon = PennedIcons.Edit,
+                                )
+                            }
+                        }
                     }
                 }
 
                 val snackbarVisible = snackbarHostState?.currentSnackbarData != null
-                HomeAddFab(
-                    visible = showFab && !snackbarVisible,
+                HomeAddEntry(
+                    visible = !selectionMode && !snackbarVisible,
+                    expanded = entryExpanded,
                     onClick = onAdd,
                     modifier = Modifier.align(Alignment.BottomEnd),
                 )
@@ -460,49 +490,69 @@ private fun HomeHeader(
     }
 }
 
-/** 右下角"记一笔"FAB：独立 composable，避免 AnimatedVisibility 命中 ColumnScope 的重载。 */
+/**
+ * 月标题行（卡片最上面一行，点它折叠/展开）：只显示 `yyyy/m`，不带收支（用户裁决）。
+ * 右侧箭头指下＝展开、转 90° 指右＝折叠（与资产页分组卡同一套）。
+ */
 @Composable
-private fun HomeAddFab(visible: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut(), modifier = modifier) {
-        FloatingActionButton(
-            onClick = onClick,
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            modifier = Modifier
-                .padding(PennedSpacing.lg)
-                .testTag(HOME_FAB_TAG),
-        ) {
-            Icon(PennedIcons.Plus, contentDescription = "记一笔")
-        }
-    }
-}
-
-/** 月标题（卡片最上面一行）：只显示 `yyyy/m`，不带收支（用户裁决）。 */
-@Composable
-private fun MonthTitleRow(yearMonth: YearMonth, modifier: Modifier = Modifier) {
-    Text(
-        text = HomeGroups.monthLabel(yearMonth.year, yearMonth.monthValue),
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.onSurface,
-        // 上宽下窄：标题压住下面的日头条，不留一段空
+private fun MonthTitleRow(
+    yearMonth: YearMonth,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val label = HomeGroups.monthLabel(yearMonth.year, yearMonth.monthValue)
+    val rotation by animateFloatAsState(if (expanded) 0f else -90f, label = "month-chevron")
+    Row(
+        // 上宽下窄：标题压住下面的汇总块/日头条，不留一段空
         modifier = modifier
             .fillMaxWidth()
+            .clickable(onClick = onToggle)
             .padding(
                 start = PennedSpacing.lg,
                 end = PennedSpacing.lg,
                 top = PennedSpacing.md,
                 bottom = PennedSpacing.sm,
             ),
-    )
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            PennedIcons.ChevronDown,
+            contentDescription = if (expanded) "折叠 $label" else "展开 $label",
+            tint = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.size(18.dp).rotate(rotation),
+        )
+    }
 }
 
-/** 月汇总卡：支出/收入/结余三列（标签一行 + 数值一行）。 */
+/**
+ * 月卡头部的展开块：该月汇总三列（支出/收入/结余）；本月再接预算块。
+ * 预算是"每月预算"一条、没有历史值，「已用」也只有本月窗口的聚合，所以只挂在本月卡上（用户裁决）。
+ */
 @Composable
-private fun HomeSummaryCard(
+private fun MonthOverview(
     totals: HomeGroups.MonthTotals,
+    showBudget: Boolean,
+    budgetSummary: HomeViewModel.BudgetSummary?,
+    onOpenBudgets: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    PennedCard(modifier = modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(
+                start = PennedSpacing.lg,
+                end = PennedSpacing.lg,
+                top = PennedSpacing.xs,
+                bottom = PennedSpacing.md,
+            ),
+    ) {
         Row(modifier = Modifier.fillMaxWidth()) {
             SummaryColumn("支出", Money.format(totals.expenseCents), expenseColor(), Modifier.weight(1f))
             SummaryColumn("收入", Money.format(totals.incomeCents), incomeColor(), Modifier.weight(1f))
@@ -513,33 +563,41 @@ private fun HomeSummaryCard(
                 Modifier.weight(1f),
             )
         }
+        if (showBudget) {
+            Spacer(Modifier.height(PennedSpacing.md))
+            HomeBudgetRow(budgetSummary = budgetSummary, onOpenBudgets = onOpenBudgets)
+        }
     }
 }
 
 /**
- * 预算卡：与月汇总卡同款三列布局（预算/已用/剩余），只多一条进度条；整卡可点进预算管理。
- * 未设预算时是"设置本月预算"入口。
+ * 预算块（只在本月卡里）：与汇总同款三列（预算/已用/剩余）+ 一条 4dp 进度条；
+ * 整块可点进预算管理。未设预算时是"设置本月预算"入口。
  */
 @Composable
-private fun HomeBudgetCard(
+private fun HomeBudgetRow(
     budgetSummary: HomeViewModel.BudgetSummary?,
     onOpenBudgets: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val shape = RoundedCornerShape(PennedDimens.cardCorner)
+    val clickable = modifier
+        .fillMaxWidth()
+        .clip(shape)
+        .clickable(onClick = onOpenBudgets)
+
     if (budgetSummary == null) {
-        PennedCard(modifier = modifier, onClick = onOpenBudgets) {
-            Text(
-                "设置本月预算，控制花销 →",
-                style = MaterialTheme.typography.labelMedium,
-                color = primaryInkColor(),
-                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-            )
-        }
+        Text(
+            "设置本月预算，控制花销 →",
+            style = MaterialTheme.typography.labelMedium,
+            color = primaryInkColor(),
+            modifier = clickable.padding(vertical = PennedSpacing.sm),
+        )
         return
     }
-    val state = dev.penned.app.domain.BudgetMath.state(budgetSummary.totalCents, budgetSummary.spentCents)
+    val state = BudgetMath.state(budgetSummary.totalCents, budgetSummary.spentCents)
     val remainColor = if (state.overspent) expenseColor() else MaterialTheme.colorScheme.onSurface
-    PennedCard(modifier = modifier, onClick = onOpenBudgets) {
+    Column(modifier = clickable) {
         Row(modifier = Modifier.fillMaxWidth()) {
             SummaryColumn("预算", Money.format(budgetSummary.totalCents), MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
             SummaryColumn("已用", Money.format(budgetSummary.spentCents), MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))

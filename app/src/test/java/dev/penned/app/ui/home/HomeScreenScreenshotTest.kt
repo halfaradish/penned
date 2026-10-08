@@ -1,6 +1,7 @@
 package dev.penned.app.ui.home
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -9,12 +10,16 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
+import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.unit.width
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.penned.app.data.db.dao.TxWithCategory
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.theme.PennedTheme
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -25,7 +30,8 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 /**
- * 首页：月汇总/预算合并卡随列表滚动 + 右下角 FAB 在「添加一条新记账」滚出视野后接管。
+ * 首页（AQ 轮）：月汇总/预算搬进月卡头部、月卡可折叠（本月默认展开）、
+ * 「添加一条新记账」改成 Tab 栏上方的悬浮入口并在往下看时收成右下角「＋」。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w400dp-h800dp")
@@ -37,7 +43,11 @@ class HomeScreenScreenshotTest {
 
     private val zone = ZoneId.systemDefault()
 
-    /** 跨 7 天 14 行，保证列表可滚动（卡片与按钮能滚出视野）。 */
+    /** 测试窗口 400dp 宽：悬浮入口展开 = 400-32 = 368dp，收起 = 56dp。 */
+    private val expandedEntryWidth = 368f
+    private val compactEntryWidth = AddEntryMotion.collapsedSize.value
+
+    /** 跨 7 天 14 行，保证列表可滚动。 */
     private val rows: List<TxWithCategory> = buildList {
         var id = 0
         for (dayOffset in 0 until 7) {
@@ -111,23 +121,31 @@ class HomeScreenScreenshotTest {
         )
     }
 
+    private fun monthLabel(date: LocalDate): String = "${date.year}/${date.monthValue}"
+
+    /** 悬浮入口的实测宽度（dp）；展开 = 通栏胶囊、收起 = 56dp 正圆。 */
+    private fun entryWidth(): Float =
+        composeRule.onNodeWithTag(HOME_ADD_TAG).getUnclippedBoundsInRoot().width.value
+
     @Test
     fun captureHomeTop() {
         composeRule.setContent { PennedTheme { content() } }
-        // 月汇总卡（本月）：支/收/结余三列
+        // 本月卡头部：月汇总三列 + 预算块（预算/已用/剩余 + 进度条）
         composeRule.onNodeWithText("支出").assertIsDisplayed()
         composeRule.onNodeWithText("收入").assertIsDisplayed()
         composeRule.onNodeWithText("结余").assertIsDisplayed()
-        // 预算卡：与月汇总同款三列 + 进度条
         composeRule.onNodeWithText("预算").assertIsDisplayed()
         composeRule.onNodeWithText("已用").assertIsDisplayed()
         composeRule.onNodeWithText("剩余").assertIsDisplayed()
+        // 悬浮入口：通栏胶囊、贴右下（右 16 / 下 16）
         composeRule.onNodeWithText("添加一条新记账").assertIsDisplayed()
+        assertEquals(expandedEntryWidth, entryWidth(), 0.5f)
+        val bounds = composeRule.onNodeWithTag(HOME_ADD_TAG).getUnclippedBoundsInRoot()
+        assertEquals(384f, bounds.right.value, 0.5f)
+        assertEquals(784f, bounds.bottom.value, 0.5f)
         // 当天日头条：相对词在最前（参考图口径）；行内时段
         composeRule.onNodeWithText("今天", substring = true).assertIsDisplayed()
         composeRule.onAllNodesWithText("12:30").onFirst().assertIsDisplayed()
-        // 按钮还在视野里 → FAB 不出现
-        composeRule.onNodeWithTag("home-fab").assertDoesNotExist()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_home_top.png")
     }
 
@@ -135,13 +153,57 @@ class HomeScreenScreenshotTest {
     fun captureMonthCards() {
         composeRule.setContent { PennedTheme { HomeContent(bookName = "日常账本", rows = monthRows(), onAdd = {}) } }
         val today = LocalDate.now(zone)
-        // 月标题行：只显示 yyyy/m
-        composeRule.onNodeWithText("${today.year}/${today.monthValue}").assertIsDisplayed()
+        // 月标题行：只显示 yyyy/m，点它折叠/展开
+        composeRule.onNodeWithText(monthLabel(today)).assertIsDisplayed()
         // 年只在月标题里以 yyyy/m 出现——日头条的日期不带年份（本年）
         composeRule.onNodeWithText("${today.year}年", substring = true).assertDoesNotExist()
         // 当日收入不为 0 → 日头条带「收」
         composeRule.onNodeWithText("收 3,000.00", substring = true).assertIsDisplayed()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/ag_home_month_cards.png")
+    }
+
+    @Test
+    fun monthCardCollapsesAndExpands() {
+        composeRule.setContent { PennedTheme { HomeContent(bookName = "日常账本", rows = monthRows(), onAdd = {}) } }
+        val today = LocalDate.now(zone)
+        // 默认：本月展开（有汇总三列），上月折叠（它的合计不在界面上）
+        composeRule.onNodeWithText("支出").assertIsDisplayed()
+        composeRule.onNodeWithText("45.00").assertDoesNotExist()
+
+        // 点本月标题 → 折叠：汇总与预算块整块收起
+        composeRule.onNodeWithText(monthLabel(today)).performClick()
+        composeRule.onNodeWithText("支出").assertDoesNotExist()
+        composeRule.onNodeWithText("收入").assertDoesNotExist()
+        // 流水行与日头条照旧（折叠只收起卡片头部那一块）
+        composeRule.onNodeWithText("今天", substring = true).assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/aq_home_months_collapsed.png")
+
+        // 点上月标题 → 展开，显示的是**那个月**的合计（支 45.00 / 收 0）
+        val previous = today.withDayOfMonth(1).minusMonths(1)
+        composeRule.onNodeWithText(monthLabel(previous)).performClick()
+        composeRule.onNodeWithText("45.00").assertIsDisplayed()
+        composeRule.onNodeWithText("支出").assertIsDisplayed()
+    }
+
+    @Test
+    fun currentMonthCardShowsBudgetEvenWithoutRows() {
+        // 本月还没记账：本月卡仍然在（月汇总 + 预算块 = 预算管理页的唯一入口）
+        val today = LocalDate.now(zone)
+        val previous = today.withDayOfMonth(1).minusMonths(1)
+        composeRule.setContent {
+            PennedTheme {
+                HomeContent(
+                    bookName = "日常账本",
+                    rows = listOf(tx("prev-1", previous, TxType.EXPENSE, 4500, "打车", "出行交通", null)),
+                    onAdd = {},
+                    budgetSummary = budget,
+                )
+            }
+        }
+        composeRule.onNodeWithText(monthLabel(today)).assertIsDisplayed()
+        composeRule.onNodeWithText("预算").assertIsDisplayed()
+        composeRule.onNodeWithText("已用").assertIsDisplayed()
+        composeRule.onNodeWithText("剩余").assertIsDisplayed()
     }
 
     @Test
@@ -174,18 +236,23 @@ class HomeScreenScreenshotTest {
     }
 
     @Test
-    fun captureHomeScrolledWithFab() {
+    fun addEntryCollapsesOnScrollAndRestores() {
         var added = 0
         composeRule.setContent { PennedTheme { content(onAdd = { added++ }) } }
-        // 往下滚：卡片与"添加一条新记账"滚出视野
-        composeRule.onNodeWithTag("home-list").performScrollToIndex(6)
-        composeRule.onNodeWithText("添加一条新记账").assertDoesNotExist()
-        composeRule.onNodeWithText("剩余").assertDoesNotExist()
-        // FAB 接管
-        composeRule.onNodeWithTag("home-fab").assertIsDisplayed()
-        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_home_scrolled.png")
-        composeRule.onNodeWithTag("home-fab").performClick()
-        org.junit.Assert.assertEquals(1, added)
+        assertEquals(expandedEntryWidth, entryWidth(), 0.5f)
+
+        // 往下看：收成右下角「＋」
+        composeRule.onNodeWithTag("home-list").performTouchInput { swipeUp() }
+        assertEquals(compactEntryWidth, entryWidth(), 0.5f)
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/aq_home_scrolled.png")
+
+        // 往回看：复原成通栏胶囊
+        composeRule.onNodeWithTag("home-list").performTouchInput { swipeDown() }
+        assertEquals(expandedEntryWidth, entryWidth(), 0.5f)
+
+        // 两种形态都是同一个节点，点它就是记一笔
+        composeRule.onNodeWithTag(HOME_ADD_TAG).performClick()
+        assertEquals(1, added)
     }
 
     @Test
@@ -206,7 +273,7 @@ class HomeScreenScreenshotTest {
     }
 
     @Test
-    fun fabHiddenInSelectionMode() {
+    fun addEntryHiddenInSelectionMode() {
         composeRule.setContent {
             PennedTheme {
                 HomeContent(
@@ -219,10 +286,9 @@ class HomeScreenScreenshotTest {
                 )
             }
         }
-        // 多选模式：合并卡与添加按钮都不渲染，FAB 也不该出现
+        // 多选模式：悬浮入口整块不渲染
         composeRule.onNodeWithText("已选 1 条").assertIsDisplayed()
-        composeRule.onNodeWithTag("home-fab").assertDoesNotExist()
+        composeRule.onNodeWithTag(HOME_ADD_TAG).assertDoesNotExist()
         composeRule.onNodeWithText("添加一条新记账").assertDoesNotExist()
-        composeRule.onNodeWithText("剩余").assertDoesNotExist()
     }
 }
