@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,7 +62,9 @@ import dev.penned.app.ui.components.PennedSectionHeader
 import dev.penned.app.ui.components.PennedTextAction
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
+import dev.penned.app.ui.theme.PennedPigment
 import dev.penned.app.ui.theme.PennedTextStyles
+import dev.penned.app.ui.theme.pigmentSlotFor
 
 /**
  * 分类管理页：支出/收入两域树形列表，支持新增（一级/子级）、重命名、软删除。
@@ -89,6 +92,10 @@ fun CategoriesScreen(
             val list = categories.orEmpty()
             listOf(CategoryType.EXPENSE to "支出分类", CategoryType.INCOME to "收入分类").forEach { (domain, title) ->
                 val parents = list.filter { it.type == domain && it.parentId == null }.sortedBy { it.sortOrder }
+                // 一屏列出全部一级分类的地方（宫格、这里、图表）走"同屏分配"，避免几个分类撞成同一个颜色；
+                // 单行/单卡出现分类的地方（首页列表、搜索结果、详情）仍走名字哈希，保证跨页稳定（D040 口径）
+                val domainNames = parents.map { it.name }
+                val slots = remember(domainNames) { PennedPigment.assignSlots(domainNames) }
                 PennedSectionHeader(
                     title = title,
                     action = { PennedTextAction("+ 新增", onClick = { addDomain = domain }) },
@@ -108,7 +115,12 @@ fun CategoriesScreen(
                     parents.forEachIndexed { index, parent ->
                         if (index > 0) PennedDivider(startIndent = PennedDimens.rowTextIndent)
                         val subs = list.filter { it.parentId == parent.id }.sortedBy { it.sortOrder }
-                        CategoryRow(parent = parent, subs = subs, onClick = { editTarget = parent })
+                        CategoryRow(
+                            parent = parent,
+                            subs = subs,
+                            slot = pigmentSlotFor(slots, parent.name),
+                            onClick = { editTarget = parent },
+                        )
                     }
                 }
                 Spacer(Modifier.height(PennedSpacing.xs))
@@ -144,7 +156,12 @@ fun CategoriesScreen(
 }
 
 @Composable
-private fun CategoryRow(parent: CategoryEntity, subs: List<CategoryEntity>, onClick: () -> Unit) {
+private fun CategoryRow(
+    parent: CategoryEntity,
+    subs: List<CategoryEntity>,
+    onClick: () -> Unit,
+    slot: Int? = null,
+) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -152,7 +169,7 @@ private fun CategoryRow(parent: CategoryEntity, subs: List<CategoryEntity>, onCl
             .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CategoryAvatar(parent.name, size = PennedDimens.iconTile)
+        CategoryAvatar(parent.name, size = PennedDimens.iconTile, slot = slot)
         Spacer(Modifier.width(PennedSpacing.md))
         Text(parent.name, style = PennedTextStyles.rowTitle, modifier = Modifier.weight(1f))
         if (subs.isEmpty()) {

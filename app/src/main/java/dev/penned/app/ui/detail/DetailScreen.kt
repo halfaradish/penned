@@ -51,6 +51,7 @@ import dev.penned.app.ui.components.PennedTopBar
 import dev.penned.app.ui.components.SectionCard
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedDimens
+import dev.penned.app.ui.theme.PennedPigment
 import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.PennedTextStyles
 import dev.penned.app.ui.theme.expenseColor
@@ -166,7 +167,9 @@ fun DetailContent(
             // 金额 hero：分类头像 + 分类路径 + 日期 + 大金额
             PennedCard(modifier = Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    CategoryAvatar(categoryLabel(d), size = PennedDimens.avatarLarge)
+                    // 头像取叶子分类名（与首页/搜索的行头像同一个哈希，颜色才对得上）；
+                    // 标题那行用完整路径「父 · 子」
+                    CategoryAvatar(avatarName(d), size = PennedDimens.avatarLarge)
                     Spacer(Modifier.width(PennedSpacing.md))
                     Column(Modifier.weight(1f)) {
                         Text(categoryLabel(d), style = PennedTextStyles.cardTitle)
@@ -255,6 +258,12 @@ fun DetailContent(
 private fun categoryLabel(d: DetailUi): String =
     listOfNotNull(d.categoryParentName, d.categoryName).joinToString(" · ")
         .ifEmpty { if (d.tx.type == TxType.TRANSFER) "转账" else "未分类" }
+
+/** 头像用名：与 `TransactionRow` 同口径（叶子分类 / 转账 / 未分类），保证同一个分类在列表与详情同色。 */
+private fun avatarName(d: DetailUi): String = when (d.tx.type) {
+    TxType.TRANSFER -> PennedPigment.TRANSFER
+    else -> d.categoryName ?: PennedPigment.UNKNOWN
+}
 
 /** 退款标记（M1 只读展示；退款交互留 M3）。 */
 @Composable
