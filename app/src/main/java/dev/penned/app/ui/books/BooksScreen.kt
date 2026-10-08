@@ -1,5 +1,8 @@
 package dev.penned.app.ui.books
 
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -51,7 +54,10 @@ import dev.penned.app.ui.components.PennedCard
 import dev.penned.app.ui.components.PennedDialog
 import dev.penned.app.ui.components.PennedDivider
 import dev.penned.app.ui.icons.PennedIcons
+import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
+import dev.penned.app.ui.theme.PennedTextStyles
+import dev.penned.app.ui.theme.iconMutedColor
 import dev.penned.app.ui.theme.expenseColor
 import dev.penned.app.ui.theme.primaryInkColor
 
@@ -206,7 +212,7 @@ fun BooksContent(
                         contentPadding = PaddingValues(0.dp),
                     ) {
                         books.forEachIndexed { index, book ->
-                            if (index > 0) PennedDivider(startIndent = 60.dp)
+                            if (index > 0) PennedDivider(startIndent = PennedDimens.rowTextIndent)
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -214,12 +220,12 @@ fun BooksContent(
                                     .padding(start = PennedSpacing.lg, end = PennedSpacing.xs, top = PennedSpacing.sm, bottom = PennedSpacing.sm),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                CategoryAvatar(book.name, size = 32.dp)
+                                CategoryAvatar(book.name, size = PennedDimens.iconTile)
                                 Spacer(Modifier.width(PennedSpacing.md))
                                 Column(Modifier.weight(1f)) {
                                     Text(
                                         book.name,
-                                        style = MaterialTheme.typography.bodyLarge,
+                                        style = PennedTextStyles.rowTitle,
                                         color = if (book.id == currentId) primaryInkColor() else MaterialTheme.colorScheme.onSurface,
                                     )
                                     if (book.id == currentId) {
@@ -230,12 +236,22 @@ fun BooksContent(
                                         )
                                     }
                                 }
-                                TextButton(onClick = { onRename(book) }) { Text("重命名") }
+                                // 行内动作改图标（文字按钮在列表里太吵）：无障碍名照旧是「重命名」「删除」
+                                IconButton(onClick = { onRename(book) }) {
+                                    Icon(
+                                        PennedIcons.Edit,
+                                        contentDescription = "重命名",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(PennedDimens.iconInline),
+                                    )
+                                }
                                 // 至少保留一个账本
-                                TextButton(onClick = { onDelete(book) }, enabled = books.size > 1) {
-                                    Text(
-                                        "删除",
-                                        color = if (books.size > 1) expenseColor() else MaterialTheme.colorScheme.onSurfaceVariant,
+                                IconButton(onClick = { onDelete(book) }, enabled = books.size > 1) {
+                                    Icon(
+                                        PennedIcons.Trash,
+                                        contentDescription = "删除",
+                                        tint = if (books.size > 1) expenseColor() else iconMutedColor(),
+                                        modifier = Modifier.size(PennedDimens.iconInline),
                                     )
                                 }
                             }

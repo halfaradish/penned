@@ -5,7 +5,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -18,7 +19,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** M1 S3：账本管理页（含删除=软删）。 */
+/** M1 S3：账本管理页（含删除=软删）。AR 轮起行内动作图标化，断言走 contentDescription。 */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w400dp-h800dp")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -42,10 +43,10 @@ class BooksScreenScreenshotTest {
         }
         composeRule.onNodeWithText("当前账本").assertIsDisplayed()
         composeRule.onNodeWithText("旅行账本").assertIsDisplayed()
-        // 每个账本都有重命名 + 删除
-        composeRule.onAllNodesWithText("重命名").assertCountEquals(3)
-        composeRule.onAllNodesWithText("删除").assertCountEquals(3)
-        composeRule.onAllNodesWithText("删除")[0].assertIsEnabled()
+        // 每个账本都有重命名 + 删除（图标按钮，语义名走 contentDescription）
+        composeRule.onAllNodesWithContentDescription("重命名").assertCountEquals(3)
+        composeRule.onAllNodesWithContentDescription("删除").assertCountEquals(3)
+        composeRule.onAllNodesWithContentDescription("删除")[0].assertIsEnabled()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_books_screen.png")
     }
 
@@ -57,6 +58,6 @@ class BooksScreenScreenshotTest {
             }
         }
         // 至少保留一个账本：最后一个账本的删除键不可点
-        composeRule.onNodeWithText("删除").assertIsNotEnabled()
+        composeRule.onNodeWithContentDescription("删除").assertIsNotEnabled()
     }
 }

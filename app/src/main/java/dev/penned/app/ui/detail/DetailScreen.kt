@@ -13,7 +13,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -44,13 +43,16 @@ import dev.penned.app.ui.components.CategoryAvatar
 import dev.penned.app.ui.components.MoneyText
 import dev.penned.app.ui.components.PennedButton
 import dev.penned.app.ui.components.PennedButtonVariant
+import dev.penned.app.ui.components.PennedBadge
 import dev.penned.app.ui.components.PennedCard
 import dev.penned.app.ui.components.PennedDivider
 import dev.penned.app.ui.components.PennedSwitchRow
 import dev.penned.app.ui.components.PennedTopBar
 import dev.penned.app.ui.components.SectionCard
 import dev.penned.app.ui.icons.PennedIcons
+import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
+import dev.penned.app.ui.theme.PennedTextStyles
 import dev.penned.app.ui.theme.expenseColor
 
 data class DetailUi(
@@ -164,10 +166,10 @@ fun DetailContent(
             // 金额 hero：分类头像 + 分类路径 + 日期 + 大金额
             PennedCard(modifier = Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    CategoryAvatar(categoryLabel(d), size = 44.dp)
+                    CategoryAvatar(categoryLabel(d), size = PennedDimens.avatarLarge)
                     Spacer(Modifier.width(PennedSpacing.md))
                     Column(Modifier.weight(1f)) {
-                        Text(categoryLabel(d), style = MaterialTheme.typography.titleMedium)
+                        Text(categoryLabel(d), style = PennedTextStyles.cardTitle)
                         Text(
                             formatMinute(d.tx.dateEpochMinute),
                             style = MaterialTheme.typography.bodySmall,
@@ -257,17 +259,11 @@ private fun categoryLabel(d: DetailUi): String =
 /** 退款标记（M1 只读展示；退款交互留 M3）。 */
 @Composable
 private fun RefundBadge(fullRefund: Boolean) {
-    Surface(
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp),
-        color = MaterialTheme.colorScheme.primaryContainer,
-    ) {
-        Text(
-            text = if (fullRefund) "已全额退款" else "部分退款",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-        )
-    }
+    PennedBadge(
+        text = if (fullRefund) "已全额退款" else "部分退款",
+        container = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+    )
 }
 
 private fun reimburseLabel(state: ReimburseState): String = when (state) {

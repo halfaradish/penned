@@ -1,6 +1,7 @@
 package dev.penned.app.ui.budgets
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -44,7 +45,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import dev.penned.app.ui.components.PennedCard
 import dev.penned.app.ui.components.SectionLabel
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.text.TextStyle
+import dev.penned.app.ui.components.PennedDivider
+import dev.penned.app.ui.components.PennedButton
+import dev.penned.app.ui.components.PennedButtonVariant
+import dev.penned.app.ui.components.PennedDialog
+import dev.penned.app.ui.components.PennedListRow
+import dev.penned.app.ui.components.PennedProgressBar
+import dev.penned.app.ui.components.PennedSectionHeader
+import dev.penned.app.ui.components.PennedSheet
+import dev.penned.app.ui.components.PennedTextAction
+import dev.penned.app.ui.components.SectionLabel
+import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedSpacing
+import dev.penned.app.ui.theme.PennedTextStyles
 import dev.penned.app.ui.theme.primaryInkColor
 
 /**
@@ -89,20 +104,10 @@ fun BudgetScreen(
                 BudgetCard(row = total, label = "总预算", onClick = { editRow = total })
             }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = PennedSpacing.xl, end = PennedSpacing.sm, top = PennedSpacing.md, bottom = PennedSpacing.xs),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "分类预算（每月）",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = { showAddCategory = true }) { Text("+ 新增") }
-            }
+            PennedSectionHeader(
+                title = "分类预算（每月）",
+                action = { PennedTextAction("+ 新增", onClick = { showAddCategory = true }) },
+            )
             if (state.categoryRows.isEmpty()) {
                 PennedCard(modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg)) {
                     Text(
@@ -173,26 +178,21 @@ private fun BudgetCard(row: BudgetsViewModel.BudgetRow, label: String, onClick: 
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 label,
-                style = MaterialTheme.typography.bodyLarge,
+                style = PennedTextStyles.rowTitle,
                 modifier = Modifier.weight(1f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 "剩 " + Money.format(row.state.remainingCents),
-                style = MaterialTheme.typography.titleMedium,
+                style = PennedTextStyles.cardTitle,
                 color = if (row.state.overspent) expenseColor() else MaterialTheme.colorScheme.onSurface,
             )
         }
         Spacer(Modifier.height(PennedSpacing.sm))
-        LinearProgressIndicator(
-            progress = { row.state.usedFraction },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(4.dp)
-                .clip(RoundedCornerShape(percent = 50)),
+        PennedProgressBar(
+            progress = row.state.usedFraction,
             color = if (row.state.overspent) expenseColor() else MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         )
         Spacer(Modifier.height(PennedSpacing.sm))
         Text(
@@ -215,35 +215,52 @@ private fun BudgetAmountDialog(
 ) {
     var amountText by remember { mutableStateOf(initialAmount) }
     val cents = Money.parseToCents(amountText)
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column {
-                categoryLabel?.let {
-                    Text("分类：$it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(8.dp))
-                }
-                OutlinedTextField(
-                    value = amountText,
-                    onValueChange = { input -> amountText = input.filter { it.isDigit() || it == '.' } },
-                    label = { Text("每月预算（元）") },
-                    singleLine = true,
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(cents ?: 0) }, enabled = cents != null && cents > 0) { Text("保存") }
-        },
-        dismissButton = {
-            Row {
-                if (onDelete != null) {
-                    TextButton(onClick = onDelete) { Text("删除", color = expenseColor()) }
-                }
-                TextButton(onClick = onDismiss) { Text("取消") }
-            }
-        },
-    )
+    PennedDialog(
+        onDismiss = onDismiss,
+        title = title,
+        confirmEnabled = cents != null && cents > 0,
+        onConfirm = { onConfirm(cents ?: 0) },
+    ) {
+        categoryLabel?.let {
+            Text("分类：$it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(PennedSpacing.sm))
+        }
+        BudgetAmountField(amountText = amountText, onAmountChange = { amountText = it })
+        if (onDelete != null) {
+            Spacer(Modifier.height(PennedSpacing.md))
+            PennedButton(
+                text = "删除这条预算",
+                onClick = onDelete,
+                variant = PennedButtonVariant.Danger,
+            )
+        }
+    }
+}
+
+/** 金额输入：填充式（白卡上再描一圈边是上一代的写法）。 */
+@Composable
+private fun BudgetAmountField(amountText: String, onAmountChange: (String) -> Unit) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(PennedSpacing.md),
+    ) {
+        if (amountText.isEmpty()) {
+            Text("每月预算（元）", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        BasicTextField(
+            value = amountText,
+            onValueChange = { input -> onAmountChange(input.filter { it.isDigit() || it == '.' }) },
+            singleLine = true,
+            textStyle = TextStyle(
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = MaterialTheme.typography.bodyLarge.fontSize,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
 }
 
 /** 新增分类预算：选支出分类 + 金额。 */
@@ -262,61 +279,53 @@ private fun BudgetCategoryDialog(
         if (parent == null) s.name else "${parent.name} · ${s.name}"
     } ?: "选择分类"
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("新增分类预算") },
-        text = {
-            Column {
-                Box {
-                    OutlinedButton(
-                        onClick = { pickerOpen = true },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(
-                            label,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.width(220.dp),
-                        )
-                    }
-                    DropdownMenu(expanded = pickerOpen, onDismissRequest = { pickerOpen = false }) {
-                        val parents = categories.filter { it.parentId == null }
-                        parents.forEach { parent ->
-                            val children = categories.filter { it.parentId == parent.id }
-                            if (children.isEmpty()) {
-                                DropdownMenuItem(text = { Text(parent.name) }, onClick = { selected = parent; pickerOpen = false })
-                            } else {
-                                Text(
-                                    parent.name,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                                )
-                                children.forEach { child ->
-                                    DropdownMenuItem(
-                                        text = { Text("　${child.name}") },
-                                        onClick = { selected = child; pickerOpen = false },
-                                    )
-                                }
-                            }
-                        }
+    PennedDialog(
+        onDismiss = onDismiss,
+        title = "新增分类预算",
+        confirmEnabled = selected != null && cents != null && cents > 0,
+        onConfirm = { selected?.let { onConfirm(it.id, cents ?: 0) } },
+    ) {
+        // 分类选择：行式入口 + 底部抽屉（名单选择一律走抽屉，D024 交互范式一）
+        PennedListRow(
+            title = label,
+            leadingIcon = PennedIcons.Tag,
+            trailing = null,
+            onClick = { pickerOpen = true },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(PennedSpacing.sm))
+        BudgetAmountField(amountText = amountText, onAmountChange = { amountText = it })
+    }
+    if (pickerOpen) {
+        BudgetCategorySheet(
+            categories = categories,
+            onPick = { selected = it; pickerOpen = false },
+            onDismiss = { pickerOpen = false },
+        )
+    }
+}
+
+/** 分类选择抽屉：一级分类作分区头、二级作可点行（只有一级的就直接是一行）。 */
+@Composable
+private fun BudgetCategorySheet(
+    categories: List<dev.penned.app.data.db.entity.CategoryEntity>,
+    onPick: (dev.penned.app.data.db.entity.CategoryEntity) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    PennedSheet(onDismiss = onDismiss, title = "选择分类") {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+            categories.filter { it.parentId == null }.forEach { parent ->
+                val children = categories.filter { it.parentId == parent.id }
+                if (children.isEmpty()) {
+                    PennedListRow(title = parent.name, onClick = { onPick(parent) })
+                } else {
+                    SectionLabel(parent.name)
+                    children.forEach { child ->
+                        PennedListRow(title = child.name, onClick = { onPick(child) })
+                        PennedDivider(startIndent = PennedSpacing.lg)
                     }
                 }
-                Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = amountText,
-                    onValueChange = { input -> amountText = input.filter { it.isDigit() || it == '.' } },
-                    label = { Text("每月预算（元）") },
-                    singleLine = true,
-                )
             }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(selected!!.id, cents ?: 0) },
-                enabled = selected != null && cents != null && cents > 0,
-            ) { Text("保存") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-    )
+        }
+    }
 }
