@@ -24,18 +24,23 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.penned.app.ui.components.CategoryAvatar
 import dev.penned.app.ui.components.PennedChip
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
+import dev.penned.app.ui.theme.PennedPigment
+import dev.penned.app.ui.theme.pigmentInkAt
+import dev.penned.app.ui.theme.pigmentSlotFor
+import dev.penned.app.ui.theme.primaryInkColor
 
 data class CategoryUi(val id: String, val name: String, val hasSubs: Boolean)
 
@@ -55,6 +60,10 @@ fun CategoryPanel(
     onAddSub: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    // 宫格是"一屏里同时出现的一组分类"，跟统计图表同口径走一次槽位分配（D040）：
+    // 只按名字哈希的话，「食品餐饮 / 出行交通 / 休闲娱乐」会落在同一槽，一屏里三个同色气泡
+    val names = parents.map { it.name }
+    val slots = remember(names) { PennedPigment.assignSlots(names) }
     Column(modifier = modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
         parents.chunked(5).forEach { rowItems ->
             Row(modifier = Modifier.fillMaxWidth()) {
@@ -63,6 +72,7 @@ fun CategoryPanel(
                         category = parent,
                         selected = parent.id == selectedId,
                         compact = false,
+                        slot = pigmentSlotFor(slots, parent.name),
                         onClick = { onSelectParent(parent) },
                         modifier = Modifier.weight(1f),
                     )
@@ -90,7 +100,7 @@ fun CategoryPanel(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(MaterialTheme.shapes.small)
                     .clickable(onClick = onAddParent)
                     .padding(vertical = 6.dp, horizontal = 2.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -132,29 +142,23 @@ private fun SubBand(
     onAddSub: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        modifier = modifier.padding(vertical = PennedSpacing.sm),
+    FlowRow(
+        modifier = modifier.fillMaxWidth().padding(vertical = PennedSpacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(PennedSpacing.sm),
+        verticalArrangement = Arrangement.spacedBy(PennedSpacing.sm),
     ) {
-        FlowRow(
-            modifier = Modifier.fillMaxWidth().padding(PennedSpacing.sm),
-            horizontalArrangement = Arrangement.spacedBy(PennedSpacing.sm),
-            verticalArrangement = Arrangement.spacedBy(PennedSpacing.sm),
-        ) {
-            subs.forEach { sub ->
-                PennedChip(
-                    label = sub.name,
-                    selected = sub.id == selectedId,
-                    onClick = { onSelectSub(sub) },
-                )
-            }
+        subs.forEach { sub ->
             PennedChip(
-                label = "新增子分类",
-                icon = PennedIcons.Plus,
-                onClick = { expandedParentId?.let(onAddSub) },
+                label = sub.name,
+                selected = sub.id == selectedId,
+                onClick = { onSelectSub(sub) },
             )
         }
+        PennedChip(
+            label = "新增子分类",
+            icon = PennedIcons.Plus,
+            onClick = { expandedParentId?.let(onAddSub) },
+        )
     }
 }
 
@@ -165,36 +169,20 @@ private fun CategoryCell(
     compact: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    slot: Int? = null,
 ) {
     val circleSize = if (compact) 40.dp else PennedDimens.categoryBubble
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
+            .clip(MaterialTheme.shapes.small)
             .clickable(onClick = onClick)
             .padding(vertical = 6.dp, horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Box(
-                modifier = Modifier
-                    .size(circleSize)
-                    .clip(CircleShape)
-                    .background(
-                        if (selected) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.surfaceContainer
-                        },
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = category.name.take(1),
-                    style = if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
-                    color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            // 有子分类：圆内右上小圆点（放到圆外会显得和单元格脱开）
+            // 气泡走颜料头像：分类在宫格里有自己的颜色（与统计图同一套分配口径）
+            CategoryAvatar(name = category.name, size = circleSize, selected = selected, slot = slot)
+            // 有子分类：圆内右上小圆点（放到圆外会显得和单元格脱开），用该分类自己的颜料色
             if (category.hasSubs) {
                 Box(
                     modifier = Modifier
@@ -202,7 +190,7 @@ private fun CategoryCell(
                         .padding(top = 3.dp, end = 3.dp)
                         .size(9.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary),
+                        .background(pigmentInkAt(slot ?: PennedPigment.slotOf(category.name))),
                 )
             }
         }
@@ -211,7 +199,7 @@ private fun CategoryCell(
             style = MaterialTheme.typography.labelSmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            color = if (selected) primaryInkColor() else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(top = 4.dp),
         )
     }

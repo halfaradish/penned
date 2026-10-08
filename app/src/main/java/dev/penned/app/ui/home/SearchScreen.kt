@@ -46,10 +46,14 @@ import dev.penned.app.data.db.dao.TxWithCategory
 import dev.penned.app.domain.SearchQuery
 import dev.penned.app.ui.components.DayHeaderRow
 import dev.penned.app.ui.components.PennedCard
+import dev.penned.app.ui.components.PennedCardSection
+import dev.penned.app.ui.components.PennedCardSectionPosition
+import dev.penned.app.ui.components.PennedDivider
 import dev.penned.app.ui.components.PennedTopBar
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
+import dev.penned.app.ui.theme.PennedTextStyles
 import java.time.ZoneId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -269,8 +273,8 @@ private fun SearchField(
 private fun SearchHint(text: String) {
     Text(
         text = text,
-        style = MaterialTheme.typography.bodyMedium,
+        style = PennedTextStyles.rowTitle,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = PennedSpacing.xl, vertical = PennedSpacing.lg),
+        modifier = Modifier.padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.lg),
     )
 }

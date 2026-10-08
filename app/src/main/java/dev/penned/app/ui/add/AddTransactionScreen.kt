@@ -17,11 +17,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,6 +42,7 @@ import dev.penned.app.domain.TxType
 import dev.penned.app.ui.components.CategoryAvatar
 import dev.penned.app.ui.components.PennedCard
 import dev.penned.app.ui.components.PennedChip
+import dev.penned.app.ui.components.PennedDialog
 import dev.penned.app.ui.components.PennedListRow
 import dev.penned.app.ui.components.PennedSegmentedTabs
 import dev.penned.app.ui.components.PennedSheet
@@ -513,52 +512,64 @@ private fun TextNameDialog(
     onDismiss: () -> Unit,
 ) {
     var text by remember { mutableStateOf("") }
-    // 用 BasicTextField 而非 OutlinedTextField：后者在 Robolectric 弹窗内会导致无法 idle
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            BasicTextField(
-                value = text,
-                onValueChange = { text = it },
-                singleLine = true,
-                textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = MaterialTheme.typography.bodyLarge.fontSize),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(12.dp),
-                decorationBox = { inner ->
-                    Box {
-                        if (text.isEmpty()) {
-                            Text(placeholder, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        inner()
+    PennedDialog(
+        onDismiss = onDismiss,
+        title = title,
+        confirmEnabled = text.isNotBlank(),
+        onConfirm = { onConfirm(text) },
+    ) {
+        // 用 BasicTextField 而非 OutlinedTextField：后者在 Robolectric 弹窗内会导致无法 idle
+        BasicTextField(
+            value = text,
+            onValueChange = { text = it },
+            singleLine = true,
+            textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = MaterialTheme.typography.bodyLarge.fontSize),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(MaterialTheme.shapes.small)
+                .background(MaterialTheme.colorScheme.surfaceContainer)
+                .padding(PennedSpacing.md),
+            decorationBox = { inner ->
+                Box {
+                    if (text.isEmpty()) {
+                        Text(placeholder, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                },
-            )
-        },
-        confirmButton = { TextButton(onClick = { onConfirm(text) }, enabled = text.isNotBlank()) { Text("保存") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-    )
+                    inner()
+                }
+            },
+        )
+    }
 }
 
 @Composable
-private fun TextAmountDialog(title: String, initial: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {    var text by remember { mutableStateOf(initial) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it.filter { ch -> ch.isDigit() || ch == '.' } },
-                placeholder = { Text("金额（元）") },
-                singleLine = true,
-            )
-        },
-        confirmButton = { TextButton(onClick = { onConfirm(text) }) { Text("保存") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("清除") } },
-    )
+private fun TextAmountDialog(title: String, initial: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+    var text by remember { mutableStateOf(initial) }
+    PennedDialog(
+        onDismiss = onDismiss,
+        title = title,
+        dismissLabel = "清除",
+        onConfirm = { onConfirm(text) },
+    ) {
+        BasicTextField(
+            value = text,
+            onValueChange = { text = it.filter { ch -> ch.isDigit() || ch == '.' } },
+            singleLine = true,
+            textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = MaterialTheme.typography.bodyLarge.fontSize),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(MaterialTheme.shapes.small)
+                .background(MaterialTheme.colorScheme.surfaceContainer)
+                .padding(PennedSpacing.md),
+            decorationBox = { inner ->
+                Box {
+                    if (text.isEmpty()) {
+                        Text("金额（元）", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    inner()
+                }
+            },
+        )
+    }
 }
 
 @Preview(showBackground = true, name = "记一笔-支出", widthDp = 400, heightDp = 800)

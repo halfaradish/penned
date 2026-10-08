@@ -53,6 +53,9 @@ object PennedTextStyles {
     /** 列表行主标题：15sp/500（比正文重一档，比 titleMedium 轻一档）。 */
     val rowTitle = style(15, 21, 500, 0.0)
 
+    /** 卡片标题（月卡标题行、弹层标题这类）：16sp/600。 */
+    val cardTitle = style(16, 22, 600, 0.0)
+
     /** 分区小标题（`SectionLabel`/`PennedSectionHeader` 用，= labelSmall 的语义别名）。 */
     val sectionLabel = style(12, 16, 600, 0.4)
 

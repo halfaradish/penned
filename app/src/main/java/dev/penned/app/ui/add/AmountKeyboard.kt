@@ -1,9 +1,7 @@
 package dev.penned.app.ui.add
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.clickable
@@ -34,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
+import dev.penned.app.ui.theme.iconMutedColor
 
 private const val KEY_AGAIN = "再记"
 private const val KEY_DONE = "完成"
@@ -142,16 +141,16 @@ private fun KeyCell(
     val background by animateColorAsState(targetValue = target, label = "key")
     val contentColor = when {
         primary -> MaterialTheme.colorScheme.onPrimary
-        !enabled -> MaterialTheme.colorScheme.outline
+        !enabled -> iconMutedColor()
         key.operatorBlock -> MaterialTheme.colorScheme.onSurfaceVariant
         else -> MaterialTheme.colorScheme.onSurface
     }
-    val shape = RoundedCornerShape(12.dp)
+    // 白键浮在灰底上就够分层了，不再描边（扁平语言：发丝线只留给卡内分隔）
+    val shape = MaterialTheme.shapes.small
     Box(
         modifier = modifier
             .clip(shape)
             .background(background)
-            .border(BorderStroke(PennedDimens.hairline, MaterialTheme.colorScheme.outlineVariant), shape)
             // 键盘键位是语义单元：测试按 tag 定位（"+"/"-" 会与分类宫格「＋ 新增」文本撞车）
             .testTag("amount-key-$label")
             .clickable(
@@ -174,7 +173,7 @@ private fun KeyCell(
                 PennedIcons.Backspace,
                 contentDescription = "退格",
                 tint = contentColor,
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(PennedDimens.icon),
             )
         } else {
             Text(

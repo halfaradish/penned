@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.penned.app.data.db.dao.TxWithCategory
@@ -32,6 +33,7 @@ import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedPigment
 import dev.penned.app.ui.theme.PennedSpacing
+import dev.penned.app.ui.theme.PennedTextStyles
 
 /** 流水标题：分类路径（父 · 子）或转账行的「转账 · 转入 X」（D007 单表多态）。列表行与删除确认共用。 */
 internal fun txTitle(row: TxWithCategory): String = when (row.type) {
@@ -109,7 +111,7 @@ internal fun TransactionRow(
         Column(Modifier.weight(1f).padding(top = 1.dp)) {
             Text(
                 title,
-                style = MaterialTheme.typography.bodyLarge,
+                style = PennedTextStyles.rowTitle,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -130,6 +132,12 @@ internal fun TransactionRow(
             }
         }
         Spacer(Modifier.width(PennedSpacing.md))
-        MoneyText(row.amountCents, type = row.type, modifier = Modifier.padding(top = 1.dp))
+        // 金额是主角：比行标题重一档（16/600 对 15/500），等宽右对齐
+        MoneyText(
+            row.amountCents,
+            type = row.type,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            modifier = Modifier.padding(top = 1.dp),
+        )
     }
 }

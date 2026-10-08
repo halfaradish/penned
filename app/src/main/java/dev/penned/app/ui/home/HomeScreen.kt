@@ -62,6 +62,13 @@ import dev.penned.app.domain.Money
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.components.DayHeaderRow
 import dev.penned.app.ui.components.EmptyState
+import dev.penned.app.ui.components.PennedDivider
+import dev.penned.app.ui.components.PennedProgressBar
+import dev.penned.app.ui.components.PennedSnackbarHost
+import dev.penned.app.ui.components.PennedStatCells
+import dev.penned.app.ui.components.StatCell
+import dev.penned.app.ui.theme.PennedTextStyles
+import dev.penned.app.ui.theme.iconMutedColor
 import dev.penned.app.ui.components.PennedCardSection
 import dev.penned.app.ui.components.PennedCardSectionPosition
 import dev.penned.app.ui.components.PennedDialog
@@ -387,10 +394,7 @@ fun HomeContent(
                                             }
                                             // 日与日之间靠日头条分开，最后一行不再画线
                                             if (!isLastRowOfDay) {
-                                                HorizontalDivider(
-                                                    modifier = Modifier.padding(start = PennedDimens.rowTextIndent),
-                                                    color = MaterialTheme.colorScheme.outlineVariant,
-                                                )
+                                                PennedDivider(startIndent = PennedDimens.rowTextIndent)
                                             }
                                         }
                                     }
@@ -421,11 +425,9 @@ fun HomeContent(
         }
 
         if (snackbarHostState != null) {
-            SnackbarHost(
+            PennedSnackbarHost(
                 hostState = snackbarHostState,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(PennedSpacing.lg),
+                modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
     }
@@ -447,14 +449,14 @@ private fun HomeHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = PennedSpacing.md, end = PennedSpacing.sm, top = PennedSpacing.sm, bottom = PennedSpacing.sm),
+            .padding(start = PennedSpacing.sm, end = PennedSpacing.sm, top = PennedSpacing.sm, bottom = PennedSpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (selectionMode) {
             TextButton(onClick = onExitSelection) { Text("取消") }
             Text(
                 "已选 $selectedCount 条",
-                style = MaterialTheme.typography.titleMedium,
+                style = PennedTextStyles.cardTitle,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.weight(1f),
             )
@@ -470,19 +472,19 @@ private fun HomeHeader(
                         .padding(horizontal = PennedSpacing.sm, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(bookName, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
+                    Text(bookName, style = PennedTextStyles.cardTitle, color = MaterialTheme.colorScheme.onSurface)
                     Spacer(Modifier.width(PennedSpacing.xs))
                     Icon(
                         PennedIcons.ChevronDown,
                         contentDescription = "切换账本",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp),
+                        tint = iconMutedColor(),
+                        modifier = Modifier.size(PennedDimens.iconChevron),
                     )
                 }
                 bookMenu()
             }
             Spacer(Modifier.weight(1f))
-            IconButton(onClick = onSearch) {
+            IconButton(onClick = onSearch, modifier = Modifier.size(PennedDimens.iconButton)) {
                 Icon(
                     PennedIcons.Search,
                     contentDescription = "搜索",
@@ -521,15 +523,15 @@ private fun MonthTitleRow(
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.titleMedium,
+            style = PennedTextStyles.cardTitle,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
         Icon(
             PennedIcons.ChevronDown,
             contentDescription = if (expanded) "折叠 $label" else "展开 $label",
-            tint = MaterialTheme.colorScheme.outline,
-            modifier = Modifier.size(18.dp).rotate(rotation),
+            tint = iconMutedColor(),
+            modifier = Modifier.size(PennedDimens.iconChevron).rotate(rotation),
         )
     }
 }
@@ -556,16 +558,13 @@ private fun MonthOverview(
                 bottom = PennedSpacing.md,
             ),
     ) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            SummaryColumn("支出", Money.format(totals.expenseCents), expenseColor(), Modifier.weight(1f))
-            SummaryColumn("收入", Money.format(totals.incomeCents), incomeColor(), Modifier.weight(1f))
-            SummaryColumn(
-                "结余",
-                Money.format(totals.incomeCents - totals.expenseCents),
-                MaterialTheme.colorScheme.onSurface,
-                Modifier.weight(1f),
-            )
-        }
+        PennedStatCells(
+            listOf(
+                StatCell("支出", Money.format(totals.expenseCents), expenseColor()),
+                StatCell("收入", Money.format(totals.incomeCents), incomeColor()),
+                StatCell("结余", Money.format(totals.incomeCents - totals.expenseCents)),
+            ),
+        )
         if (showBudget) {
             Spacer(Modifier.height(PennedSpacing.md))
             HomeBudgetRow(budgetSummary = budgetSummary, onOpenBudgets = onOpenBudgets)
@@ -604,36 +603,20 @@ private fun HomeBudgetRow(
     val state = BudgetMath.state(budgetSummary.totalCents, budgetSummary.spentCents)
     val remainColor = if (state.overspent) expenseColor() else MaterialTheme.colorScheme.onSurface
     Column(modifier = clickable) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            SummaryColumn("预算", Money.format(budgetSummary.totalCents), MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
-            SummaryColumn("已用", Money.format(budgetSummary.spentCents), MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
-            // 超支时 remainingCents 为负，红字直接读出超了多少
-            SummaryColumn("剩余", Money.format(state.remainingCents), remainColor, Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(PennedSpacing.sm))
-        LinearProgressIndicator(
-            progress = { state.usedFraction },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(4.dp)
-                .clip(RoundedCornerShape(percent = 50))
-                .testTag(HOME_BUDGET_BAR_TAG),
-            color = if (state.overspent) expenseColor() else MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        PennedStatCells(
+            listOf(
+                StatCell("预算", Money.format(budgetSummary.totalCents)),
+                StatCell("已用", Money.format(budgetSummary.spentCents)),
+                // 超支时 remainingCents 为负，红字直接读出超了多少
+                StatCell("剩余", Money.format(state.remainingCents), remainColor),
+            ),
         )
-    }
-}
-
-/** 卡片里的三列：标签一行、数值一行（等宽三列，居中）。 */
-@Composable
-private fun SummaryColumn(label: String, value: String, valueColor: Color, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.titleMedium, color = valueColor)
+        Spacer(Modifier.height(PennedSpacing.sm))
+        PennedProgressBar(
+            progress = state.usedFraction,
+            color = if (state.overspent) expenseColor() else MaterialTheme.colorScheme.primary,
+            testTag = HOME_BUDGET_BAR_TAG,
+        )
     }
 }
 
