@@ -60,6 +60,8 @@ import dev.penned.app.ui.components.PennedTopBar
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
+import dev.penned.app.ui.theme.PennedTextStyles
+import dev.penned.app.ui.theme.iconMutedColor
 import dev.penned.app.ui.theme.PennedTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -507,22 +509,22 @@ private fun PickerRow(
     ) {
         Text(
             label,
-            style = MaterialTheme.typography.bodyLarge,
+            style = PennedTextStyles.rowTitle,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.width(72.dp),
+            modifier = Modifier.width(PennedDimens.formLabel),
         )
         Spacer(Modifier.weight(1f))
         if (leading != null) {
             leading()
             Spacer(Modifier.width(PennedSpacing.sm))
         }
-        Text(value, style = MaterialTheme.typography.bodyLarge)
+        Text(value, style = PennedTextStyles.rowTitle)
         Spacer(Modifier.width(PennedSpacing.sm))
         Icon(
             PennedIcons.ChevronRight,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.outline,
-            modifier = Modifier.size(18.dp),
+            tint = iconMutedColor(),
+            modifier = Modifier.size(PennedDimens.iconChevron),
         )
     }
 }
@@ -587,7 +589,7 @@ private fun BookCheckRow(
         Spacer(Modifier.width(PennedSpacing.md))
         Text(
             name,
-            style = MaterialTheme.typography.bodyLarge,
+            style = PennedTextStyles.rowTitle,
             color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -626,7 +628,7 @@ private fun GroupPickerSheet(
                     slot = accountPigmentSlot(group.defaultType),
                 )
                 Spacer(Modifier.width(PennedSpacing.md))
-                Text(group.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Text(group.title, style = PennedTextStyles.rowTitle, modifier = Modifier.weight(1f))
                 if (group == selected) {
                     Text(
                         "已选",
@@ -659,15 +661,15 @@ private fun EditFieldRow(
     ) {
         Text(
             label,
-            style = MaterialTheme.typography.bodyLarge,
+            style = PennedTextStyles.rowTitle,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.width(72.dp),
+            modifier = Modifier.width(PennedDimens.formLabel),
         )
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
             singleLine = true,
-            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+            textStyle = PennedTextStyles.rowTitle.copy(color = MaterialTheme.colorScheme.onSurface),
             keyboardOptions = KeyboardOptions(keyboardType = if (money) KeyboardType.Decimal else KeyboardType.Text),
             modifier = Modifier
                 .weight(1f)
@@ -677,7 +679,7 @@ private fun EditFieldRow(
                     if (value.isEmpty()) {
                         Text(
                             placeholder,
-                            style = MaterialTheme.typography.bodyLarge,
+                            style = PennedTextStyles.rowTitle,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }

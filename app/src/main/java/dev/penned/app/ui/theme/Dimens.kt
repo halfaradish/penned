@@ -77,6 +77,13 @@ object PennedDimens {
     /** 卡头里"支出|收入"这类两段切换器的定宽（放卡头右侧，铺满会喧宾夺主）。 */
     val segmentToggle = 132.dp
 
+    /** 表单页左侧标签列宽（名称/余额/备注这类五行表单）。 */
+    val formLabel = 72.dp
+
+    /** 锁屏 PIN 键宽（键高复用 [keyHeight]）与密码圆点直径。 */
+    val pinKeyWidth = 76.dp
+    val pinDot = 16.dp
+
     /** 底部 Snackbar 与导航栏的间距。 */
     val fabMargin = 16.dp
 }

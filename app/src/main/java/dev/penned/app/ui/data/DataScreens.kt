@@ -4,6 +4,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -42,9 +48,20 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import androidx.compose.foundation.layout.PaddingValues
 import dev.penned.app.ui.components.PennedCard
+import dev.penned.app.ui.components.CategoryAvatar
+import dev.penned.app.ui.components.ConfirmDialog
+import dev.penned.app.ui.components.EmptyState
+import dev.penned.app.ui.components.MoneyText
+import dev.penned.app.ui.components.PennedCard
+import dev.penned.app.ui.components.PennedDivider
 import dev.penned.app.ui.components.PennedListRow
+import dev.penned.app.ui.components.PennedSnackbarHost
 import dev.penned.app.ui.components.SectionLabel
+import dev.penned.app.ui.icons.PennedIcons
+import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
+import dev.penned.app.ui.theme.PennedTextStyles
+import dev.penned.app.ui.theme.expenseColor
 
 /**
  * 数据管理页：一木 xls 导入 / CSV 导入导出 / 导入批次管理。
@@ -81,10 +98,16 @@ fun DataManagementScreen(
 
     Scaffold(
         topBar = { PennedTopBar(title = "数据管理", onBack = onBack) },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { PennedSnackbarHost(snackbarHostState) },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (busy) {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                )
+            }
             SectionCard("导入") {
                 MenuRow(
                     title = "一木记账 xls 导入",
@@ -171,61 +194,63 @@ fun ImportBatchesScreen(
 
     Scaffold(
         topBar = { PennedTopBar(title = "导入批次", onBack = onBack) },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { PennedSnackbarHost(snackbarHostState) },
     ) { padding ->
         if (batches.isEmpty()) {
-            Column(
-                Modifier.padding(padding).fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text("还没有导入记录", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "在数据管理页导入一木 xls 或 CSV 后，会在这里按批次记录",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.Center) {
+                EmptyState(
+                    title = "还没有导入记录",
+                    hint = "在数据管理页导入一木 xls 或 CSV 后，会在这里按批次记录",
+                    icon = PennedIcons.Database,
                 )
             }
         } else {
-            LazyColumn(Modifier.padding(padding).fillMaxSize()) {
-                items(batches.size) { i ->
-                    val batch = batches[i]
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable { onOpenBatch(batch.id) }
-                            .padding(horizontal = 20.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(batch.fileName, style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                "${batch.count} 条流水 · ${formatBatchTime(batch.importedAt)}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            // 卡片语言：一张卡包住全部批次，行分隔线缩进到头像之后（AR 轮收编：此前是 20dp 裸行）
+            LazyColumn(
+                modifier = Modifier.padding(padding).fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = PennedSpacing.lg,
+                    end = PennedSpacing.lg,
+                    top = PennedSpacing.md,
+                    bottom = PennedSpacing.xxl,
+                ),
+            ) {
+                item(key = "batch-card") {
+                    PennedCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(0.dp)) {
+                        batches.forEachIndexed { i, batch ->
+                            if (i > 0) PennedDivider(startIndent = PennedDimens.rowTextIndent)
+                            PennedListRow(
+                                title = batch.fileName,
+                                subtitle = "${batch.count} 条流水 · ${formatBatchTime(batch.importedAt)}",
+                                leadingIcon = PennedIcons.Database,
+                                onClick = { onOpenBatch(batch.id) },
+                                content = {
+                                    IconButton(onClick = { confirmTarget = batch }) {
+                                        Icon(
+                                            PennedIcons.Trash,
+                                            contentDescription = "删除",
+                                            tint = expenseColor(),
+                                            modifier = Modifier.size(PennedDimens.iconInline),
+                                        )
+                                    }
+                                },
                             )
                         }
-                        TextButton(onClick = { confirmTarget = batch }) { Text("删除") }
                     }
-                    HorizontalDivider()
                 }
             }
         }
     }
 
     confirmTarget?.let { target ->
-        AlertDialog(
-            onDismissRequest = { confirmTarget = null },
-            title = { Text("删除这批导入？") },
-            text = { Text("「${target.fileName}」的 ${target.count} 条流水将被删除（可恢复的软删除）。") },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.deleteBatch(target.id)
-                    confirmTarget = null
-                }) { Text("删除") }
+        ConfirmDialog(
+            onDismiss = { confirmTarget = null },
+            title = "删除这批导入？",
+            text = "「${target.fileName}」的 ${target.count} 条流水将被删除（可恢复的软删除）。",
+            onConfirm = {
+                viewModel.deleteBatch(target.id)
+                confirmTarget = null
             },
-            dismissButton = { TextButton(onClick = { confirmTarget = null }) { Text("取消") } },
         )
     }
 }
@@ -260,54 +285,67 @@ fun ImportBatchDetailContent(
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
             batch?.let {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
-                    Text(it.fileName, style = MaterialTheme.typography.titleMedium)
+                PennedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
+                ) {
+                    Text(it.fileName, style = PennedTextStyles.cardTitle)
                     Text(
                         "${it.count} 条流水 · 导入于 ${formatBatchTime(it.importedAt)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                HorizontalDivider()
             }
             if (rows.isEmpty()) {
-                Column(
-                    Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    Text("这批流水已全部删除", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    EmptyState(title = "这批流水已全部删除", icon = PennedIcons.Trash)
                 }
             } else {
-                LazyColumn(Modifier.fillMaxSize()) {
-                    items(rows.size) { i ->
-                        val row = rows[i]
-                        Row(
-                            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    row.note ?: row.categoryName ?: "未分类",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                )
-                                Text(
-                                    batchRowDate(row.dateEpochMinute) + " · " +
-                                        (row.categoryName ?: "未分类"),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = PennedSpacing.lg,
+                        end = PennedSpacing.lg,
+                        bottom = PennedSpacing.xxl,
+                    ),
+                ) {
+                    item(key = "rows-card") {
+                        PennedCard(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(0.dp)) {
+                            rows.forEachIndexed { i, row ->
+                                if (i > 0) PennedDivider(startIndent = PennedDimens.rowTextIndent)
+                                Row(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = PennedDimens.rowMinHeight)
+                                        .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.sm),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    CategoryAvatar(row.categoryName ?: "未分类")
+                                    Spacer(Modifier.width(PennedSpacing.md))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            row.note ?: row.categoryName ?: "未分类",
+                                            style = PennedTextStyles.rowTitle,
+                                        )
+                                        Text(
+                                            batchRowDate(row.dateEpochMinute) + " · " +
+                                                (row.categoryName ?: "未分类"),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    MoneyText(
+                                        cents = row.amountCents,
+                                        type = row.type,
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                                        ),
+                                    )
+                                }
                             }
-                            Text(
-                                (if (row.type == dev.penned.app.domain.TxType.EXPENSE) "-" else if (row.type == dev.penned.app.domain.TxType.INCOME) "+" else "") +
-                                    dev.penned.app.domain.Money.format(row.amountCents),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = if (row.type == dev.penned.app.domain.TxType.EXPENSE) dev.penned.app.ui.theme.expenseColor()
-                                else if (row.type == dev.penned.app.domain.TxType.INCOME) dev.penned.app.ui.theme.incomeColor()
-                                else MaterialTheme.colorScheme.onSurface,
-                            )
                         }
-                        HorizontalDivider()
                     }
                 }
             }

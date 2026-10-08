@@ -44,7 +44,7 @@ fun PennedSectionHeader(
     Row(
         modifier
             .fillMaxWidth()
-            .padding(start = PennedSpacing.xl, end = PennedSpacing.sm, top = PennedSpacing.md, bottom = PennedSpacing.xs),
+            .padding(start = PennedSpacing.lg, end = PennedSpacing.sm, top = PennedSpacing.md, bottom = PennedSpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(

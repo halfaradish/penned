@@ -37,6 +37,8 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedDimens
+import dev.penned.app.ui.theme.PennedSpacing
+import dev.penned.app.ui.theme.PennedTextStyles
 
 /**
  * PIN 数字键盘（4 位）：锁屏与设置页共用。纯 UI + 可测状态机 [PinState]。
@@ -51,24 +53,26 @@ fun PinPad(
     onBackspace: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // 锁屏是覆盖层、不在 NavHost 里（D041），所以自己铺底色——透明根会透出下面的页面
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp),
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = PennedSpacing.xxl),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(title, style = MaterialTheme.typography.titleLarge)
+        Text(title, style = PennedTextStyles.cardTitle)
         if (subtitle != null) {
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(PennedSpacing.xs + 2.dp))
             Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Spacer(Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Spacer(Modifier.height(PennedSpacing.lg))
+        Row(horizontalArrangement = Arrangement.spacedBy(PennedSpacing.md)) {
             repeat(PinHasher.PIN_LENGTH) { i ->
                 Box(
                     modifier = Modifier
-                        .size(16.dp)
+                        .size(PennedDimens.pinDot)
                         .clip(CircleShape)
                         .background(
                             if (i < filledCount) MaterialTheme.colorScheme.primary
@@ -77,13 +81,13 @@ fun PinPad(
                 )
             }
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(PennedSpacing.sm))
         Text(
             errorText ?: " ",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
         )
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(PennedSpacing.lg))
 
         val keys = listOf('1', '2', '3', '4', '5', '6', '7', '8', '9', '·', '0', '⌫')
         keys.chunked(3).forEach { row ->
@@ -94,7 +98,7 @@ fun PinPad(
                 row.forEach { key ->
                     if (key == '·') {
                         // 占位键不做成"看着能点其实没反应"的死 UI
-                        Spacer(Modifier.size(76.dp, 60.dp))
+                        Spacer(Modifier.size(PennedDimens.pinKeyWidth, PennedDimens.keyHeight + PennedSpacing.sm))
                         return@forEach
                     }
                     PinKey(
@@ -114,17 +118,16 @@ private fun PinKey(label: String?, backspace: Boolean, onClick: () -> Unit) {
     val haptics = LocalHapticFeedback.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val shape = RoundedCornerShape(12.dp)
+    val shape = MaterialTheme.shapes.small
     val background by animateColorAsState(
         targetValue = if (pressed) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface,
         label = "pinKey",
     )
     Box(
         modifier = Modifier
-            .size(76.dp, 60.dp)
+            .size(PennedDimens.pinKeyWidth, PennedDimens.keyHeight + PennedSpacing.sm)
             .clip(shape)
             .background(background)
-            .border(BorderStroke(PennedDimens.hairline, MaterialTheme.colorScheme.outlineVariant), shape)
             .clickable(interactionSource = interaction, indication = null) {
                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onClick()
@@ -136,7 +139,7 @@ private fun PinKey(label: String?, backspace: Boolean, onClick: () -> Unit) {
                 PennedIcons.Backspace,
                 contentDescription = "退格",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(PennedDimens.icon),
             )
         } else {
             Text(label.orEmpty(), style = MaterialTheme.typography.titleLarge)
