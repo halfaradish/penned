@@ -20,6 +20,7 @@ import dev.penned.app.data.db.dao.TxWithCategory
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.theme.PennedTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -270,6 +271,51 @@ class HomeScreenScreenshotTest {
         }
         composeRule.onNodeWithText("-234.56").assertIsDisplayed()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_home_budget_overspent.png")
+    }
+
+    /**
+     * 回归（AQ 轮用户实测报的 bug）：预算块曾经带 16dp 圆角裁剪，而进度条压在块的底边上，
+     * 16dp 底角把条的两端连同"已用 > 0"的那点绿色一起裁掉——0.73% 的填充全落在被裁的 23px 里，
+     * 看着就像一分钱没花。断言：进度条区域里**有绿色像素**，且**紧贴条的左端**。
+     *
+     * 取像素走 Roborazzi 落盘再由宿主 JVM 读回来——`captureToImage()` 在 Robolectric 下会卡在
+     * 窗口重绘（PixelCopy 永远等不到 idle）。
+     */
+    @Test
+    fun budgetBarDrawsGreenAtTinyUsage() {
+        composeRule.setContent {
+            PennedTheme {
+                HomeContent(
+                    bookName = "日常账本",
+                    rows = rows,
+                    onAdd = {},
+                    // 22.00 / 3,000.00 = 0.73%
+                    budgetSummary = HomeViewModel.BudgetSummary(totalCents = 300000, spentCents = 2200),
+                )
+            }
+        }
+        val scale = composeRule.density.density
+        val bar = composeRule.onNodeWithTag(HOME_BUDGET_BAR_TAG).getUnclippedBoundsInRoot()
+        val left = (bar.left.value * scale).toInt()
+        val right = (bar.right.value * scale).toInt()
+        val top = (bar.top.value * scale).toInt()
+        val bottom = (bar.bottom.value * scale).toInt()
+
+        val path = "build/test-results/roborazzi/aq_budget_bar_probe.png"
+        composeRule.onRoot().captureRoboImage(path)
+        val bitmap = requireNotNull(android.graphics.BitmapFactory.decodeFile(path)) { "读不到 $path" }
+
+        // 主色（青绿）的判据：绿通道明显高于红通道；浅青日头条与灰轨道都过不了这一关
+        fun isGreen(x: Int, y: Int): Boolean {
+            val rgb = bitmap.getPixel(x, y)
+            return ((rgb shr 8) and 0xFF) - ((rgb shr 16) and 0xFF) > 38
+        }
+        val greenColumns = (left until right).filter { x -> (top until bottom).any { y -> isGreen(x, y) } }
+        assertTrue("进度条里一个绿像素都没有（条 $left..$right × $top..$bottom）", greenColumns.isNotEmpty())
+        assertTrue(
+            "绿色没贴着条的左端（最左绿 x=${greenColumns.first()}，条左 x=$left）",
+            greenColumns.first() - left <= 2,
+        )
     }
 
     @Test

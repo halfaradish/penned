@@ -82,6 +82,9 @@ import kotlinx.coroutines.launch
 /** 首页列表 tag（滚动退化/位置断言都靠它）。 */
 private const val HOME_LIST_TAG = "home-list"
 
+/** 预算进度条的 tag：像素回归要按它的 bounds 去扫"有没有画出绿色"（AQ 轮被圆角裁掉过）。 */
+internal const val HOME_BUDGET_BAR_TAG = "home-budget-bar"
+
 
 @Composable
 fun HomeScreen(
@@ -573,6 +576,11 @@ private fun MonthOverview(
 /**
  * 预算块（只在本月卡里）：与汇总同款三列（预算/已用/剩余）+ 一条 4dp 进度条；
  * 整块可点进预算管理。未设预算时是"设置本月预算"入口。
+ *
+ * ⚠️ **这块不要加圆角裁剪**：进度条压在块的底边上，16dp 底角会把条的两端一起裁掉——
+ * 已用只有零点几个百分点时，那点绿色全落在被裁的区域里，看着就像"一分钱没花"（AQ 轮实测：
+ * 0.73% 的绿全在裁掉的 23px 里，用户报的就是这个）。点击水波做成方的没关系，
+ * 它本来就在卡片里、外面还有卡片自己的圆角兜着。
  */
 @Composable
 private fun HomeBudgetRow(
@@ -580,10 +588,8 @@ private fun HomeBudgetRow(
     onOpenBudgets: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(PennedDimens.cardCorner)
     val clickable = modifier
         .fillMaxWidth()
-        .clip(shape)
         .clickable(onClick = onOpenBudgets)
 
     if (budgetSummary == null) {
@@ -610,7 +616,8 @@ private fun HomeBudgetRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(4.dp)
-                .clip(RoundedCornerShape(percent = 50)),
+                .clip(RoundedCornerShape(percent = 50))
+                .testTag(HOME_BUDGET_BAR_TAG),
             color = if (state.overspent) expenseColor() else MaterialTheme.colorScheme.primary,
             trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         )
