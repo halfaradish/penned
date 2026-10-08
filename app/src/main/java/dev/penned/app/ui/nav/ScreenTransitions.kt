@@ -3,13 +3,13 @@ package dev.penned.app.ui.nav
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.navigation.NavBackStackEntry
+import dev.penned.app.ui.theme.PennedMotion
 
 /**
  * 转场口径（原则五：动效回答动作）——
@@ -17,22 +17,23 @@ import androidx.navigation.NavBackStackEntry
  * 让位（视差），返回时完全反向；进出下钻页时底栏跟着收起/展开。
  *
  * 口径是纯函数，NavHost 与转场测试共用同一套（测试不另抄一份数字）。
+ * 时长档位取自 `PennedMotion`（界面规范第七节的四档），这里只做转场语义的绑定。
  */
 internal object MotionSpec {
     /** Tab 之间：淡入淡出，不位移。 */
-    const val TAB_FADE_IN = 180
-    const val TAB_FADE_OUT = 160
+    const val TAB_FADE_IN = PennedMotion.fastIn
+    const val TAB_FADE_OUT = PennedMotion.fastOut
 
     /** 下钻页推入/推回。 */
-    const val PAGE = 300
+    const val PAGE = PennedMotion.page
 
     /** 底栏收起/展开，与 [PAGE] 同步——父页可用高度跟着一起变，点进子页不再跳一截。 */
-    const val BAR = 300
+    const val BAR = PennedMotion.page
 
     /** 父页让位位移 = 屏宽 / PARALLAX。 */
     const val PARALLAX = 3
 
-    val ease = FastOutSlowInEasing
+    val ease = PennedMotion.ease
 }
 
 /** 进入侧播什么。 */

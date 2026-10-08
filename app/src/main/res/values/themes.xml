@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.Penned" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@android:color/white</item>
+        <!-- 冷启动窗口背景与 Compose 主题一致（D043：浅 #F4F5F7） -->
+        <item name="android:windowBackground">#FFF4F5F7</item>
     </style>
 </resources>

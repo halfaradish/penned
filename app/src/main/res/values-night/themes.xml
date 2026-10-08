@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 冷启动窗口背景与 Compose 深色主题保持一致（D024：消除深色下白闪） -->
+    <!-- 冷启动窗口背景与 Compose 深色主题保持一致（D043：消除深色下白闪） -->
     <style name="Theme.Penned" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">#FF0E1211</item>
+        <item name="android:windowBackground">#FF0F1113</item>
     </style>
 </resources>

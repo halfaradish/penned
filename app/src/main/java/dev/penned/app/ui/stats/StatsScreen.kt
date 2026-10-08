@@ -330,8 +330,10 @@ private fun StatsPageBody(
             color = unitColor,
             seriesLabel = unit,
         )
-        // 这一张图里分配好的槽位：环、图例、数据行三处共用，段段不同色
-        val slots = PennedPigment.assignSlots(shown.map { it.name })
+        // 这一张图里分配好的槽位：环、图例、数据行三处共用，段段不同色。
+        // 撞色时要在 P(8,k) 个排列里搜最优（AR 轮）——拿 remember 记住，别在每次重组里重搜
+        val names = shown.map { it.name }
+        val slots = remember(names) { PennedPigment.assignSlots(names) }
         StatsDonutCard(
             title = "${unit}占比",
             centerLabel = "总$unit",

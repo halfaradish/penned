@@ -17,6 +17,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -160,6 +161,10 @@ fun CategoryDetailContent(
 ) {
     val isExpense = target.type == TxType.EXPENSE
     val unit = if (isExpense) "支出" else "收入"
+    // 这一张图里分配好的槽位：环、图例、数据行三处共用，段段不同色。
+    // 撞色时要在 P(8,k) 个排列里搜最优（AR 轮）——拿 remember 记住，别在每次重组里重搜
+    val childNames = children.map { it.name }
+    val slots = remember(childNames) { PennedPigment.assignSlots(childNames) }
     Scaffold(
         topBar = { PennedTopBar(title = target.name, onBack = onBack) },
         containerColor = MaterialTheme.colorScheme.background,
@@ -272,8 +277,6 @@ fun CategoryDetailContent(
                     }
                 }
             } else {
-                // 这一张图里分配好的槽位：环、图例、数据行三处共用，段段不同色
-                val slots = PennedPigment.assignSlots(children.map { it.name })
                 item(key = "donut") {
                     StatsDonutCard(
                         title = "${unit}占比",

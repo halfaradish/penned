@@ -59,16 +59,35 @@ private val DarkColors = darkColorScheme(
     surfaceContainerHighest = SurfaceContainerHighDark,
 )
 
-/** 金额语义色（不进 ColorScheme：M3 没有金额语义槽位）。 */
+/**
+ * M3 没有的语义槽位（金额红绿、品牌墨色、非文字图标灰）。
+ * 对照度有承诺：见 docs/界面规范.md 第三节的实测列，改值要同步改 `ContrastTest`。
+ */
 @Immutable
-data class PennedMoneyColors(val expense: Color, val income: Color, val primaryInk: Color)
+data class PennedSemanticColors(
+    val expense: Color,
+    val income: Color,
+    val primaryInk: Color,
+    val iconMuted: Color,
+)
 
-private val LightMoney = PennedMoneyColors(ExpenseLight, IncomeLight, PrimaryInkLight)
-private val DarkMoney = PennedMoneyColors(ExpenseDark, IncomeDark, PrimaryInkDark)
+private val LightSemantic = PennedSemanticColors(
+    expense = ExpenseLight,
+    income = IncomeLight,
+    primaryInk = PrimaryInkLight,
+    iconMuted = IconMutedLight,
+)
+
+private val DarkSemantic = PennedSemanticColors(
+    expense = ExpenseDark,
+    income = IncomeDark,
+    primaryInk = PrimaryInkDark,
+    iconMuted = IconMutedDark,
+)
 
 /** 当前主题是否深色。读 PennedTheme 的入参而非系统值——截图测试会强制 darkTheme=true。 */
 private val LocalPennedDark = staticCompositionLocalOf { false }
-private val LocalPennedMoney = staticCompositionLocalOf { LightMoney }
+private val LocalPennedSemantic = staticCompositionLocalOf { LightSemantic }
 
 @Composable
 @ReadOnlyComposable
@@ -81,7 +100,7 @@ fun PennedTheme(
 ) {
     CompositionLocalProvider(
         LocalPennedDark provides darkTheme,
-        LocalPennedMoney provides if (darkTheme) DarkMoney else LightMoney,
+        LocalPennedSemantic provides if (darkTheme) DarkSemantic else LightSemantic,
     ) {
         MaterialTheme(
             colorScheme = if (darkTheme) DarkColors else LightColors,
@@ -92,17 +111,22 @@ fun PennedTheme(
     }
 }
 
-/** 支出朱砂。 */
+/** 支出红。 */
 @Composable
 @ReadOnlyComposable
-fun expenseColor(): Color = LocalPennedMoney.current.expense
+fun expenseColor(): Color = LocalPennedSemantic.current.expense
 
 /** 收入青绿。 */
 @Composable
 @ReadOnlyComposable
-fun incomeColor(): Color = LocalPennedMoney.current.income
+fun incomeColor(): Color = LocalPennedSemantic.current.income
 
 /** 品牌文字色（用于正文/图标的青绿，比 primary 深一档）。 */
 @Composable
 @ReadOnlyComposable
-fun primaryInkColor(): Color = LocalPennedMoney.current.primaryInk
+fun primaryInkColor(): Color = LocalPennedSemantic.current.primaryInk
+
+/** 非文字控件灰（右箭头、占位图标；≥3:1，别拿来写字）。 */
+@Composable
+@ReadOnlyComposable
+fun iconMutedColor(): Color = LocalPennedSemantic.current.iconMuted

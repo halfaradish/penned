@@ -6,13 +6,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 一张图里的颜料分配（AO 轮）：用户反馈"连续三种一样的颜色"——根因是各分类按名字哈希落槽，
- * 三个暖色槽（朱砂/赭石/藤黄）会在同一张图里撞上。这里锁住"同图不撞色"的规则。
+ * 一张图里的颜料分配（AO 轮起，AR 轮换盘）：用户反馈"连续三种一样的颜色"——根因是各分类按名字哈希落槽，
+ * 暖色槽会在同一张图里撞上。这里锁住"同图不撞色"的规则。
+ *
+ * AR 轮（D043）换了八色，分配算法也从"贪心 + 爬山"改成"不撞色不动、撞色才穷举求最优"——
+ * 旧盘五分类爬山只能到 36~40°，新盘能到最优的 46°。
  */
 class PigmentAssignTest {
 
     /** 各槽的色相角，与 [PennedPigment] 里的表一致（测试里独立抄一份来做校验）。 */
-    private val hues = listOf(5f, 28f, 45f, 146f, 204f, 227f, 280f, 326f)
+    private val hues = listOf(341f, 17f, 157f, 193f, 267f, 233f, 295f, 40f)
 
     private fun hueGap(a: Int, b: Int): Float {
         val diff = kotlin.math.abs(hues[a] - hues[b])
@@ -51,8 +54,9 @@ class PigmentAssignTest {
     }
 
     @Test
-    fun `五个分类也掰得开（贪心之后还有一轮爬山）`() {
-        // 分类详细页的真实集合：贪心收尾时最后一对只差 40°，爬山把它掰到 46°
+    fun `五个分类也掰得开（撞色时穷举求最优）`() {
+        // 分类详细页的真实集合：五个名字里有两个哈希到同一槽，撞色后走穷举——
+        // 新盘的最优是 46°（旧盘爬山只能到 36~40°）
         val names = listOf("晚餐", "午餐", "休闲零食", "早餐", "食品餐饮")
         val slots = PennedPigment.assignSlots(names)
         val values = slots.values.toList()
@@ -71,6 +75,23 @@ class PigmentAssignTest {
         val slots = PennedPigment.assignSlots(names)
         assertEquals(8, slots.size)
         assertEquals(8, slots.values.toSet().size)
+    }
+
+    @Test
+    fun `六个彩色分类拿到这套盘的最优 36 度`() {
+        // 统计页 top6 一屏的真实集合。八槽在 45° 线下最多支持 5 色（见界面规范第四节的极限记录），
+        // 第 6 色退到 36° —— 这是**最优解**，不是算法没尽力：撞色时穷举了全部 P(8,6) 个排列。
+        val names = listOf("食品餐饮", "购物消费", "出行交通", "休闲娱乐", "文化教育", "居家生活")
+        val slots = PennedPigment.assignSlots(names)
+        val values = slots.values.toList()
+        var min = 360f
+        for (i in values.indices) {
+            for (j in i + 1 until values.size) {
+                min = kotlin.math.min(min, hueGap(values[i], values[j]))
+            }
+        }
+        assertEquals(36f, min, 0.01f)
+        assertEquals(6, values.toSet().size)
     }
 
     @Test
