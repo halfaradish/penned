@@ -163,7 +163,7 @@ private fun WheelColumn(
                 .align(Alignment.Center)
                 .fillMaxWidth()
                 .height(WheelItemHeight)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(MaterialTheme.shapes.small)
                 .background(MaterialTheme.colorScheme.primaryContainer),
         )
         LazyColumn(

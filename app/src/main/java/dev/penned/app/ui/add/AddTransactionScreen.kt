@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -134,6 +136,7 @@ fun AddTransactionScreen(
 data class AccountUi(val id: String, val name: String, val typeName: String)
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun AddTransactionContent(
     type: TxType,
     amountText: String,
@@ -300,9 +303,12 @@ fun AddTransactionContent(
                     )
                 }
                 Spacer(Modifier.height(PennedSpacing.sm))
-                Row(
+                // FlowRow 而不是 Row：字体放大到 1.5× 时 chip 会放不下，Row 会把最后一个挤成竖排单字，
+                // FlowRow 让它换行（D044 字体缩放检查）
+                FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(PennedSpacing.sm),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalArrangement = Arrangement.spacedBy(PennedSpacing.xs),
+                    itemVerticalAlignment = Alignment.CenterVertically,
                 ) {
                     val today = java.time.LocalDate.now()
                     PennedChip(
@@ -424,7 +430,7 @@ fun AddTransactionContent(
                 TextButton(onClick = { showDatePicker = false }) { Text("取消") }
             },
         ) {
-            androidx.compose.material3.DatePicker(state = pickerState, title = { Text("选择记账日期", modifier = Modifier.padding(16.dp)) })
+            androidx.compose.material3.DatePicker(state = pickerState, title = { Text("选择记账日期", modifier = Modifier.padding(PennedSpacing.lg)) })
         }
     }
 }
@@ -452,7 +458,7 @@ private fun AccountFieldRow(label: String, account: AccountEntity?, onClick: () 
                 PennedIcons.ChevronRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(PennedDimens.iconChevron),
             )
         }
     }

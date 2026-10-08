@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedMotion
 import dev.penned.app.ui.theme.iconMutedColor
 import dev.penned.app.ui.theme.rememberAnimationsEnabled
@@ -69,7 +70,7 @@ fun <T> PennedSegmentedTabs(
             Modifier
                 .offset { IntOffset(offset.toInt(), 0) }
                 .width(segmentWidth)
-                .height(36.dp)
+                .height(PennedDimens.segmentHeight)
                 .clip(shape)
                 // 滑块要比轨道"浮起来"：浅色用白（surfaceBright=白），深色用更亮的表面
                 .background(MaterialTheme.colorScheme.surfaceBright),
@@ -89,7 +90,7 @@ fun <T> PennedSegmentedTabs(
                 Box(
                     Modifier
                         .weight(1f)
-                        .height(36.dp)
+                        .height(PennedDimens.segmentHeight)
                         .clip(shape)
                         .clickable(enabled = enabled(option)) { onSelect(option) },
                     contentAlignment = Alignment.Center,

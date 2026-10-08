@@ -57,7 +57,7 @@ fun PennedListRow(
             Box(
                 Modifier
                     .size(PennedDimens.iconTile)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(PennedDimens.iconTileCorner))
                     .background(leadingTint?.copy(alpha = 0.14f) ?: MaterialTheme.colorScheme.surfaceContainer),
                 contentAlignment = Alignment.Center,
             ) {

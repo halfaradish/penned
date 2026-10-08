@@ -102,7 +102,7 @@ fun CategoryPanel(
                     .weight(1f)
                     .clip(MaterialTheme.shapes.small)
                     .clickable(onClick = onAddParent)
-                    .padding(vertical = 6.dp, horizontal = 2.dp),
+                    .padding(vertical = PennedSpacing.xs, horizontal = 2.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Box(
@@ -116,7 +116,7 @@ fun CategoryPanel(
                         PennedIcons.Plus,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(PennedDimens.iconInline),
                     )
                 }
                 Text(
@@ -176,7 +176,7 @@ private fun CategoryCell(
         modifier = modifier
             .clip(MaterialTheme.shapes.small)
             .clickable(onClick = onClick)
-            .padding(vertical = 6.dp, horizontal = 2.dp),
+            .padding(vertical = PennedSpacing.xs, horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(contentAlignment = Alignment.Center) {
@@ -188,7 +188,7 @@ private fun CategoryCell(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(top = 3.dp, end = 3.dp)
-                        .size(9.dp)
+                        .size(PennedDimens.categoryDot)
                         .clip(CircleShape)
                         .background(pigmentInkAt(slot ?: PennedPigment.slotOf(category.name))),
                 )

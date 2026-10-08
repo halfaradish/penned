@@ -174,7 +174,7 @@ private fun CategoryRow(parent: CategoryEntity, subs: List<CategoryEntity>, onCl
             PennedIcons.ChevronRight,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.outline,
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.size(PennedDimens.iconSmall),
         )
     }
 }

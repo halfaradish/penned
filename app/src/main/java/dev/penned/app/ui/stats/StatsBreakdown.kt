@@ -106,7 +106,7 @@ fun StatsDonutCard(
             ) {
                 categories.take(4).forEach { cat ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(10.dp).background(pigmentInkFor(slots, cat.name), CircleShape))
+                        Box(Modifier.size(PennedDimens.legendDot).background(pigmentInkFor(slots, cat.name), CircleShape))
                         Spacer(Modifier.width(PennedSpacing.sm))
                         Text(
                             cat.name,
@@ -197,7 +197,7 @@ fun StatsDataCard(
                     .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                CategoryAvatar(cat.name, size = 28.dp, slot = pigmentSlotFor(slots, cat.name))
+                CategoryAvatar(cat.name, size = PennedDimens.avatarSmall, slot = pigmentSlotFor(slots, cat.name))
                 Spacer(Modifier.width(PennedSpacing.md))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -236,7 +236,7 @@ fun StatsDataCard(
                     cents = cat.cents,
                     type = type,
                     style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.width(84.dp),
+                    modifier = Modifier.width(PennedDimens.moneyColumn),
                 )
             }
         }

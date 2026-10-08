@@ -31,7 +31,7 @@ private val LightColors = lightColorScheme(
     // 提示条（Snackbar）用的反向槽位：深底浅字（浅色主题）/ 浅底深字（深色主题）
     inverseSurface = OnSurfaceLight,
     inverseOnSurface = BackgroundLight,
-    inversePrimary = PrimaryDark,
+    inversePrimary = InversePrimaryLight,
     // "比 surface 更亮一档"的语义槽位：浅色就是白，深色要比卡片亮（分段控件的选中滑块用它）
     surfaceBright = SurfaceLight,
     surfaceDim = BackgroundLight,
@@ -61,7 +61,7 @@ private val DarkColors = darkColorScheme(
     onErrorContainer = OnErrorContainerDark,
     inverseSurface = OnSurfaceDark,
     inverseOnSurface = SurfaceDark,
-    inversePrimary = PrimaryLight,
+    inversePrimary = InversePrimaryDark,
     surfaceBright = SurfaceBrightDark,
     surfaceDim = BackgroundDark,
     surfaceContainerLowest = SurfaceDark,

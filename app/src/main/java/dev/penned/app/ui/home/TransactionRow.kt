@@ -81,7 +81,7 @@ internal fun TransactionRow(
             Box(
                 Modifier
                     .align(Alignment.CenterVertically)
-                    .size(22.dp)
+                    .size(PennedDimens.selectionDot)
                     .background(
                         if (selected) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent,
                         CircleShape,
@@ -100,7 +100,7 @@ internal fun TransactionRow(
                         PennedIcons.Check,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(14.dp),
+                        modifier = Modifier.size(PennedDimens.selectionCheck),
                     )
                 }
             }

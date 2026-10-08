@@ -254,7 +254,7 @@ fun AssetsContent(
         // 整页一起滚：页头/净资产卡/汇总卡/分组卡都随列表滚走，只留 FAB 与底栏
         LazyColumn(
             modifier = modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(bottom = 96.dp),
+            contentPadding = PaddingValues(bottom = PennedDimens.listBottomClearance),
         ) {
             // 页头大标题已去掉：底栏 Tab 已经写着"资产"，同一句话不必出现两次（D035 推广）
             item(key = "net") {
@@ -478,7 +478,7 @@ private fun AccountGroupCard(
                 PennedIcons.ChevronDown,
                 contentDescription = if (collapsed) "展开$title" else "折叠$title",
                 tint = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.size(18.dp).rotate(rotation),
+                modifier = Modifier.size(PennedDimens.iconChevron).rotate(rotation),
             )
         }
         AnimatedVisibility(visible = !collapsed) {

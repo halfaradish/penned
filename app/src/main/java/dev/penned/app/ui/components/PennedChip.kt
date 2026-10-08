@@ -53,11 +53,11 @@ fun PennedChip(
     }
     Row(
         modifier
-            .heightIn(min = 32.dp)
+            .heightIn(min = PennedDimens.chipHeight)
             .clip(shape)
             .background(bg)
             .then(if (onClick != null && enabled) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = PennedSpacing.md, vertical = 6.dp),
+            .padding(horizontal = PennedSpacing.md, vertical = PennedSpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(PennedSpacing.xs + 2.dp),
     ) {

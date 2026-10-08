@@ -480,7 +480,7 @@ private fun HomeHeader(
                     modifier = Modifier
                         .clip(RoundedCornerShape(percent = 50))
                         .clickable(onClick = onBookClick)
-                        .padding(horizontal = PennedSpacing.sm, vertical = 6.dp),
+                        .padding(horizontal = PennedSpacing.sm, vertical = PennedSpacing.xs),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(bookName, style = PennedTextStyles.cardTitle, color = MaterialTheme.colorScheme.onSurface)

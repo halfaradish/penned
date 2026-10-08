@@ -92,7 +92,7 @@ fun PinPad(
         val keys = listOf('1', '2', '3', '4', '5', '6', '7', '8', '9', '·', '0', '⌫')
         keys.chunked(3).forEach { row ->
             Row(
-                Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                Modifier.fillMaxWidth().padding(vertical = PennedSpacing.xs),
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
                 row.forEach { key ->

@@ -72,6 +72,9 @@ class ContrastTest {
         add("income / surface", IncomeLight, SurfaceLight)
         add("error / surface", ErrorLight, SurfaceLight)
         add("onErrorContainer / errorContainer", OnErrorContainerLight, ErrorContainerLight)
+        // 提示条走反向槽位：深底浅字 + inversePrimary 动作键
+        add("inverseOnSurface / inverseSurface（提示条）", BackgroundLight, OnSurfaceLight)
+        add("inversePrimary / inverseSurface（撤销键）", InversePrimaryLight, OnSurfaceLight)
         // —— 浅色：非文字（≥3:1）——
         add("iconMuted / surface", IconMutedLight, SurfaceLight, nonText)
         add("iconMuted / background", IconMutedLight, BackgroundLight, nonText)
@@ -98,6 +101,8 @@ class ContrastTest {
         add("income / surface（深）", IncomeDark, SurfaceDark)
         add("error / surface（深）", ErrorDark, SurfaceDark)
         add("onErrorContainer / errorContainer（深）", OnErrorContainerDark, ErrorContainerDark)
+        add("inverseOnSurface / inverseSurface（提示条·深）", SurfaceDark, OnSurfaceDark)
+        add("inversePrimary / inverseSurface（撤销键·深）", InversePrimaryDark, OnSurfaceDark)
         // —— 深色：非文字 ——
         add("iconMuted / surface（深）", IconMutedDark, SurfaceDark, nonText)
         add("进度填充 primary / surface（深）", PrimaryDark, SurfaceDark, nonText)

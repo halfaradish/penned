@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -57,6 +58,8 @@ fun PennedSectionHeader(
     }
 }
 
+private const val LARGE_TEXT_SCALE = 1.3f
+
 /**
  * 三列汇总（首页月卡头部、资产汇总、统计汇总共用）：
  * 标签 `labelSmall` 弱化、数值 `titleSmall` 等宽——金额是主角但这一档是"概览"，
@@ -67,10 +70,38 @@ fun PennedStatCells(
     cells: List<StatCell>,
     modifier: Modifier = Modifier,
 ) {
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(PennedSpacing.sm)) {
-        cells.forEach { cell ->
-            StatCellColumn(cell, Modifier.weight(1f))
+    // 字体放大到 1.3× 以上时三列挤不下（金额会被截成 "1,500.…"）——换成"标签左 + 数值右"的竖排，
+    // 宁可多占几行也不能把金额读成半个（D044 字体缩放检查）
+    val largeText = LocalDensity.current.fontScale >= LARGE_TEXT_SCALE
+    if (largeText) {
+        Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(PennedSpacing.xs)) {
+            cells.forEach { cell -> StatCellRow(cell) }
         }
+    } else {
+        Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(PennedSpacing.sm)) {
+            cells.forEach { cell ->
+                StatCellColumn(cell, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/** 大字号下的汇总行：标签在左、数值在右（数值不再被截断）。 */
+@Composable
+private fun StatCellRow(cell: StatCell) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            cell.label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            cell.value,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = cell.color ?: MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+        )
     }
 }
 

@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import dev.penned.app.ui.components.PennedTopBar
+import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.expenseColor
 
 /** 密码锁设置：开启（两次输入）/ 修改（先验旧）/ 关闭。哈希经 [PinHasher] 存储。 */
@@ -123,7 +124,7 @@ fun PinManageScreen(
                 Column(Modifier.padding(padding).fillMaxSize()) {
                     TextButton(
                         onClick = { viewModel.removePin(); onBack() },
-                        modifier = Modifier.align(androidx.compose.ui.Alignment.End).padding(horizontal = 24.dp),
+                        modifier = Modifier.align(androidx.compose.ui.Alignment.End).padding(horizontal = PennedSpacing.xxl),
                     ) { Text("关闭密码锁", color = expenseColor()) }
                     PinPad(
                         filledCount = state.pin.length,

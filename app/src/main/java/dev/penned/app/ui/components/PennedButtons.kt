@@ -38,7 +38,7 @@ fun PennedButton(
 ) {
     val shape = MaterialTheme.shapes.small
     val base = modifier
-        .heightIn(min = 48.dp)
+        .heightIn(min = PennedDimens.touchTarget)
         .then(if (fillWidth) Modifier.fillMaxWidth() else Modifier)
     val content: @Composable RowScope.() -> Unit = {
         if (leadingIcon != null) {

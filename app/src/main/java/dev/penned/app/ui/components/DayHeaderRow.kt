@@ -20,6 +20,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.penned.app.domain.Money
+import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.primaryInkColor
 
@@ -48,7 +49,7 @@ fun DayHeaderRow(
     ) {
         Box(
             Modifier
-                .size(width = 3.dp, height = 16.dp)
+                .size(width = PennedDimens.dayBarWidth, height = PennedDimens.dayBarHeight)
                 .clip(RoundedCornerShape(percent = 50))
                 .background(primaryInkColor()),
         )

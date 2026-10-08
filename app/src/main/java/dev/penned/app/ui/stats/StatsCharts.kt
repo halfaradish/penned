@@ -261,7 +261,7 @@ private fun Tooltip(
     x: Dp,
     alignEnd: Boolean,
 ) {
-    val shape = RoundedCornerShape(10.dp)
+    val shape = MaterialTheme.shapes.small
     Box(
         Modifier.offset(x = x, y = PennedSpacing.xs).width(TooltipWidth),
         contentAlignment = if (alignEnd) Alignment.CenterEnd else Alignment.CenterStart,

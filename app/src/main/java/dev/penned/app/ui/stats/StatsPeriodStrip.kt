@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import dev.penned.app.domain.StatsStrip
 import dev.penned.app.ui.icons.PennedIcons
+import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.primaryInkColor
 import java.time.YearMonth
@@ -167,7 +168,7 @@ private fun YearCell(year: Int, onClick: () -> Unit, modifier: Modifier = Modifi
             PennedIcons.ChevronDown,
             contentDescription = "快速定位",
             tint = primaryInkColor(),
-            modifier = Modifier.size(16.dp),
+            modifier = Modifier.size(PennedDimens.iconChevron),
         )
     }
 }

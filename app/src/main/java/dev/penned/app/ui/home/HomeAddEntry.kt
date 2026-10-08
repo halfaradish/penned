@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.penned.app.ui.icons.PennedIcons
+import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
 import kotlin.math.roundToInt
 
@@ -78,7 +79,7 @@ internal fun HomeAddEntry(
                             PennedIcons.Plus,
                             contentDescription = "记一笔",
                             tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(24.dp),
+                            modifier = Modifier.size(PennedDimens.icon),
                         )
                     }
                     Box(Modifier.testTag(HOME_ADD_LABEL_TAG)) {

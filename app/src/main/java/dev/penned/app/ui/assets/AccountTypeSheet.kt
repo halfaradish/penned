@@ -92,7 +92,7 @@ private fun AccountTypeTile(
 ) {
     Column(
         modifier = modifier
-            .heightIn(min = 72.dp)
+            .heightIn(min = PennedDimens.sheetCellHeight)
             .clickable(onClick = onClick)
             .padding(vertical = PennedSpacing.xs),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -110,7 +110,7 @@ private fun AccountTypeTile(
                     PennedIcons.Plus,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(PennedDimens.iconInline),
                 )
             }
         }

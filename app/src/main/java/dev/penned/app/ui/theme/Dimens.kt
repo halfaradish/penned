@@ -34,8 +34,8 @@ object PennedDimens {
      */
     val touchTarget = 48.dp
 
-    /** 图标按钮热区。 */
-    val iconButton = 44.dp
+    /** 图标按钮热区（≥48dp：Material 触控目标建议，见界面规范第十一节）。 */
+    val iconButton = 48.dp
 
     /** 图标尺寸四档（16 行内箭头 / 18 小 / 20 嵌入 / 24 默认）。 */
     val icon = 24.dp
@@ -83,6 +83,42 @@ object PennedDimens {
     /** 锁屏 PIN 键宽（键高复用 [keyHeight]）与密码圆点直径。 */
     val pinKeyWidth = 76.dp
     val pinDot = 16.dp
+
+    /** chip 视觉高度（热区由外层行距兜着，WCAG 2.5.8 要求 ≥24dp）。 */
+    val chipHeight = 32.dp
+
+    /** 分段控件段高（轨道再各留 3dp 内边距）。 */
+    val segmentHeight = 36.dp
+
+    /** 设置类行前置图标方块的圆角（10dp：比方块本身更圆一点才像"软 tile"）。 */
+    val iconTileCorner = 10.dp
+
+    /** 抽屉顶角与弹窗圆角（= shapes.extraLarge）。 */
+    val sheetCorner = 24.dp
+
+    /** 类型抽屉里图标格的最小高度。 */
+    val sheetCellHeight = 72.dp
+
+    /** 列表底部为悬浮件留出的清空高度（FAB / 悬浮记账入口 56 + 边距 + 余量）。 */
+    val listBottomClearance = 96.dp
+
+    /** 统计页数据行的颜料圆点与金额列宽。 */
+    val legendDot = 10.dp
+    val moneyColumn = 84.dp
+
+    /** 统计数据行的分类头像（比列表行小一档）。 */
+    val avatarSmall = 28.dp
+
+    /** 多选模式的勾选圈与对勾。 */
+    val selectionDot = 22.dp
+    val selectionCheck = 14.dp
+
+    /** 分类宫格里"有子分类"的小圆点。 */
+    val categoryDot = 9.dp
+
+    /** 日头条左侧竖条（宽 × 高）。 */
+    val dayBarWidth = 3.dp
+    val dayBarHeight = 16.dp
 
     /** 底部 Snackbar 与导航栏的间距。 */
     val fabMargin = 16.dp

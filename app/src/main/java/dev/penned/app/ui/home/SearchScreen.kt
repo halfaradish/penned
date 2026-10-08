@@ -217,14 +217,14 @@ private fun SearchField(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = PennedSpacing.md, vertical = 10.dp),
+                    .padding(horizontal = PennedSpacing.md, vertical = PennedSpacing.md),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
                     PennedIcons.Search,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(PennedDimens.iconSmall),
                 )
                 Spacer(Modifier.width(PennedSpacing.sm))
                 // 用 BasicTextField：Robolectric 下能 idle（弹窗里的 OutlinedTextField 不行，见看板）
@@ -254,12 +254,12 @@ private fun SearchField(
                     },
                 )
                 if (query.isNotEmpty()) {
-                    IconButton(onClick = { onQueryChange("") }, modifier = Modifier.size(24.dp)) {
+                    IconButton(onClick = { onQueryChange("") }, modifier = Modifier.size(PennedDimens.iconButton)) {
                         Icon(
                             PennedIcons.Close,
                             contentDescription = "清除",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp),
+                            modifier = Modifier.size(PennedDimens.iconChevron),
                         )
                     }
                 }

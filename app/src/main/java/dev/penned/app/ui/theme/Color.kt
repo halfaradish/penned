@@ -76,6 +76,13 @@ val OnErrorDark = Color(0xFF601410)
 val ErrorContainerDark = Color(0xFF7A2A24)
 val OnErrorContainerDark = Color(0xFFF7DAD7)
 
+// —— 反向层（提示条）——
+/** 浅色主题的提示条是深底浅字，动作键用深色主题的那档亮青（深底上 9.4:1）。 */
+val InversePrimaryLight = PrimaryDark
+
+/** 深色主题的提示条是浅底深字，动作键要用更深一档的青（4.50:1 卡线，PrimaryInkLight 给 5.29:1）。 */
+val InversePrimaryDark = PrimaryInkLight
+
 // —— 金额语义色（信息架构分析：支红/收绿）——
 /** 支出（白底 5.20:1 / 灰底 4.76:1）。 */
 val ExpenseLight = Color(0xFFC43C33)
