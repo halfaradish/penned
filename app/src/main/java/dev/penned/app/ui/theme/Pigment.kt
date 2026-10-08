@@ -13,11 +13,13 @@ import androidx.compose.ui.graphics.Color
  *
  * > **大面积一律极淡；色相只在小面积上给满。**
  *
- * 于是每槽只剩**一个色相**（[hue]），按两种强度用：
- * - **淡底**（[TINT_ALPHA_LIGHT] 12% / [TINT_ALPHA_DARK] 22%，叠在卡片上）= 头像/气泡的块面。
+ * 于是每槽只剩**一个色相**（[hue]），按三种强度用：
+ * - **块面**（[TINT_ALPHA_LIGHT] 12% / [TINT_ALPHA_DARK] 22%，叠在卡片上）= 头像/气泡的底。
  *   浅色下与白卡只有 1.16~1.21:1，跟日头条底（1.12:1）同一档——块面是"纸"，不是"色块"。
- * - **全强度**（100%）= 占比环/图例点/占比条（细件）、选中态实心、宫格"有子分类"小圆点。
- *   就是日头条那根 3dp 竖条的角色：小面积、给满、白卡上 3.8~5.4:1。
+ * - **细件**（[MARK_ALPHA_LIGHT] 45% / [MARK_ALPHA_DARK] 65%）= 占比环、图例点、占比条。
+ *   比块面浓一档、比状态淡：环/条是辅助视觉（占比数字与金额每行都写着），浓到 3:1 就成"色块"了。
+ * - **全强度**（100%）= 只留给**状态**：选中态实心、宫格"有子分类"小圆点。
+ *   就是日头条那根 3dp 竖条的角色：小面积、给满、白字压上去 4.6~5.4:1。
  *
  * 块面上的字形**不染颜料**，用 `onSurface` 墨色（浅色 14.2~14.6:1、深色 13.2~13.8:1）——
  * 与日头条的墨色日期同一口径。前几轮把字形染成彩色，正是"艳"和"国画"两种观感的直接来源。
@@ -73,6 +75,18 @@ object PennedPigment {
      */
     const val TINT_ALPHA_LIGHT = 0.12f
     const val TINT_ALPHA_DARK = 0.22f
+
+    /**
+     * 细件透明度：浅色 45% / 深色 65%（占比环、图例点、占比条）。
+     *
+     * 细件比块面浓一档、但**比全强度淡**——用户第二轮点名"支出占比的配色也需要改动"，而占比环是页面上
+     * 最大的一块颜色。45% 是渲染比出来的那条线：≥45% 时 4dp 的占比条还看得见，≤25% 就真看不见了
+     * （`build/chart_pale.py` 把 12/25/40/55/74/100% 六档按真机尺寸排在一起比过）。
+     * 代价说清楚：这一档与卡片只有 **1.84~2.00:1**、与浅轨道 **1.52~1.72:1**，够不上 3:1 的非文字下限——
+     * 这是有意的取舍：环/条只是**辅助**视觉，占比数字与金额每一行都写着，色相本身另有 ≥45° 的分离保证。
+     */
+    const val MARK_ALPHA_LIGHT = 0.45f
+    const val MARK_ALPHA_DARK = 0.65f
 
     /** 中性（转账/未分类/合并桶「其他」）：全强度灰 + 它的淡底，不参与哈希。 */
     val neutralHue = Color(0xFF4B5563)
@@ -223,6 +237,27 @@ fun pigmentFillAt(slot: Int): Color = pigmentInkAt(slot).copy(
 /** 按名字取块面淡底。 */
 @Composable
 fun pigmentFill(name: String): Color = pigmentFillAt(PennedPigment.slotOf(name))
+
+/**
+ * 细件色（占比环、图例点、占比条）：全强度色再按 [PennedPigment.MARK_ALPHA_LIGHT] 稀释一档
+ * （浅色 45% / 深色 65%）——比块面浓、比选中态淡，是"图表看得见"与"整体偏淡"之间的那档。
+ */
+@Composable
+fun pigmentMarkAt(slot: Int): Color = pigmentInkAt(slot).copy(
+    alpha = if (isDarkTheme()) PennedPigment.MARK_ALPHA_DARK else PennedPigment.MARK_ALPHA_LIGHT,
+)
+
+/** 按名字取细件色。 */
+@Composable
+fun pigmentMark(name: String): Color = pigmentMarkAt(PennedPigment.slotOf(name))
+
+/**
+ * 按"一张图里分配好的槽位"取细件色（[PennedPigment.assignSlots] 的产物）：
+ * 环、图例、占比条共用同一份，段段对得上。没分配到的名字退回名字哈希。
+ */
+@Composable
+fun pigmentMarkFor(slots: Map<String, Int>, name: String): Color =
+    pigmentMarkAt(slots[name] ?: PennedPigment.slotOf(name))
 
 /**
  * 按"一张图里分配好的槽位"取全强度色（[PennedPigment.assignSlots] 的产物）：

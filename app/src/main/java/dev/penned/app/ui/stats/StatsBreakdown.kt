@@ -50,7 +50,7 @@ import dev.penned.app.ui.components.PennedCard
 import dev.penned.app.ui.components.PennedDivider
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
-import dev.penned.app.ui.theme.pigmentInkFor
+import dev.penned.app.ui.theme.pigmentMarkFor
 import dev.penned.app.ui.theme.pigmentSlotFor
 
 /**
@@ -66,6 +66,7 @@ import dev.penned.app.ui.theme.pigmentSlotFor
  * - 图例：颜料圆点 + 名称（墨色）+ 右侧百分数（更实一档的 labelLarge、等宽数字）；
  * - [slots] 是"这一张图里分配好的槽位"（[dev.penned.app.ui.theme.PennedPigment.assignSlots]）：
  *   环、图例、下面数据卡的行与占比条共用同一份，段段不同色且三处对得上。
+ *   三处都用**细件档**（`pigmentMarkFor`，色相 45%/65% 稀释）——比块面浓、比选中态淡，见 D048。
  */
 @Composable
 fun StatsDonutCard(
@@ -106,7 +107,7 @@ fun StatsDonutCard(
             ) {
                 categories.take(4).forEach { cat ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(PennedDimens.legendDot).background(pigmentInkFor(slots, cat.name), CircleShape))
+                        Box(Modifier.size(PennedDimens.legendDot).background(pigmentMarkFor(slots, cat.name), CircleShape))
                         Spacer(Modifier.width(PennedSpacing.sm))
                         Text(
                             cat.name,
@@ -215,7 +216,7 @@ fun StatsDataCard(
                         )
                     }
                     Spacer(Modifier.height(PennedSpacing.xs))
-                    // 占比条：用这张图里分配好的颜料，和环图/图例/头像都对得上
+                    // 占比条：用这张图里分配好的颜料（细件档），和环图/图例/头像都对得上
                     Box(
                         Modifier
                             .fillMaxWidth()
@@ -227,7 +228,7 @@ fun StatsDataCard(
                             Modifier
                                 .fillMaxWidth(cat.fraction.coerceIn(0.02f, 1f))
                                 .height(4.dp)
-                                .background(pigmentInkFor(slots, cat.name), RoundedCornerShape(percent = 50)),
+                                .background(pigmentMarkFor(slots, cat.name), RoundedCornerShape(percent = 50)),
                         )
                     }
                 }
@@ -260,7 +261,7 @@ internal fun DonutChart(
     slots: Map<String, Int> = emptyMap(),
 ) {
     // 颜色先在 composable 上下文里解析：Canvas 的 DrawScope lambda 不是 composable，读不了主题
-    val colors = categories.map { pigmentInkFor(slots, it.name) }
+    val colors = categories.map { pigmentMarkFor(slots, it.name) }
     val track = MaterialTheme.colorScheme.surfaceContainerHigh
     val progress = remember { Animatable(1f) }
     var firstPass by remember { mutableStateOf(true) }

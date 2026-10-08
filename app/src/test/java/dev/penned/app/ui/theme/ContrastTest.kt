@@ -45,6 +45,18 @@ class ContrastTest {
     private val body = 4.5
     private val nonText = 3.0
 
+    /**
+     * 图表细件（占比环/图例/占比条）的"看得见"下限：**1.40:1（浅）/ 2.30:1（深）**。
+     *
+     * 这两条**故意低于 3:1**——用户第二轮点名"支出占比的配色也需要改动"，环/条从全强度淡到 45%
+     * 之后，与卡片 1.84~2.00:1、与浅轨道 1.52~1.72:1，物理上到不了 3:1。
+     * 取舍写在 D048：环/条只是**辅助**视觉，占比数字与金额每行都写着；
+     * 下限取"渲染比出来的那条线"——≥45% 时 4dp 占比条还看得见，≤25% 就真看不见了（`build/chart_pale.py`）。
+     * 留着它是因为**改淡过头会立刻红**，而不是为了让数字好看。
+     */
+    private val markVisible = 1.40
+    private val markVisibleDark = 2.30
+
     private fun pairs(): List<ContrastPair> {
         val out = mutableListOf<ContrastPair>()
         fun add(label: String, fg: Color, bg: Color, need: Double = body) =
@@ -114,33 +126,34 @@ class ContrastTest {
         add("iconMuted / surface（深）", IconMutedDark, SurfaceDark, nonText)
         add("进度填充 primary / surface（深）", PrimaryDark, SurfaceDark, nonText)
 
-        // —— 分类颜料 v4：一个色相两种强度（淡底块面 / 全强度细件与选中，D047）——
+        // —— 分类颜料 v4：一个色相三种强度（块面淡底 / 细件 / 全强度，D047 + D048）——
         // 口径 = 日头条那一栏：大面积只给 12%（浅）/22%（深）的淡底（与白卡 1.16~1.21:1，
         // 和日头条底 1.12:1 同档，**不设明度下限**——它是"纸"，识别靠上面的墨色字形）；
-        // 色相给满的地方只有细件（环/图例/占比条）与选中态实心。
-        // 所以这里守四条：墨色字形在淡底上读得清、细件在白底与轨道上看得见、
-        // 深色下细件换成亮档也看得见、选中态实心上反白（浅）/深字（深）都成立。
+        // 图表细件再浓一档（45%/65%）但够不上 3:1，按上面 markVisible 的两条"看得见"下限守；
+        // 色相给满只留在**状态**上：选中态实心、宫格"有子分类"小圆点。
         PennedPigment.hue.forEachIndexed { i, full ->
             val onDark = PennedPigment.hueOnDark[i]
             val groundLight = over(full, SurfaceLight, PennedPigment.TINT_ALPHA_LIGHT)
             val groundDark = over(onDark, SurfaceDark, PennedPigment.TINT_ALPHA_DARK)
+            val markLight = over(full, SurfaceLight, PennedPigment.MARK_ALPHA_LIGHT)
+            val markDark = over(onDark, SurfaceDark, PennedPigment.MARK_ALPHA_DARK)
             add("颜料$i 墨色字 / 淡底块面（浅）", OnSurfaceLight, groundLight)
             add("颜料$i 墨色字 / 淡底块面（深）", OnSurfaceDark, groundDark)
-            add("颜料$i 全强度细件 / surface（浅）", full, SurfaceLight, nonText)
-            add("颜料$i 全强度细件 / 占比条轨道（浅）", full, SurfaceContainerHighLight, nonText)
-            add("颜料$i 亮档细件 / surface（深）", onDark, SurfaceDark, nonText)
-            add("颜料$i 亮档细件 / 占比条轨道（深）", onDark, SurfaceContainerHighDark, nonText)
+            add("颜料$i 细件 / surface（浅）", markLight, SurfaceLight, markVisible)
+            add("颜料$i 细件 / 占比条轨道（浅）", markLight, SurfaceContainerHighLight, markVisible)
+            add("颜料$i 细件 / surface（深）", markDark, SurfaceDark, markVisibleDark)
             add("白字 / 颜料$i 实心（选中态·浅）", OnPrimaryLight, full)
             add("深字 surface / 颜料$i 实心（选中态·深）", SurfaceDark, onDark)
         }
         val neutralGroundLight = over(PennedPigment.neutralHue, SurfaceLight, PennedPigment.TINT_ALPHA_LIGHT)
         val neutralGroundDark = over(PennedPigment.neutralHueOnDark, SurfaceDark, PennedPigment.TINT_ALPHA_DARK)
+        val neutralMarkLight = over(PennedPigment.neutralHue, SurfaceLight, PennedPigment.MARK_ALPHA_LIGHT)
+        val neutralMarkDark = over(PennedPigment.neutralHueOnDark, SurfaceDark, PennedPigment.MARK_ALPHA_DARK)
         add("中性 墨色字 / 淡底块面（浅）", OnSurfaceLight, neutralGroundLight)
         add("中性 墨色字 / 淡底块面（深）", OnSurfaceDark, neutralGroundDark)
-        add("中性 全强度细件 / surface（浅）", PennedPigment.neutralHue, SurfaceLight, nonText)
-        add("中性 全强度细件 / 占比条轨道（浅）", PennedPigment.neutralHue, SurfaceContainerHighLight, nonText)
-        add("中性 亮档细件 / surface（深）", PennedPigment.neutralHueOnDark, SurfaceDark, nonText)
-        add("中性 亮档细件 / 占比条轨道（深）", PennedPigment.neutralHueOnDark, SurfaceContainerHighDark, nonText)
+        add("中性 细件 / surface（浅）", neutralMarkLight, SurfaceLight, markVisible)
+        add("中性 细件 / 占比条轨道（浅）", neutralMarkLight, SurfaceContainerHighLight, markVisible)
+        add("中性 细件 / surface（深）", neutralMarkDark, SurfaceDark, markVisibleDark)
         add("白字 / 中性实心（选中态·浅）", OnPrimaryLight, PennedPigment.neutralHue)
         add("深字 surface / 中性实心（选中态·深）", SurfaceDark, PennedPigment.neutralHueOnDark)
         return out
