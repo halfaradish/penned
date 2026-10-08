@@ -216,7 +216,8 @@ fun HomeContent(
     modifier: Modifier = Modifier,
     zone: ZoneId = ZoneId.systemDefault(),
 ) {
-    Box(modifier.fillMaxSize()) {
+    // 不透明页面：下钻推入时父子两页同屏，透明根会让下层页透出来（AP-2）
+    Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Column(Modifier.fillMaxSize()) {
             HomeHeader(
                 bookName = bookName,

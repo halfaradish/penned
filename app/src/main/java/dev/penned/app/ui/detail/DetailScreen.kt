@@ -116,7 +116,17 @@ fun DetailScreen(
         initializer = { DetailViewModel(app, txId) },
     )
     val detail by viewModel.state.collectAsStateWithLifecycle()
-    val d = detail ?: return
+    val d = detail
+    if (d == null) {
+        // 载入中就画页面底色与顶栏：下钻推入时父子两页同屏，空白帧会让下层页透出来（AP-2）
+        Scaffold(
+            topBar = { PennedTopBar(title = "账单详情", onBack = onBack) },
+            containerColor = MaterialTheme.colorScheme.background,
+        ) { padding ->
+            Spacer(Modifier.fillMaxSize().padding(padding))
+        }
+        return
+    }
     DetailContent(
         detail = d,
         onEdit = { onEdit(d.tx.id) },

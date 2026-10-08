@@ -1,5 +1,6 @@
 package dev.penned.app.ui.stats
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -131,7 +132,8 @@ fun StatsContent(
         }
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
+    // 不透明页面：下钻推入时父子两页同屏，透明根会让下层页透出来（AP-2）
+    Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         // 时间维度分段固定当首行（2026-10-07：去掉冗余的「统计」页头大标题——底栏 Tab 已写着"统计"）
         PennedSegmentedTabs(
             options = StatsView.entries.toList(),

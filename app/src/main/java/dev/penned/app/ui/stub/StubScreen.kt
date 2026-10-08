@@ -1,6 +1,7 @@
 package dev.penned.app.ui.stub
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -18,7 +19,8 @@ fun StubScreen(
     hint: String,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxSize()) {
+    // 不透明页面：下钻推入时父子两页同屏，透明根会让下层页透出来（AP-2）
+    Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Text(
             title,
             style = MaterialTheme.typography.headlineSmall,

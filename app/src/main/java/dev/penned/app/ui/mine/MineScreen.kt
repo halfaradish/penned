@@ -1,5 +1,6 @@
 package dev.penned.app.ui.mine
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,6 +35,8 @@ fun MineScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
+            // 不透明页面：下钻推入时父子两页同屏，透明根会让下层页透出来（AP-2）
+            .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState())
             .padding(bottom = PennedSpacing.xxl),
     ) {
