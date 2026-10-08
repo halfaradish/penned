@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.penned.app.domain.StatsMath
@@ -127,9 +128,50 @@ class StatsScreenScreenshotTest {
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/ai_stats_month.png")
     }
 
+    /** UI-9/D049 回归：一级分类多于 6 个时不再合并出第二行「其他」——真实分类逐行列出。 */
     @Test
-    fun captureStatsMonthStripScrolled() {
-        // 选中一个老月份：条自动滚过去，左边年份列跟着变成 2025（参考图 p2 的行为）
+    fun captureStatsAllRealCategoriesListed() {
+        val period = StatsPeriod.Month(YearMonth.of(2026, 10))
+        // 照真机 2024-10 的那一屏（用户报 bug 的现场）：7 个真实分类（含「其他」）+ 未分类
+        val categories = listOf(
+            StatsMath.CategoryTotal("食品餐饮", 95344, 110, 0.598f),
+            StatsMath.CategoryTotal("购物消费", 50182, 15, 0.315f),
+            StatsMath.CategoryTotal("出行交通", 4707, 6, 0.030f),
+            StatsMath.CategoryTotal("居家生活", 2717, 2, 0.017f),
+            StatsMath.CategoryTotal("文化教育", 2005, 5, 0.013f),
+            StatsMath.CategoryTotal("其他", 2000, 1, 0.013f),
+            StatsMath.CategoryTotal("休闲娱乐", 1680, 1, 0.011f),
+            StatsMath.CategoryTotal("未分类", 900, 1, 0.006f, drillable = false),
+        )
+        composeRule.setContent {
+            PennedTheme {
+                StatsContent(
+                    view = StatsView.MONTH,
+                    pages = mapOf(
+                        StatsView.MONTH to pageOf(
+                            period = period,
+                            totalExpense = 159535,
+                            categories = categories,
+                            bars = dailyBars(31, 3 to 95344L, 11 to 50182L, 19 to 4707L),
+                        ),
+                    ),
+                    stripMonths = stripMonths(YearMonth.of(2026, 10)),
+                    stripYears = stripYears(),
+                    today = today,
+                )
+            }
+        }
+        // 「其他」只有真实分类这一行；修复前它还会与同名的合成桶各占一行
+        composeRule.onAllNodesWithText("其他").assertCountEquals(1)
+        composeRule.onNodeWithText("未分类").assertExists()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/ui9_stats_all_categories.png")
+        // 数据卡尾部：「其他」彩色可点、「未分类」中性灰（滚到底再截一张）
+        composeRule.onNodeWithText("未分类").performScrollTo()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/ui9_stats_all_categories_bottom.png")
+    }
+
+    @Test
+    fun captureStatsMonthStripScrolled() {        // 选中一个老月份：条自动滚过去，左边年份列跟着变成 2025（参考图 p2 的行为）
         val period = StatsPeriod.Month(YearMonth.of(2025, 12))
         composeRule.setContent {
             PennedTheme {

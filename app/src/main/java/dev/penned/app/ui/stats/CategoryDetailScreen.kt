@@ -293,12 +293,6 @@ fun CategoryDetailContent(
                         categories = children,
                         type = target.type,
                         slots = slots,
-                        // 直挂在节点上的桶、合并桶「其他」与「未分类」都不是分类，不可再下钻
-                        drillable = {
-                            it.name != target.name &&
-                                it.name != StatsMath.OTHERS &&
-                                it.name != StatsMath.UNCATEGORIZED
-                        },
                         onOpenCategory = { child -> onOpenCategory(target.copy(name = child, parent = target.name)) },
                     )
                 }

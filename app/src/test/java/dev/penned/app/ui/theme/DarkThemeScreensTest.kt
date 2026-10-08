@@ -204,11 +204,13 @@ class DarkThemeScreensTest {
                     dev.penned.app.domain.StatsView.MONTH to dev.penned.app.ui.stats.StatsPage(
                         period = period,
                         window = dev.penned.app.domain.StatsPeriods.window(period),
-                        totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 295570),
+                        totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 296770),
                         expenseCategories = listOf(
-                            StatsMath.CategoryTotal("食品餐饮", 180000, 110, 0.61f),
-                            StatsMath.CategoryTotal("购物消费", 80000, 15, 0.27f),
-                            StatsMath.CategoryTotal("其他", 35570, 4, 0.12f),
+                            StatsMath.CategoryTotal("食品餐饮", 180000, 110, 0.607f),
+                            StatsMath.CategoryTotal("购物消费", 80000, 15, 0.270f),
+                            StatsMath.CategoryTotal("其他", 35570, 4, 0.120f),
+                            // 未分类行：中性灰、不可点（UI-9/D049 起由 drillable 决定）
+                            StatsMath.CategoryTotal("未分类", 1200, 1, 0.004f, drillable = false),
                         ),
                         incomeCategories = listOf(StatsMath.CategoryTotal("工资", 350000, 1, 1f)),
                         // 趋势卡：2026-09 按日（30 天），月中有几笔

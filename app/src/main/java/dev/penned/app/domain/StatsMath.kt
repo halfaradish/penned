@@ -13,18 +13,27 @@ import java.time.ZoneId
  */
 object StatsMath {
 
-    /** 未分类的显示名——不是分类，配色走中性（见 PennedPigment.UNKNOWN）。 */
+    /** 未分类的显示名——不是分类，配色走中性（见 PennedPigment.UNKNOWN），也不可下钻。 */
     const val UNCATEGORIZED = "未分类"
-
-    /** 超 topN 的尾巴合并成这个桶；它不是真实分类，不可下钻、配色走中性。 */
-    const val OTHERS = "其他"
 
     data class CategoryTotal(
         val name: String,
         val cents: Long,
         val count: Int,
         val fraction: Float,
+        /**
+         * 这行是否对应一个可下钻的真实分类节点——统计页数据卡按它决定点不点得动：
+         * - [categoryTotals]：真实分类 true；纯「未分类」组 false（没有分类可进）。
+         * - [childTotals]：真实子分类 true；直挂在节点上的同名桶 false（再点就是节点自己）。
+         *
+         * **不许用名字判断**：真实分类可能就叫「其他」（种子数据就有）、
+         * 「未分类」（用户自建）——名字当身份正是 D049 前的 bug。
+         */
+        val drillable: Boolean = true,
     )
+
+    /** 分组中间态：合计、笔数、这组是否可下钻（各调用点自己定口径）。 */
+    private data class Group(val cents: Long, val count: Int, val drillable: Boolean)
 
     data class PeriodTotals(val incomeCents: Long, val expenseCents: Long)
 
@@ -39,33 +48,31 @@ object StatsMath {
 
     /**
      * 分类占比（统计页首屏）：按**一级分类**汇总（二级分类并进它的父分类，与参考图一致——
-     * 「食品餐饮 60.10%」含晚餐/午餐/早餐），降序、topN 之后合并为「其他」，
-     * fraction 相对该类型总额。无分类的行单列「未分类」。
+     * 「食品餐饮 60.10%」含晚餐/午餐/早餐），金额降序，**全部列出**。
+     *
+     * 不再把尾部合并成 topN 之外的「其他」桶（D049：桶名与预置分类「其他」撞名，
+     * 两行同名；用户裁决"展示事实的分类"）。无分类的行单列「未分类」，
+     * [CategoryTotal.drillable] = false——它没有可进的分类页。
      */
-    fun categoryTotals(
-        rows: List<TxWithCategory>,
-        type: TxType,
-        topN: Int = 6,
-    ): List<CategoryTotal> {
+    fun categoryTotals(rows: List<TxWithCategory>, type: TxType): List<CategoryTotal> {
         val byCategory = rows.filter { it.type == type && !it.excludeFromStats }
             .groupBy { topLevelName(it) }
-            .mapValues { (_, items) -> items.sumOf { it.amountCents } to items.size }
-            .filterValues { (cents, _) -> cents > 0 }
-        val total = byCategory.values.sumOf { it.first }
+            .mapValues { (_, items) ->
+                Group(
+                    cents = items.sumOf { it.amountCents },
+                    count = items.size,
+                    // 组里有真实分类行才可下钻：纯「未分类」组没有分类可进
+                    drillable = items.any { it.categoryName != null },
+                )
+            }
+            .filterValues { it.cents > 0 }
+        val total = byCategory.values.sumOf { it.cents }
         if (total == 0L) return emptyList()
-        val sorted = byCategory.entries.sortedByDescending { it.value.first }
-        val head = sorted.take(topN)
-        val rest = sorted.drop(topN)
-        val result = head.map { (name, value) ->
-            CategoryTotal(name, value.first, value.second, value.first.toFloat() / total)
-        }
-        return if (rest.isEmpty()) {
-            result
-        } else {
-            val restCents = rest.sumOf { it.value.first }
-            val restCount = rest.sumOf { it.value.second }
-            result + CategoryTotal(OTHERS, restCents, restCount, restCents.toFloat() / total)
-        }
+        return byCategory.entries
+            .sortedByDescending { it.value.cents }
+            .map { (name, group) ->
+                CategoryTotal(name, group.cents, group.count, group.cents.toFloat() / total, group.drillable)
+            }
     }
 
     /** 行所属的一级分类名：二级分类并进父分类（与 [nodeRows] 的一级节点筛选同一口径）。 */
@@ -101,21 +108,28 @@ object StatsMath {
         parent == null && rows.any { it.type == type && !it.excludeFromStats && it.categoryParentName == name }
 
     /**
-     * 节点下的子分类聚合（分类详细页）：按二级分类名分组，降序；
-     * 直接记在节点上的行聚成一个与节点同名的桶（点击不再下钻）。
-     * 这里**不做** topN 合并——一个节点下通常没几个子分类，全列出来更有用。
+     * 节点下的子分类聚合（分类详细页）：按二级分类名分组，降序，全部列出；
+     * 直接记在节点上的行聚成一个与节点同名的桶——它不是"这个节点的子分类"，
+     * [CategoryTotal.drillable] = false（再点就是节点自己）。
      */
     fun childTotals(rows: List<TxWithCategory>, type: TxType): List<CategoryTotal> {
         val byCategory = rows.filter { it.type == type && !it.excludeFromStats }
             .groupBy { it.categoryName ?: UNCATEGORIZED }
-            .mapValues { (_, items) -> items.sumOf { it.amountCents } to items.size }
-            .filterValues { (cents, _) -> cents > 0 }
-        val total = byCategory.values.sumOf { it.first }
+            .mapValues { (_, items) ->
+                Group(
+                    cents = items.sumOf { it.amountCents },
+                    count = items.size,
+                    // 有父分类的行才是可下钻的子分类；直挂行（无父分类）聚成的桶不可点
+                    drillable = items.any { it.categoryParentName != null },
+                )
+            }
+            .filterValues { it.cents > 0 }
+        val total = byCategory.values.sumOf { it.cents }
         if (total == 0L) return emptyList()
         return byCategory.entries
-            .sortedByDescending { it.value.first }
-            .map { (name, value) ->
-                CategoryTotal(name, value.first, value.second, value.first.toFloat() / total)
+            .sortedByDescending { it.value.cents }
+            .map { (name, group) ->
+                CategoryTotal(name, group.cents, group.count, group.cents.toFloat() / total, group.drillable)
             }
     }
 

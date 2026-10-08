@@ -79,7 +79,8 @@ class PigmentAssignTest {
 
     @Test
     fun `六个彩色分类拿到这套盘的最优 36 度`() {
-        // 统计页 top6 一屏的真实集合。八槽在 45° 线下最多支持 5 色（见界面规范第四节的极限记录），
+        // 统计页最常见的同屏集合（六个真实分类；D049 起不再有尾巴合并的第七行）。
+        // 八槽在 45° 线下最多支持 5 色（见界面规范第四节的极限记录），
         // 第 6 色退到 36° —— 这是**最优解**，不是算法没尽力：撞色时穷举了全部 P(8,6) 个排列。
         val names = listOf("食品餐饮", "购物消费", "出行交通", "休闲娱乐", "文化教育", "居家生活")
         val slots = PennedPigment.assignSlots(names)
@@ -96,11 +97,27 @@ class PigmentAssignTest {
 
     @Test
     fun `中性名字不参与分配`() {
+        // 中性的只有转账与未分类（D049：统计页不再有「其他」合并桶，「其他」是真实分类）
         val slots = PennedPigment.assignSlots(listOf("食品餐饮", "其他", "未分类", "转账"))
-        assertEquals(-1, slots.getValue("其他"))
         assertEquals(-1, slots.getValue("未分类"))
         assertEquals(-1, slots.getValue("转账"))
         assertNotEquals(-1, slots.getValue("食品餐饮"))
+        assertNotEquals(-1, slots.getValue("其他"))
+    }
+
+    @Test
+    fun `「其他」按名字哈希取彩色`() {
+        // D049 前它被"合并桶同名"误判成中性灰；现在它是普通分类，落 0 号玫红（见 hue 注释）
+        assertEquals(0, PennedPigment.slotOf("其他"))
+    }
+
+    @Test
+    fun `种子八个一级分类同屏也各占一槽`() {
+        // D049 起统计页全列真实分类，一屏最多可能同时出现种子的 8 个一级分类（+ 中性的「未分类」）
+        val names = listOf("食品餐饮", "购物消费", "出行交通", "文化教育", "休闲娱乐", "居家生活", "健康医疗", "其他")
+        val slots = PennedPigment.assignSlots(names + "未分类")
+        assertEquals(-1, slots.getValue("未分类"))
+        assertEquals(8, names.map { slots.getValue(it) }.toSet().size)
     }
 
     @Test

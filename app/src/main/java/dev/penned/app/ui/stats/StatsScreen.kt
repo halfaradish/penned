@@ -348,10 +348,6 @@ private fun StatsPageBody(
             categories = shown,
             type = type,
             slots = slots,
-            // 「其他」合并桶与「未分类」不是分类，不可点；其余行点进分类详细页
-            drillable = {
-                it.name != StatsMath.OTHERS && it.name != StatsMath.UNCATEGORIZED
-            },
             onOpenCategory = { name -> onOpenCategory(CategoryTarget(type, name, parent = null), page.window) },
         )
     }
@@ -430,12 +426,13 @@ private fun StatsMonthPreview() {
                 StatsView.MONTH to StatsPage(
                     period = period,
                     window = window,
-                    totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 32300),
+                    totals = StatsMath.PeriodTotals(incomeCents = 350000, expenseCents = 34200),
                     expenseCategories = listOf(
-                        StatsMath.CategoryTotal("食品餐饮", 15600, 110, 0.483f),
-                        StatsMath.CategoryTotal("购物消费", 9500, 15, 0.294f),
-                        StatsMath.CategoryTotal("出行交通", 4200, 6, 0.13f),
-                        StatsMath.CategoryTotal("其他", 3000, 4, 0.093f),
+                        StatsMath.CategoryTotal("食品餐饮", 15600, 110, 0.456f),
+                        StatsMath.CategoryTotal("购物消费", 9500, 15, 0.278f),
+                        StatsMath.CategoryTotal("出行交通", 4200, 6, 0.123f),
+                        StatsMath.CategoryTotal("其他", 3000, 4, 0.088f),
+                        StatsMath.CategoryTotal("未分类", 1900, 2, 0.055f, drillable = false),
                     ),
                     incomeCategories = listOf(StatsMath.CategoryTotal("工资", 350000, 1, 1f)),
                     trendBars = List(31) { 0L }.toMutableList().also { it[3] = 1600; it[19] = 9500 },

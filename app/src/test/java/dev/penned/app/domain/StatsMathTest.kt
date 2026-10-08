@@ -52,7 +52,7 @@ class StatsMathTest {
     // —— 分类占比 ——
 
     @Test
-    fun `category totals groups by name merges tail and counts rows`() {
+    fun `category totals list every real category in descending order`() {
         val rows = listOf(
             row("1", "2026-10-01T10:00", 5000, name = "食品餐饮"),
             row("2", "2026-10-02T10:00", 1000, name = "食品餐饮"),
@@ -60,20 +60,43 @@ class StatsMathTest {
             row("4", "2026-10-04T10:00", 2000, name = "出行交通"),
             row("5", "2026-10-05T10:00", 1000, name = "文化教育"),
             row("6", "2026-10-06T10:00", 99000, type = TxType.INCOME, name = "工资"),
-            // 无分类的支出归到「未分类」，不是「其他」
+            // 无分类的支出单列「未分类」；它不是分类（不可下钻），也不是「其他」
             row("7", "2026-10-07T10:00", 500, name = null),
         )
-        val totals = StatsMath.categoryTotals(rows, TxType.EXPENSE, topN = 3)
-        // 降序：食品餐饮 6000 > 购物消费 3000 > 出行交通 2000，其余（文化教育 + 未分类）合并「其他」
-        assertEquals(listOf("食品餐饮", "购物消费", "出行交通", "其他"), totals.map { it.name })
-        assertEquals(listOf(6000L, 3000L, 2000L, 1500L), totals.map { it.cents })
-        assertEquals(listOf(2, 1, 1, 2), totals.map { it.count })
+        val totals = StatsMath.categoryTotals(rows, TxType.EXPENSE)
+        // 全部真实分类逐行列出、金额降序，没有尾巴合并（D049）
+        assertEquals(listOf("食品餐饮", "购物消费", "出行交通", "文化教育", "未分类"), totals.map { it.name })
+        assertEquals(listOf(6000L, 3000L, 2000L, 1000L, 500L), totals.map { it.cents })
+        assertEquals(listOf(2, 1, 1, 1, 1), totals.map { it.count })
         assertEquals(12500L, totals.sumOf { it.cents })
         assertEquals(1.0f, totals.sumOf { it.fraction.toDouble() }.toFloat(), 0.0001f)
+        // 真实分类可点进详细页，「未分类」不行
+        assertEquals(listOf(true, true, true, true, false), totals.map { it.drillable })
 
         // 收入域单独聚合、无数据返回空
         assertEquals(listOf("工资"), StatsMath.categoryTotals(rows, TxType.INCOME).map { it.name })
         assertEquals(0, StatsMath.categoryTotals(emptyList(), TxType.EXPENSE).size)
+    }
+
+    @Test
+    fun `category totals keep a real category named like a bucket drillable`() {
+        // 种子数据里有一个真实一级分类就叫「其他」（DefaultSeed）；D049 前它会被
+        // 尾部合并桶的同名判定误伤成不可点。回归：它必须独立成行且可下钻。
+        val rows = listOf(
+            row("1", "2026-10-01T10:00", 9000, name = "食品餐饮"),
+            row("2", "2026-10-02T10:00", 2000, name = "其他"),
+            row("3", "2026-10-03T10:00", 1680, name = "休闲娱乐"),
+            row("4", "2026-10-04T10:00", 300, name = null),
+        )
+        val totals = StatsMath.categoryTotals(rows, TxType.EXPENSE)
+        assertEquals(listOf("食品餐饮", "其他", "休闲娱乐", "未分类"), totals.map { it.name })
+        assertEquals(listOf(true, true, true, false), totals.map { it.drillable })
+        // 行上的金额与点进去（nodeRows）看到的流水是同一笔
+        assertEquals(2000L, totals.first { it.name == "其他" }.cents)
+        assertEquals(
+            2000L,
+            StatsMath.nodeRows(rows, TxType.EXPENSE, "其他", parent = null).sumOf { it.amountCents },
+        )
     }
 
     @Test
@@ -86,6 +109,8 @@ class StatsMathTest {
         assertEquals(2, totals.size)
         assertEquals(listOf("未分类", "食品餐饮"), totals.map { it.name })
         assertEquals(700L, totals.first { it.name == "未分类" }.cents)
+        assertFalse(totals.first { it.name == "未分类" }.drillable)
+        assertTrue(totals.first { it.name == "食品餐饮" }.drillable)
     }
 
     @Test
@@ -137,7 +162,8 @@ class StatsMathTest {
     }
 
     @Test
-    fun `child totals keep the direct bucket and skip the others merge`() {        val rows = listOf(
+    fun `child totals keep the direct bucket and skip the others merge`() {
+        val rows = listOf(
             row("1", "2026-10-01T10:00", 2000, name = "食品餐饮"),
             row("2", "2026-10-02T10:00", 3000, name = "晚餐", parent = "食品餐饮"),
             row("3", "2026-10-03T10:00", 3000, name = "午餐", parent = "食品餐饮"),
@@ -145,10 +171,11 @@ class StatsMathTest {
         )
         val node = StatsMath.nodeRows(rows, TxType.EXPENSE, "食品餐饮", parent = null)
         val children = StatsMath.childTotals(node, TxType.EXPENSE)
-        // 降序、无 topN 合并；直挂在节点上的行聚成与节点同名的桶
+        // 降序、全列；直挂在节点上的行聚成与节点同名的桶，它不是子分类、不可再下钻
         assertEquals(listOf("晚餐", "午餐", "食品餐饮", "水果"), children.map { it.name })
         assertEquals(listOf(3000L, 3000L, 2000L, 1000L), children.map { it.cents })
         assertEquals(1.0f, children.sumOf { it.fraction.toDouble() }.toFloat(), 0.0001f)
+        assertEquals(listOf(true, true, false, true), children.map { it.drillable })
     }
 
     @Test

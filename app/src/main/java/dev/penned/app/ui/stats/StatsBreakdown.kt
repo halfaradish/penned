@@ -155,8 +155,9 @@ private fun DonutCenter(label: String, amount: String, amountColor: Color) {
 }
 
 /**
- * 数据卡：分类行清单。[drillable] 决定哪些行能点进详细页
- * （「其他」合并桶与「未分类」不是真实分类，不可点）。
+ * 数据卡：分类行清单。行能否点进详细页由 [StatsMath.CategoryTotal.drillable] 决定
+ * （真实分类可点；「未分类」与直挂在节点上的同名桶不是可下钻的节点）——
+ * 判定下沉在数据层，别在这里按名字猜（D049：真实分类可能就叫「其他」/「未分类」）。
  */
 @Composable
 fun StatsDataCard(
@@ -165,7 +166,6 @@ fun StatsDataCard(
     type: TxType,
     modifier: Modifier = Modifier,
     slots: Map<String, Int> = emptyMap(),
-    drillable: (StatsMath.CategoryTotal) -> Boolean = { false },
     onOpenCategory: (String) -> Unit = {},
 ) {
     PennedCard(
@@ -188,7 +188,7 @@ fun StatsDataCard(
             )
         }
         categories.forEachIndexed { index, cat ->
-            val canDrill = drillable(cat)
+            val canDrill = cat.drillable
             if (index > 0) PennedDivider()
             Row(
                 modifier = Modifier

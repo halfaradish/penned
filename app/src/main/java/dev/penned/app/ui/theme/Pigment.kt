@@ -25,7 +25,8 @@ import androidx.compose.ui.graphics.Color
  * 与日头条的墨色日期同一口径。前几轮把字形染成彩色，正是"艳"和"国画"两种观感的直接来源。
  *
  * 分配按名字稳定哈希落槽（同名同色、跨页稳定）；**同一张图里**出现的一组分类走 [assignSlots]
- * 保证不撞色。转账/未分类/统计页的合并桶「其他」**不是分类**，走中性灰（[neutralHue] 等）。
+ * 保证不撞色。转账/未分类**不是分类**，走中性灰（[neutralHue] 等）；真实分类「其他」是普通分类，
+ * 照名字哈希取色（落 0 号玫红，见 [hue] 注释）——D049 前它被"合并桶同名"误判成中性。
  */
 object PennedPigment {
 
@@ -88,19 +89,16 @@ object PennedPigment {
     const val MARK_ALPHA_LIGHT = 0.45f
     const val MARK_ALPHA_DARK = 0.65f
 
-    /** 中性（转账/未分类/合并桶「其他」）：全强度灰 + 它的淡底，不参与哈希。 */
+    /** 中性（转账/未分类）：全强度灰 + 它的淡底，不参与哈希。 */
     val neutralHue = Color(0xFF4B5563)
     val neutralHueOnDark = Color(0xFFA8AEBA)
 
     const val TRANSFER = "转账"
     const val UNKNOWN = "未分类"
 
-    /** 合并桶不是分类，配色与转账/未分类同待遇（AI 轮）。 */
-    const val OTHERS = dev.penned.app.domain.StatsMath.OTHERS
-
-    /** 落在八色里的返回 0..7；转账/未分类/「其他」返回 -1（中性）。 */
+    /** 落在八色里的返回 0..7；转账/未分类返回 -1（中性）。 */
     fun slotOf(name: String): Int = when (name) {
-        TRANSFER, UNKNOWN, OTHERS, "?" -> -1
+        TRANSFER, UNKNOWN, "?" -> -1
         else -> (name.hashCode().toLong() and 0xFFFFFFFFL).rem(hue.size.toLong()).toInt()
     }
 
@@ -261,7 +259,7 @@ fun pigmentMarkFor(slots: Map<String, Int>, name: String): Color =
 
 /**
  * 按"一张图里分配好的槽位"取全强度色（[PennedPigment.assignSlots] 的产物）：
- * 没分配到的名字退回名字哈希，转账/未分类/「其他」照旧走中性。
+ * 没分配到的名字退回名字哈希，转账/未分类照旧走中性。
  */
 @Composable
 fun pigmentInkFor(slots: Map<String, Int>, name: String): Color =
