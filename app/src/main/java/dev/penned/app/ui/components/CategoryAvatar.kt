@@ -13,18 +13,18 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedPigment
-import dev.penned.app.ui.theme.pigmentFill
+import dev.penned.app.ui.theme.isDarkTheme
 import dev.penned.app.ui.theme.pigmentFillAt
-import dev.penned.app.ui.theme.pigmentOnFillAt
-import dev.penned.app.ui.theme.pigmentSelectedAt
+import dev.penned.app.ui.theme.pigmentInkAt
 
 /**
- * 分类头像：**实心颜料块 + 同色相深档字形**（D046 起）。
- * 取代 AR/RA 两轮的"淡底 + ink 字"——那两版一个太艳一个太灰，用户都不认。
- * 现在的口径是用户给的参考（课表课程格子）：块面亮而干净（S74/L70，浅深两个主题同一份），
- * 字形用同色相的深档（在自家块面上 4.6:1），所以块面本身就承担了"这是什么分类"。
+ * 分类头像：**极淡色相底 + 墨色字形**（D047 起；日头条那一栏的口径）。
  *
- * [selected] 换成深档实心 + 白字：和亮档块面差一整个明度档，选中一眼看得出（记一笔宫格用）。
+ * 大面积只给 12%（浅）/ 22%（深）的淡底——与白卡只有 1.16~1.19:1，跟日头条底一个量级，
+ * 是"纸"不是"色块"；色相给满的地方只有细件与选中态（见 `PennedPigment`）。
+ * 字形一律 `onSurface` 墨色，不染颜料：前几轮把字形染成彩色，正是"艳"与"国画"两种观感的来源。
+ *
+ * [selected] 走全强度实心 + 反白（浅色深档配白字、深色亮档配深字）——和淡底拉开一整个档。
  * [slot] 给账户这类"按类型固定上色"的场景用；不传则按名字哈希取色。
  */
 @Composable
@@ -37,8 +37,13 @@ fun CategoryAvatar(
     slot: Int? = null,
 ) {
     val s = slot ?: PennedPigment.slotOf(name)
-    val background = if (selected) pigmentSelectedAt(s) else pigmentFillAt(s)
-    val foreground = if (selected) PennedPigment.onFillWhite else pigmentOnFillAt(s)
+    val background = if (selected) pigmentInkAt(s) else pigmentFillAt(s)
+    val foreground = when {
+        !selected -> MaterialTheme.colorScheme.onSurface
+        // 选中态是实心底：浅色主题是深档色，配白字；深色主题是亮档色，配深字
+        isDarkTheme() -> MaterialTheme.colorScheme.surface
+        else -> MaterialTheme.colorScheme.onPrimary
+    }
     Box(
         modifier = modifier.size(size).background(background, CircleShape),
         contentAlignment = Alignment.Center,

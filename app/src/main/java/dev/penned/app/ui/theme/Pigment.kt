@@ -4,97 +4,79 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 /**
- * 分类颜料盘 v3（D046，取代 D043/D045 的"降饱和"盘）。
+ * 分类颜料盘 v4（D047，取代 D043/D045/D046 三版）。
  *
- * 前两轮的教训：AR 轮"高彩度深色 ink + 12% 淡底"，用户说**太艳太明亮**；
- * RA 轮把彩度压到 ≤50% 并加深，用户说**绕回了国画色**（深、灰、土 = 古董工具软件的味道）。
- * 结论：问题不在"彩度高低"，而在**明度与分工**——块面要亮、要干净，
- * 让深色只去承担"字与细件"。
+ * **四轮的结论**：AR「高彩度深色 ink + 12% 淡底」→ 用户说**太艳、太明亮**；RA「压彩度 ≤50% 并加深」→
+ * **绕回了国画色**（深、灰、土）；v3「实心亮档块 + 深档字」→ **"又艳起来了，与整体不协调"**。
+ * 三次都栽在同一处：**把颜色铺成了面**。而用户点名的样板始终是首页**日头条那一栏**——
+ * 极淡的青灰底 + 3dp 深青竖条 + 墨色日期。那就是这套盘该有的口径：
  *
- * 新盘照用户给的参考（两张课表截图的课程格子）取色带，三档分工明确：
+ * > **大面积一律极淡；色相只在小面积上给满。**
  *
- * - [fill] **亮档 = 块面**（头像/气泡的实心底）：S74 / L70，八个槽**等视觉重量**。
- *   在浅色卡片上只有 1.4~3.2:1 —— 这是有意的：块面是**装饰性**的，分类身份由
- *   压在上面的字形 + 旁边的名称文字承担（参考图自己的块面在画布上也只有 1.4~1.6:1）。
- * - [mark] **中档 = 细件**（占比环/图例点/占比条）：按对比度对齐（白卡上 3.2:1），
- *   所以明度随色相变——绿、金压得深，紫、靛亮到 L60。
- * - [ink] **深档 = 字与选中块**：块面上的字形（在自家亮档上 4.6:1）、选中态的实心底。
- *   深色主题里它只当字形（细件在深色下改用 [fill]，深档在暗底上看不见）。
+ * 于是每槽只剩**一个色相**（[hue]），按两种强度用：
+ * - **淡底**（[TINT_ALPHA_LIGHT] 12% / [TINT_ALPHA_DARK] 22%，叠在卡片上）= 头像/气泡的块面。
+ *   浅色下与白卡只有 1.16~1.21:1，跟日头条底（1.12:1）同一档——块面是"纸"，不是"色块"。
+ * - **全强度**（100%）= 占比环/图例点/占比条（细件）、选中态实心、宫格"有子分类"小圆点。
+ *   就是日头条那根 3dp 竖条的角色：小面积、给满、白卡上 3.8~5.4:1。
  *
- * 两个主题**共用同一份 [fill]**：分类的颜色是身份，不随主题变（"食品餐饮"永远是玫红）。
- * 深色下亮档块面在 #181A1D 上 ≥5.4:1，看得见；字形用深档，仍是 4.6:1。
+ * 块面上的字形**不染颜料**，用 `onSurface` 墨色（浅色 14.2~14.6:1、深色 13.2~13.8:1）——
+ * 与日头条的墨色日期同一口径。前几轮把字形染成彩色，正是"艳"和"国画"两种观感的直接来源。
  *
  * 分配按名字稳定哈希落槽（同名同色、跨页稳定）；**同一张图里**出现的一组分类走 [assignSlots]
- * 保证不撞色。转账/未分类/统计页的合并桶「其他」**不是分类**，走中性三档（[neutralFill] 等）。
+ * 保证不撞色。转账/未分类/统计页的合并桶「其他」**不是分类**，走中性灰（[neutralHue] 等）。
  */
 object PennedPigment {
 
     /**
-     * 亮档：块面色（头像/气泡实心底），浅深两个主题共用。
-     * 八个槽同为 S74 / L70，块面之间没有"谁更重"。
+     * 分类色相（每槽一个，**全强度**值）：细件、选中态实心、淡底源色都用它。
+     *
+     * 八槽按**对比度**对齐而不是按明度——都解到"**白字压上去 = 4.5:1**"（同一档色相既当细件、
+     * 又当选中态实心，白字要读得清），所以玫红/紫/靛亮到 L50~60、翠/金压到 L29~34。
+     * 这不是随手定的：绿、金的物理亮度高，压到同一明度白字就糊了（翠在 L48 上白字只有 1.8:1），
+     * 而亮度对比才是"看不看得见"的真正口径。
      *
      * **槽位顺序不是色相顺序**——哈希落槽决定了"哪几个真实分类会同屏"，所以槽位与色相要错开配：
      * AR 轮实测发现，按色相排（…紫 267 / 洋红 295）会让「晚餐」与「工资」这两个最常用的分类
      * 只差 28°（旧盘是 46°），用户一眼就能看出"两个都是紫的"。按下面这个顺序，
      * 真实分类名落到的槽位两两最小色相差 46°（详见 `docs/界面规范.md` 第四节）。
      */
-    val fill: List<Color> = listOf(
-        Color(0xFFEB7A9E), // 0 玫红 341°（食品餐饮/出行交通/休闲娱乐/文化教育/午餐/其他 落这里）
-        Color(0xFFEB9A7A), // 1 橙   17°
-        Color(0xFF7AEBC0), // 2 翠  157°（休闲零食/转账）
-        Color(0xFF7AD3EB), // 3 青  193°
-        Color(0xFFAD7AEB), // 4 紫  267°
-        Color(0xFF7A87EB), // 5 靛  233°（购物消费/居家生活）
-        Color(0xFFE27AEB), // 6 洋红 295°（晚餐）
-        Color(0xFFEBC57A), // 7 金   40°（工资/早餐）
+    val hue: List<Color> = listOf(
+        Color(0xFFE31657), // 0 玫红 341°（食品餐饮/出行交通/休闲娱乐/文化教育/午餐/其他 落这里）
+        Color(0xFFCD4814), // 1 橙   17°
+        Color(0xFF0D8557), // 2 翠  157°（休闲零食/转账）
+        Color(0xFF107F9D), // 3 青  193°
+        Color(0xFF9145ED), // 4 紫  267°
+        Color(0xFF4559ED), // 5 靛  233°（购物消费/居家生活）
+        Color(0xFFC815D8), // 6 洋红 295°（晚餐）
+        Color(0xFF9B6C0F), // 7 金   40°（工资/早餐）
     )
 
     /**
-     * 深档：字与细件色（顺序同 [fill]）。明度按色相各自解出来，取"字形在自家亮档上 = 4.6:1"的
-     * **最亮**解——再亮字就糊，再暗就成了"近黑"，色相看不出来。所以八槽的深档明度 23~25 各差一点，
-     * 是解出来的、不是随手定的。
+     * 深色主题的全强度色（顺序同 [hue]）：暗底上深档看不见（靛只有 2.2:1），所以换成同色相的亮档
+     * （在 `#181A1D` 上 5.4~12.0:1）。淡底也用这一份当源色——深色下的"淡底"= 亮色叠一点点。
      */
-    val ink: List<Color> = listOf(
-        Color(0xFF690D2A), // 0 玫红
-        Color(0xFF712A0E), // 1 橙
-        Color(0xFF0D6946), // 2 翠
-        Color(0xFF0E596E), // 3 青
-        Color(0xFF390E6F), // 4 紫
-        Color(0xFF0E1A72), // 5 靛
-        Color(0xFF620D69), // 6 洋红
-        Color(0xFF6F4E0E), // 7 金
+    val hueOnDark: List<Color> = listOf(
+        Color(0xFFEB7A9E),
+        Color(0xFFEB9A7A),
+        Color(0xFF7AEBC0),
+        Color(0xFF7AD3EB),
+        Color(0xFFAD7AEB),
+        Color(0xFF7A87EB),
+        Color(0xFFE27AEB),
+        Color(0xFFEBC57A),
     )
 
     /**
-     * 中档：细件色（占比环、图例点、占比条）。八槽按**对比度**对齐而不是按明度——
-     * 都解到"在白卡上 = 3.2:1"，所以玫红/紫/靛亮到 L60、翠/金压到 L33~38。
-     * 这不是随手定的：绿、金的物理亮度高，压到同一个明度就会看不见（翠在 L48 只有 1.8:1），
-     * 而亮度对比才是"这段数据看不看得见"的真正口径。
-     * 深色主题不用这一档（暗底上改用 [fill]，见 [pigmentInkAt]）。
+     * 淡底透明度：浅色 12% / 深色 22%。
+     * 12% 是"与日头条同一档偏淡、又还能分清八个色相"的那条线——再淡（≤8%）八个色相就开始糊成
+     * 一片（用户上一轮抱怨过"连续三种一样的颜色"，那一头也是硬线）；再浓就又回到"色块"。
      */
-    val mark: List<Color> = listOf(
-        Color(0xFFEC3E75), // 0 玫红
-        Color(0xFFE55117), // 1 橙
-        Color(0xFF0F9562), // 2 翠
-        Color(0xFF118EB0), // 3 青
-        Color(0xFF9145ED), // 4 紫
-        Color(0xFF4559ED), // 5 靛
-        Color(0xFFDA2BEA), // 6 洋红
-        Color(0xFFAD7911), // 7 金
-    )
+    const val TINT_ALPHA_LIGHT = 0.12f
+    const val TINT_ALPHA_DARK = 0.22f
 
-    /** 中性块面（转账/未分类/合并桶「其他」）：灰底白字，两个主题同一份。 */
-    val neutralFill = Color(0xFF6B7280)
-
-    /**
-     * 块面上的白字：中性灰块（4.8:1）与选中态的深档块（≥7:1）都用它。
-     * 彩色块面上的字不走这里——那是同色相的深档（见 [ink]），不是白。
-     */
-    val onFillWhite = Color(0xFFFFFFFF)
-
-    /** 中性细件色：浅色主题用深一档的灰（白卡 7.6:1），深色主题用浅灰（暗卡 7.8:1）。 */
-    val neutralInkLight = Color(0xFF4B5563)
-    val neutralInkDark = Color(0xFFA8AEBA)
+    /** 中性（转账/未分类/合并桶「其他」）：全强度灰 + 它的淡底，不参与哈希。 */
+    val neutralHue = Color(0xFF4B5563)
+    val neutralHueOnDark = Color(0xFFA8AEBA)
 
     const val TRANSFER = "转账"
     const val UNKNOWN = "未分类"
@@ -105,11 +87,11 @@ object PennedPigment {
     /** 落在八色里的返回 0..7；转账/未分类/「其他」返回 -1（中性）。 */
     fun slotOf(name: String): Int = when (name) {
         TRANSFER, UNKNOWN, OTHERS, "?" -> -1
-        else -> (name.hashCode().toLong() and 0xFFFFFFFFL).rem(fill.size.toLong()).toInt()
+        else -> (name.hashCode().toLong() and 0xFFFFFFFFL).rem(hue.size.toLong()).toInt()
     }
 
     /**
-     * 每槽的色相角（度）：判"撞色"用，**顺序与 [fill] 一一对应**（所以看起来不是递增的）。
+     * 每槽的色相角（度）：判"撞色"用，**顺序与 [hue] 一一对应**（所以看起来不是递增的）。
      */
     private val hues = listOf(341f, 17f, 157f, 193f, 267f, 233f, 295f, 40f)
 
@@ -119,10 +101,10 @@ object PennedPigment {
      *
      * **这套盘的极限（诚实记录）**：k 个分类能拿到的最优最小色相差是 2→176°、3→110°、4→62°、
      * 5→46°、6→36°、7→28°、8→23°。旧盘同样是"5 个的极限"（D040 记过），所以一屏 6 个彩色分类时
-     * 第 6 色与邻居约 36°，靠"块面色 + 桶名 + 占比数字"一起区分。
+     * 第 6 色与邻居约 36°，靠"淡底 + 桶名 + 占比数字"一起区分。
      *
      * 另外：**真实数据里会同屏的那几个分类**（食品餐饮/购物消费/休闲娱乐/文化教育/晚餐/工资…）
-     * 落到的槽位两两 ≥46°——这靠"槽位与色相错开配"实现，见 [fill] 的注释。
+     * 落到的槽位两两 ≥46°——这靠"槽位与色相错开配"实现，见 [hue] 的注释。
      */
     internal const val MIN_HUE_GAP = 45f
 
@@ -157,7 +139,7 @@ object PennedPigment {
      */
     private fun searchBest(k: Int, preferred: IntArray): IntArray {
         val current = IntArray(k)
-        val used = BooleanArray(fill.size)
+        val used = BooleanArray(hue.size)
         val best = preferred.copyOf()
         var bestGap = -1f
         var bestKeep = -1
@@ -178,7 +160,7 @@ object PennedPigment {
                 }
                 return
             }
-            for (slot in fill.indices) {
+            for (slot in hue.indices) {
                 if (used[slot]) continue
                 var gap = partialGap
                 for (i in 0 until depth) {
@@ -217,42 +199,33 @@ object PennedPigment {
     }
 }
 
-/** 块面色：头像/气泡的实心底。两个主题同色（分类身份色不随主题变）。 */
-@Composable
-fun pigmentFill(name: String): Color = pigmentFillAt(PennedPigment.slotOf(name))
-
-/** 按槽位取块面色（账户按类型固定上色，不走哈希）。slot 为负＝中性灰。 */
-@Composable
-fun pigmentFillAt(slot: Int): Color =
-    if (slot < 0) PennedPigment.neutralFill else PennedPigment.fill[slot % PennedPigment.fill.size]
-
-/** 块面上的字形色：彩色块配深档（4.6:1），中性块配白字（4.8:1）；两个主题同一份。 */
-@Composable
-fun pigmentOnFillAt(slot: Int): Color =
-    if (slot < 0) PennedPigment.onFillWhite else PennedPigment.ink[slot % PennedPigment.ink.size]
-
-/** 选中态的实心底：深档（中性用深灰），配白字——和亮档块面差一整个明度档，一眼看得出选中。 */
-@Composable
-fun pigmentSelectedAt(slot: Int): Color =
-    if (slot < 0) PennedPigment.neutralInkLight else PennedPigment.ink[slot % PennedPigment.ink.size]
-
 /**
- * 细件色（占比环、图例点、占比条）：浅色主题用中档（白卡与浅轨道上 3.0~3.7:1），
- * 深色主题改用亮档（中/深档在暗底上都看不见，亮档在 #181A1D 上有 5.4:1）。
+ * 全强度色（细件、选中态实心、淡底源色）：浅色主题用深档、深色主题用亮档；
+ * slot 为负＝中性灰。
  */
 @Composable
 fun pigmentInkAt(slot: Int): Color = when {
-    slot < 0 -> if (isDarkTheme()) PennedPigment.neutralInkDark else PennedPigment.neutralInkLight
-    isDarkTheme() -> PennedPigment.fill[slot % PennedPigment.fill.size]
-    else -> PennedPigment.mark[slot % PennedPigment.mark.size]
+    slot < 0 -> if (isDarkTheme()) PennedPigment.neutralHueOnDark else PennedPigment.neutralHue
+    isDarkTheme() -> PennedPigment.hueOnDark[slot % PennedPigment.hueOnDark.size]
+    else -> PennedPigment.hue[slot % PennedPigment.hue.size]
 }
 
-/** 按名字取细件色。 */
+/** 按名字取全强度色。 */
 @Composable
 fun pigmentInk(name: String): Color = pigmentInkAt(PennedPigment.slotOf(name))
 
+/** 块面淡底：全强度色按 12%（浅）/ 22%（深）叠在卡片上——与日头条底同一档的"偏淡"。 */
+@Composable
+fun pigmentFillAt(slot: Int): Color = pigmentInkAt(slot).copy(
+    alpha = if (isDarkTheme()) PennedPigment.TINT_ALPHA_DARK else PennedPigment.TINT_ALPHA_LIGHT,
+)
+
+/** 按名字取块面淡底。 */
+@Composable
+fun pigmentFill(name: String): Color = pigmentFillAt(PennedPigment.slotOf(name))
+
 /**
- * 按"一张图里分配好的槽位"取细件色（[PennedPigment.assignSlots] 的产物）：
+ * 按"一张图里分配好的槽位"取全强度色（[PennedPigment.assignSlots] 的产物）：
  * 没分配到的名字退回名字哈希，转账/未分类/「其他」照旧走中性。
  */
 @Composable

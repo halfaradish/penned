@@ -114,27 +114,35 @@ class ContrastTest {
         add("iconMuted / surface（深）", IconMutedDark, SurfaceDark, nonText)
         add("进度填充 primary / surface（深）", PrimaryDark, SurfaceDark, nonText)
 
-        // —— 分类颜料 v3：三档（亮档块面 / 中档细件 / 深档字与选中块，D046）——
-        // 块面是**装饰性**的（分类身份由字形 + 旁边的名称承担），所以块面本身不设明度下限——
-        // 它靠色相/彩度与卡片分开（参考的课表格子同款做法，人家只有 1.4~1.6:1）。
-        // 真正要守的是下面三条：字形读得清、细件在白底与轨道上看得见、深色下细件换成亮档也看得见。
-        PennedPigment.fill.forEachIndexed { i, block ->
-            val mark = PennedPigment.mark[i]
-            val glyph = PennedPigment.ink[i]
-            add("颜料$i 深档字 / 自家亮档块面", glyph, block)
-            add("白字 / 颜料$i 深档块（选中态）", PennedPigment.onFillWhite, glyph)
-            add("颜料$i 中档细件 / surface（浅）", mark, SurfaceLight, nonText)
-            add("颜料$i 中档细件 / 占比条轨道（浅）", mark, SurfaceContainerHighLight, nonText)
-            add("颜料$i 亮档细件 / surface（深）", block, SurfaceDark, nonText)
-            add("颜料$i 亮档细件 / 占比条轨道（深）", block, SurfaceContainerHighDark, nonText)
+        // —— 分类颜料 v4：一个色相两种强度（淡底块面 / 全强度细件与选中，D047）——
+        // 口径 = 日头条那一栏：大面积只给 12%（浅）/22%（深）的淡底（与白卡 1.16~1.21:1，
+        // 和日头条底 1.12:1 同档，**不设明度下限**——它是"纸"，识别靠上面的墨色字形）；
+        // 色相给满的地方只有细件（环/图例/占比条）与选中态实心。
+        // 所以这里守四条：墨色字形在淡底上读得清、细件在白底与轨道上看得见、
+        // 深色下细件换成亮档也看得见、选中态实心上反白（浅）/深字（深）都成立。
+        PennedPigment.hue.forEachIndexed { i, full ->
+            val onDark = PennedPigment.hueOnDark[i]
+            val groundLight = over(full, SurfaceLight, PennedPigment.TINT_ALPHA_LIGHT)
+            val groundDark = over(onDark, SurfaceDark, PennedPigment.TINT_ALPHA_DARK)
+            add("颜料$i 墨色字 / 淡底块面（浅）", OnSurfaceLight, groundLight)
+            add("颜料$i 墨色字 / 淡底块面（深）", OnSurfaceDark, groundDark)
+            add("颜料$i 全强度细件 / surface（浅）", full, SurfaceLight, nonText)
+            add("颜料$i 全强度细件 / 占比条轨道（浅）", full, SurfaceContainerHighLight, nonText)
+            add("颜料$i 亮档细件 / surface（深）", onDark, SurfaceDark, nonText)
+            add("颜料$i 亮档细件 / 占比条轨道（深）", onDark, SurfaceContainerHighDark, nonText)
+            add("白字 / 颜料$i 实心（选中态·浅）", OnPrimaryLight, full)
+            add("深字 surface / 颜料$i 实心（选中态·深）", SurfaceDark, onDark)
         }
-        add("白字 / 中性块面", PennedPigment.onFillWhite, PennedPigment.neutralFill)
-        add("中性块面 / surface（浅）", PennedPigment.neutralFill, SurfaceLight, nonText)
-        add("中性块面 / surface（深）", PennedPigment.neutralFill, SurfaceDark, nonText)
-        add("中性细件 / surface（浅）", PennedPigment.neutralInkLight, SurfaceLight, nonText)
-        add("中性细件 / 占比条轨道（浅）", PennedPigment.neutralInkLight, SurfaceContainerHighLight, nonText)
-        add("中性细件 / surface（深）", PennedPigment.neutralInkDark, SurfaceDark, nonText)
-        add("中性细件 / 占比条轨道（深）", PennedPigment.neutralInkDark, SurfaceContainerHighDark, nonText)
+        val neutralGroundLight = over(PennedPigment.neutralHue, SurfaceLight, PennedPigment.TINT_ALPHA_LIGHT)
+        val neutralGroundDark = over(PennedPigment.neutralHueOnDark, SurfaceDark, PennedPigment.TINT_ALPHA_DARK)
+        add("中性 墨色字 / 淡底块面（浅）", OnSurfaceLight, neutralGroundLight)
+        add("中性 墨色字 / 淡底块面（深）", OnSurfaceDark, neutralGroundDark)
+        add("中性 全强度细件 / surface（浅）", PennedPigment.neutralHue, SurfaceLight, nonText)
+        add("中性 全强度细件 / 占比条轨道（浅）", PennedPigment.neutralHue, SurfaceContainerHighLight, nonText)
+        add("中性 亮档细件 / surface（深）", PennedPigment.neutralHueOnDark, SurfaceDark, nonText)
+        add("中性 亮档细件 / 占比条轨道（深）", PennedPigment.neutralHueOnDark, SurfaceContainerHighDark, nonText)
+        add("白字 / 中性实心（选中态·浅）", OnPrimaryLight, PennedPigment.neutralHue)
+        add("深字 surface / 中性实心（选中态·深）", SurfaceDark, PennedPigment.neutralHueOnDark)
         return out
     }
 
@@ -191,35 +199,25 @@ class ContrastTest {
             hex(ErrorDark) to "#F2B8B5",
             hex(DayHeaderLight) to "#EDF3F1",
             hex(DayHeaderDark) to "#1C2523",
-            // 分类颜料盘 v3（第四节八槽 × 三档 + 中性三档）
-            hex(PennedPigment.fill[0]) to "#EB7A9E",
-            hex(PennedPigment.fill[1]) to "#EB9A7A",
-            hex(PennedPigment.fill[2]) to "#7AEBC0",
-            hex(PennedPigment.fill[3]) to "#7AD3EB",
-            hex(PennedPigment.fill[4]) to "#AD7AEB",
-            hex(PennedPigment.fill[5]) to "#7A87EB",
-            hex(PennedPigment.fill[6]) to "#E27AEB",
-            hex(PennedPigment.fill[7]) to "#EBC57A",
-            hex(PennedPigment.ink[0]) to "#690D2A",
-            hex(PennedPigment.ink[1]) to "#712A0E",
-            hex(PennedPigment.ink[2]) to "#0D6946",
-            hex(PennedPigment.ink[3]) to "#0E596E",
-            hex(PennedPigment.ink[4]) to "#390E6F",
-            hex(PennedPigment.ink[5]) to "#0E1A72",
-            hex(PennedPigment.ink[6]) to "#620D69",
-            hex(PennedPigment.ink[7]) to "#6F4E0E",
-            hex(PennedPigment.mark[0]) to "#EC3E75",
-            hex(PennedPigment.mark[1]) to "#E55117",
-            hex(PennedPigment.mark[2]) to "#0F9562",
-            hex(PennedPigment.mark[3]) to "#118EB0",
-            hex(PennedPigment.mark[4]) to "#9145ED",
-            hex(PennedPigment.mark[5]) to "#4559ED",
-            hex(PennedPigment.mark[6]) to "#DA2BEA",
-            hex(PennedPigment.mark[7]) to "#AD7911",
-            hex(PennedPigment.neutralFill) to "#6B7280",
-            hex(PennedPigment.onFillWhite) to "#FFFFFF",
-            hex(PennedPigment.neutralInkLight) to "#4B5563",
-            hex(PennedPigment.neutralInkDark) to "#A8AEBA",
+            // 分类颜料盘 v4（第四节八槽色相 × 两种强度 + 中性）
+            hex(PennedPigment.hue[0]) to "#E31657",
+            hex(PennedPigment.hue[1]) to "#CD4814",
+            hex(PennedPigment.hue[2]) to "#0D8557",
+            hex(PennedPigment.hue[3]) to "#107F9D",
+            hex(PennedPigment.hue[4]) to "#9145ED",
+            hex(PennedPigment.hue[5]) to "#4559ED",
+            hex(PennedPigment.hue[6]) to "#C815D8",
+            hex(PennedPigment.hue[7]) to "#9B6C0F",
+            hex(PennedPigment.hueOnDark[0]) to "#EB7A9E",
+            hex(PennedPigment.hueOnDark[1]) to "#EB9A7A",
+            hex(PennedPigment.hueOnDark[2]) to "#7AEBC0",
+            hex(PennedPigment.hueOnDark[3]) to "#7AD3EB",
+            hex(PennedPigment.hueOnDark[4]) to "#AD7AEB",
+            hex(PennedPigment.hueOnDark[5]) to "#7A87EB",
+            hex(PennedPigment.hueOnDark[6]) to "#E27AEB",
+            hex(PennedPigment.hueOnDark[7]) to "#EBC57A",
+            hex(PennedPigment.neutralHue) to "#4B5563",
+            hex(PennedPigment.neutralHueOnDark) to "#A8AEBA",
         )
         val mismatched = documented.filter { (actual, expected) -> actual != expected }
         assertTrue(

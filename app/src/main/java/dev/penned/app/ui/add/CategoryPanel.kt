@@ -38,7 +38,7 @@ import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.PennedPigment
-import dev.penned.app.ui.theme.pigmentOnFillAt
+import dev.penned.app.ui.theme.pigmentInkAt
 import dev.penned.app.ui.theme.pigmentSlotFor
 import dev.penned.app.ui.theme.primaryInkColor
 
@@ -46,7 +46,7 @@ data class CategoryUi(val id: String, val name: String, val hasSubs: Boolean)
 
 /**
  * 分类面板：5 列一级宫格，点一级在其下方就地展开子分类 chip 带（动效见原则五）。
- * 选中 = 该分类的深档实心圆 + 白字；有子分类的圆内右上带小圆点提示可展开。
+ * 选中 = 该分类的全强度实心圆 + 反白；有子分类的圆内右上带小圆点提示可展开。
  */
 @Composable
 fun CategoryPanel(
@@ -182,7 +182,7 @@ private fun CategoryCell(
         Box(contentAlignment = Alignment.Center) {
             // 气泡走颜料头像：分类在宫格里有自己的颜色（与统计图同一套分配口径）
             CategoryAvatar(name = category.name, size = circleSize, selected = selected, slot = slot)
-            // 有子分类：圆内右上小圆点（放到圆外会显得和单元格脱开），用该分类自己的深档色
+            // 有子分类：圆内右上小圆点（放到圆外会显得和单元格脱开），用该分类的全强度色
             if (category.hasSubs) {
                 Box(
                     modifier = Modifier
@@ -190,7 +190,7 @@ private fun CategoryCell(
                         .padding(top = 3.dp, end = 3.dp)
                         .size(PennedDimens.categoryDot)
                         .clip(CircleShape)
-                        .background(pigmentOnFillAt(slot ?: PennedPigment.slotOf(category.name))),
+                        .background(pigmentInkAt(slot ?: PennedPigment.slotOf(category.name))),
                 )
             }
         }
