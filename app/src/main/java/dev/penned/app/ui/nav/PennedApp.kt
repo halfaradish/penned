@@ -1,12 +1,13 @@
 package dev.penned.app.ui.nav
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
@@ -19,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavType
@@ -76,7 +78,23 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
 
     Scaffold(
         bottomBar = {
-            if (currentRoute in TABS.map { it.route }) {
+            // 进出下钻页时底栏跟着收起/展开：以前它是瞬时消失，父页可用高度会在那一瞬跳一截。
+            // expandFrom/shrinkTowards 取 Top，底栏才是"从屏幕下沿滑上来/滑下去"（Bottom 是原地揭开）
+            AnimatedVisibility(
+                visible = currentRoute in tabRoutes,
+                enter = if (motion) {
+                    fadeIn(tween(MotionSpec.BAR)) +
+                        expandVertically(tween(MotionSpec.BAR), expandFrom = Alignment.Top)
+                } else {
+                    EnterTransition.None
+                },
+                exit = if (motion) {
+                    fadeOut(tween(MotionSpec.BAR)) +
+                        shrinkVertically(tween(MotionSpec.BAR), shrinkTowards = Alignment.Top)
+                } else {
+                    ExitTransition.None
+                },
+            ) {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                     TABS.forEach { tab ->
                         NavigationBarItem(
@@ -106,30 +124,13 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
         NavHost(
             navController = navController,
             startDestination = "home",
-            // 转场（原则五：动效回答动作）——Tab 切换淡入淡出，下钻页共享轴滑入滑出；
+            // 转场（原则五：动效回答动作）：Tab 之间淡入淡出；下钻页整幅从右推入、
+            // 父页左退 1/3 视差，返回反向。口径与时长在 ui/nav/ScreenTransitions.kt；
             // 系统"动画时长缩放"为 0 时全部关闭
-            enterTransition = {
-                when {
-                    !motion -> EnterTransition.None
-                    targetState.destination.route in tabRoutes -> fadeIn(tween(180))
-                    else -> slideInHorizontally(tween(260)) { it / 5 } + fadeIn(tween(260))
-                }
-            },
-            exitTransition = { if (!motion) ExitTransition.None else fadeOut(tween(160)) },
-            popEnterTransition = {
-                when {
-                    !motion -> EnterTransition.None
-                    initialState.destination.route in tabRoutes -> fadeIn(tween(180))
-                    else -> slideInHorizontally(tween(260)) { -it / 5 } + fadeIn(tween(260))
-                }
-            },
-            popExitTransition = {
-                when {
-                    !motion -> ExitTransition.None
-                    targetState.destination.route in tabRoutes -> fadeOut(tween(160))
-                    else -> slideOutHorizontally(tween(260)) { it / 5 } + fadeOut(tween(260))
-                }
-            },
+            enterTransition = { screenMotion(tabRoutes, isPop = false, motion).enter.toTransition() },
+            exitTransition = { screenMotion(tabRoutes, isPop = false, motion).exit.toTransition() },
+            popEnterTransition = { screenMotion(tabRoutes, isPop = true, motion).enter.toTransition() },
+            popExitTransition = { screenMotion(tabRoutes, isPop = true, motion).exit.toTransition() },
             // consumeWindowInsets：普通 padding 不标记 inset 已消费，内层 Scaffold/TopAppBar 会
             // 再加一遍状态栏/导航栏高度（真机搜索页顶部 2× 状态栏死带，D025）
             modifier = Modifier.padding(padding).consumeWindowInsets(padding),
