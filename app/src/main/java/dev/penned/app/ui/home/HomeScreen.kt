@@ -36,6 +36,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -101,6 +102,9 @@ fun HomeScreen(
     onManageBooks: () -> Unit,
     onManageBudgets: () -> Unit = {},
     onSearch: () -> Unit = {},
+    /** 一次性提示（如"已记账"）：由记一笔页写进本页的 savedStateHandle，展示后回调 [onFlashShown]。 */
+    flashMessage: String? = null,
+    onFlashShown: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val rows by viewModel.rows.collectAsStateWithLifecycle()
@@ -115,6 +119,13 @@ fun HomeScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    // 保存完成后的反馈（跨页）：此前保存完静默返回，用户不知道成没成
+    LaunchedEffect(flashMessage) {
+        val message = flashMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        onFlashShown()
+    }
     var undoJob by remember { mutableStateOf<Job?>(null) }
 
     // 删除后给一次「撤销」机会（D024 交互范式二）；连续删除时后一条顶掉前一条

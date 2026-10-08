@@ -18,8 +18,21 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.penned.app.ui.theme.PennedDimens
+import dev.penned.app.ui.theme.PennedElevation
+import dev.penned.app.ui.theme.PennedMotion
+import dev.penned.app.ui.theme.PennedTextStyles
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -58,6 +71,9 @@ import dev.penned.app.ui.stats.categoryDetailRoute
 import dev.penned.app.ui.stats.StatsViewModel
 import dev.penned.app.ui.stub.StubScreen
 
+/** 首页提示条的一次性消息键（保存完成后由记一笔页写进首页的 savedStateHandle）。 */
+private const val HOME_FLASH_KEY = "home-flash"
+
 private data class TabSpec(val route: String, val label: String, val icon: ImageVector)
 
 private val TABS = listOf(
@@ -95,27 +111,55 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     ExitTransition.None
                 },
             ) {
-                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                    TABS.forEach { tab ->
-                        NavigationBarItem(
-                            selected = currentRoute == tab.route,
-                            onClick = {
-                                navController.navigate(tab.route) {
-                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = { Icon(tab.icon, contentDescription = tab.label) },
-                            label = { Text(tab.label) },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = primaryInkColor(),
-                                selectedTextColor = primaryInkColor(),
-                                indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            ),
-                        )
+                // 底栏：白底 + 顶 1dp 发丝线（与卡片同一套边界语言），零 tonal elevation
+                Column {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(PennedDimens.hairline)
+                            .background(MaterialTheme.colorScheme.outlineVariant),
+                    )
+                    NavigationBar(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        tonalElevation = PennedElevation.flat,
+                    ) {
+                        TABS.forEach { tab ->
+                            val selected = currentRoute == tab.route
+                            // 选中图标轻微放大（220ms，克制）：颜色之外再给一个形状信号
+                            val scale by animateFloatAsState(
+                                targetValue = if (selected) 1.08f else 1f,
+                                animationSpec = tween(PennedMotion.base, easing = PennedMotion.ease),
+                                label = "tabIcon",
+                            )
+                            NavigationBarItem(
+                                selected = selected,
+                                onClick = {
+                                    navController.navigate(tab.route) {
+                                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                                icon = {
+                                    Icon(
+                                        tab.icon,
+                                        contentDescription = tab.label,
+                                        modifier = Modifier.graphicsLayer {
+                                            scaleX = scale
+                                            scaleY = scale
+                                        },
+                                    )
+                                },
+                                label = { Text(tab.label, style = PennedTextStyles.caption) },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = primaryInkColor(),
+                                    selectedTextColor = primaryInkColor(),
+                                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                ),
+                            )
+                        }
                     }
                 }
             }
@@ -139,8 +183,14 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                 val vm: HomeViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
                     initializer = { HomeViewModel(app) },
                 )
+                val entry = navController.currentBackStackEntry
+                val flash by entry?.savedStateHandle
+                    ?.getStateFlow(HOME_FLASH_KEY, null)
+                    ?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(null) }
                 HomeScreen(
                     viewModel = vm,
+                    flashMessage = flash,
+                    onFlashShown = { entry?.savedStateHandle?.set(HOME_FLASH_KEY, null) },
                     onAdd = { navController.navigate("add") },
                     onOpenDetail = { id -> navController.navigate("detail/$id") },
                     onManageBooks = { navController.navigate("books") },
@@ -152,10 +202,18 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                 route = "add?editId={editId}",
                 arguments = listOf(navArgument("editId") { type = NavType.StringType; defaultValue = "" }),
             ) { entry ->
+                val editId = entry.arguments?.getString("editId")?.ifEmpty { null }
                 AddTransactionScreen(
                     app = app,
-                    editId = entry.arguments?.getString("editId")?.ifEmpty { null },
-                    onDone = { navController.popBackStack() },
+                    editId = editId,
+                    // 保存后给一次反馈：把消息挂到上一个目的地（首页）的 savedStateHandle 上，
+                    // 由首页的提示条读出来（此前保存完静默返回，用户不知道成没成）
+                    onDone = {
+                        navController.previousBackStackEntry
+                            ?.savedStateHandle
+                            ?.set(HOME_FLASH_KEY, if (editId == null) "已记账" else "已保存")
+                        navController.popBackStack()
+                    },
                     onManageCategories = { navController.navigate("categories") },
                 )
             }
