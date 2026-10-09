@@ -41,7 +41,8 @@ internal const val HOME_ADD_LABEL_TAG = "home-add-label"
 
 /**
  * 悬浮记账入口（界面上就是原来那个「添加一条新记账」按钮，只是搬到了列表之上）：
- * 停在底部 Tab 栏上方；页面往下看时收成右下角的正圆「＋」，往回看复原。
+ * 停在底部 Tab 栏上方；页面往下看时收成右下角的正圆「＋」，**回到列表顶部**复原
+ * （往回滚但没到顶部时保持「＋」，见 [AddEntryScrollGate] 的口径修正）。
  *
  * 形变由**一个进度值**驱动（宽度、标签收窄、标签淡出全从它算出来），所以几何连续、没有跳变；
  * 不自绘阴影（原则二：全局不用阴影，层级靠表面色）。系统「动画时长缩放 = 0」时
@@ -134,9 +135,11 @@ internal object AddEntryMotion {
 }
 
 /**
- * 滚动方向判定（纯逻辑）：**往回看立刻展开、继续往下看累计够了才收起**——
- * 走 Material 那条通用口径（内容往下走 = 回看 = 展开），配合"回到顶部恒展开"，
- * 与「添加一条新记账」滚出视野后 FAB 接管的老行为读起来是一致的。
+ * 滚动方向判定（纯逻辑）：**继续往下看累计够了才收起、只有回到列表顶部才复原**。
+ *
+ * 口径修正（2026-10-09，UI-10）：最早照 Material 那条做成"往回看立刻展开"，
+ * 真机上表现为"往回滚一像素就弹回通栏胶囊"（离顶部还远也复原）——用户裁决改成
+ * **复原只认"回到顶部"**；往回滚只清掉"往下看"的累计，不改形态。
  *
  * @return true = 展开、false = 收起、null = 保持原状
  */
@@ -150,12 +153,7 @@ internal class AddEntryScrollGate(private val collapseAfterPx: Float) {
             true
         }
 
-        // deltaY > 0 = 内容往下走 = 往回看
-        deltaY > 0f -> {
-            advance = 0f
-            true
-        }
-
+        // deltaY < 0 = 内容往上走 = 继续往下看：累计够了才收起
         deltaY < 0f -> {
             advance += -deltaY
             if (advance >= collapseAfterPx) {
@@ -166,6 +164,10 @@ internal class AddEntryScrollGate(private val collapseAfterPx: Float) {
             }
         }
 
-        else -> null
+        // 往回滚：只把"往下看"的累计清零，复原交给"回到顶部"那一支
+        else -> {
+            advance = 0f
+            null
+        }
     }
 }

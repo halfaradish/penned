@@ -57,11 +57,11 @@ class AddEntryMotionTest {
     }
 
     @Test
-    fun `scroll gate expands on reverse scroll and collapses only after enough forward scroll`() {
+    fun `scroll gate collapses after enough forward scroll and restores only at top`() {
         val gate = AddEntryScrollGate(collapseAfterPx = 72f)
-        // 往回看（内容往下走）→ 立刻展开，不设阈值
-        assertEquals(true, gate.onScroll(deltaY = 1f, atTop = false))
-        assertEquals(true, gate.onScroll(deltaY = 80f, atTop = false))
+        // 往回滚（内容往下走）：不改形态，只清"往下看"的累计（UI-10：复原只认回到顶部）
+        assertEquals(null, gate.onScroll(deltaY = 1f, atTop = false))
+        assertEquals(null, gate.onScroll(deltaY = 80f, atTop = false))
         // 继续往下看：没累计够就不动
         assertEquals(null, gate.onScroll(deltaY = -40f, atTop = false))
         assertEquals(null, gate.onScroll(deltaY = -31f, atTop = false))
@@ -70,11 +70,13 @@ class AddEntryMotionTest {
         // 收起后累计清零：同样的一小段不会再触发一次
         assertEquals(null, gate.onScroll(deltaY = -40f, atTop = false))
         assertEquals(false, gate.onScroll(deltaY = -32f, atTop = false))
-        // 反向一像素就展开（且把累计清掉）
-        assertEquals(true, gate.onScroll(deltaY = 1f, atTop = false))
+        // 往回滚把累计清掉：后面的 -40 不该和前面加在一起（清完仍不到 72）
         assertEquals(null, gate.onScroll(deltaY = -40f, atTop = false))
-        // 到顶：不看方向，一律展开
+        assertEquals(null, gate.onScroll(deltaY = 1f, atTop = false))
+        assertEquals(null, gate.onScroll(deltaY = -40f, atTop = false))
+        // 回到顶部：不看方向，一律展开
         assertEquals(true, gate.onScroll(deltaY = -1000f, atTop = true))
+        assertEquals(true, gate.onScroll(deltaY = 5f, atTop = true))
         // 零位移不改状态
         assertEquals(null, gate.onScroll(deltaY = 0f, atTop = false))
     }

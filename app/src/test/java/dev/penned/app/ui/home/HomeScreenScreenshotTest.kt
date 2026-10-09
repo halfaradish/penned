@@ -237,7 +237,7 @@ class HomeScreenScreenshotTest {
     }
 
     @Test
-    fun addEntryCollapsesOnScrollAndRestores() {
+    fun addEntryCollapsesOnScrollAndRestoresOnlyAtTop() {
         var added = 0
         composeRule.setContent { PennedTheme { content(onAdd = { added++ }) } }
         assertEquals(expandedEntryWidth, entryWidth(), 0.5f)
@@ -247,7 +247,14 @@ class HomeScreenScreenshotTest {
         assertEquals(compactEntryWidth, entryWidth(), 0.5f)
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/aq_home_scrolled.png")
 
-        // 往回看：复原成通栏胶囊
+        // 往回滚一小段（离顶部还远）：保持「＋」——UI-10 修的就是这里（原来会弹回通栏胶囊）
+        composeRule.onNodeWithTag("home-list").performTouchInput {
+            swipeDown(startY = centerY, endY = centerY + 200f, durationMillis = 400)
+        }
+        assertEquals(compactEntryWidth, entryWidth(), 0.5f)
+
+        // 回到列表顶部：才复原成通栏胶囊
+        composeRule.onNodeWithTag("home-list").performTouchInput { swipeDown() }
         composeRule.onNodeWithTag("home-list").performTouchInput { swipeDown() }
         assertEquals(expandedEntryWidth, entryWidth(), 0.5f)
 

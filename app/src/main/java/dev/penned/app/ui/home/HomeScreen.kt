@@ -255,8 +255,8 @@ fun HomeContent(
                 val listState = rememberLazyListState()
                 // 月卡展开态：本月默认展开、其余默认折叠（点标题行翻转）；只记"被点过的月份"
                 var toggledMonths by remember { mutableStateOf(emptySet<YearMonth>()) }
-                // 悬浮记账入口：往下看收成右下角「＋」，往回看复原。初值跟列表位置走——
-                // 切 Tab 回来列表位置被 rememberSaveable 恢复，入口状态也得跟着对，别突然弹回通栏
+                // 悬浮记账入口：往下看收成右下角「＋」，**回到列表顶部**复原（UI-10 口径修正）。
+                // 初值跟列表位置走——切 Tab 回来列表位置被 rememberSaveable 恢复，入口状态也得跟着对，别突然弹回通栏
                 var entryExpanded by remember {
                     mutableStateOf(listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0)
                 }
