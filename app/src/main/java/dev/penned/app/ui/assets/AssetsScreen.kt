@@ -504,7 +504,7 @@ private fun AccountGroupCard(
     }
 }
 
-/** 账户行：颜料头像（按类型固定色）+ 名称 + 等宽余额（正=品牌青绿、负=朱砂）。 */
+/** 账户行：头像（统一淡灰绿）+ 名称 + 等宽余额（正=品牌青绿、负=朱砂）。 */
 @Composable
 private fun AccountRow(account: AccountWithBalance, masked: Boolean, onClick: () -> Unit) {
     Row(
@@ -515,7 +515,7 @@ private fun AccountRow(account: AccountWithBalance, masked: Boolean, onClick: ()
             .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CategoryAvatar(account.name, size = PennedDimens.avatarLarge, slot = accountPigmentSlot(account.type))
+        CategoryAvatar(account.name, size = PennedDimens.avatarLarge)
         Spacer(Modifier.width(PennedSpacing.md))
         Column(Modifier.weight(1f)) {
             Text(

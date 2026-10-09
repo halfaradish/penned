@@ -8,7 +8,7 @@ import dev.penned.app.domain.AccountType
  * 账户大类：资产页的分组标题、添加/编辑账户页的分段 tab 共用一套口径（M1 S4 的四类）。
  *
  * 大类不能直接用 [AccountType] 表达——现金与储蓄卡同属"资金账户"，
- * 而列表行又按 [AccountType] 上色，所以两套粒度分开：大类管分组与 tab，类型管配色与副标题。
+ * 所以两套粒度分开：大类管分组与 tab，类型管副标题与落库默认值（图标不再按类型上色，AS 轮）。
  */
 enum class AccountGroup(val tab: String, val title: String, val defaultType: AccountType) {
     FUNDS("资金", "资金账户", AccountType.DEBIT),
@@ -43,15 +43,6 @@ val ACCOUNT_PRESETS: Map<AccountGroup, List<AccountPreset>> = linkedMapOf(
     AccountGroup.INVEST to listOf(AccountPreset("理财账户", AccountType.INVEST)),
     AccountGroup.DEBT to listOf(AccountPreset("欠款", AccountType.DEBT)),
 )
-
-/** 账户类型的固定颜料槽：信用卡/负债红系、现金橙、储蓄卡紫、理财青。 */
-internal fun accountPigmentSlot(type: AccountType): Int = when (type) {
-    AccountType.DEBT -> 6
-    AccountType.CREDIT -> 0
-    AccountType.CASH -> 1
-    AccountType.INVEST -> 3
-    AccountType.DEBIT -> 4
-}
 
 /** 资产页分组标题：groupName 有值优先（留给以后的自定义分组），否则按账户大类推导。 */
 internal fun accountGroupTitle(groupName: String?, type: AccountType): String =

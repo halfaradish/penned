@@ -67,8 +67,7 @@ fun AccountTypeSheet(
                             row.forEach { index ->
                                 val preset = presets.getOrNull(index)
                                 AccountTypeTile(
-                                    label = preset?.label ?: "自定义",
-                                    slot = preset?.let { accountPigmentSlot(it.type) },
+                                    preset = preset,
                                     onClick = { onPick(group, preset) },
                                     modifier = Modifier.weight(1f),
                                 )
@@ -82,11 +81,10 @@ fun AccountTypeSheet(
     }
 }
 
-/** 一个类型格：颜料头像（自定义格是加号圆）+ 名称，5 列网格里的一格。 */
+/** 一个类型格：头像（统一淡灰绿；自定义格是加号圆）+ 名称，5 列网格里的一格。 */
 @Composable
 private fun AccountTypeTile(
-    label: String,
-    slot: Int?,
+    preset: AccountPreset?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -97,8 +95,8 @@ private fun AccountTypeTile(
             .padding(vertical = PennedSpacing.xs),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        if (slot != null) {
-            CategoryAvatar(name = label, size = PennedDimens.categoryBubble, slot = slot)
+        if (preset != null) {
+            CategoryAvatar(name = preset.label, size = PennedDimens.categoryBubble)
         } else {
             Box(
                 Modifier
@@ -116,7 +114,7 @@ private fun AccountTypeTile(
         }
         Spacer(Modifier.size(PennedSpacing.xs))
         Text(
-            label,
+            preset?.label ?: "自定义",
             style = MaterialTheme.typography.labelSmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

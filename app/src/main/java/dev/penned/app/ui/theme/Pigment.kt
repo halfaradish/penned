@@ -253,16 +253,6 @@ fun pigmentIconFill(): Color {
     )
 }
 
-/** 块面淡底：全强度色按 12%（浅）/ 22%（深）叠在卡片上——账户这类"按类型上色"的场景在用。 */
-@Composable
-fun pigmentFillAt(slot: Int): Color = pigmentInkAt(slot).copy(
-    alpha = if (isDarkTheme()) PennedPigment.TINT_ALPHA_DARK else PennedPigment.TINT_ALPHA_LIGHT,
-)
-
-/** 按名字取块面淡底。 */
-@Composable
-fun pigmentFill(name: String): Color = pigmentFillAt(PennedPigment.slotOf(name))
-
 /**
  * 细件色（占比环、图例点、占比条）：全强度色再按 [PennedPigment.MARK_ALPHA_LIGHT] 稀释一档
  * （浅色 45% / 深色 65%）——比图标底浓、比状态淡，是"图表看得见"与"整体偏淡"之间的那档。
@@ -292,6 +282,6 @@ fun pigmentMarkFor(slots: Map<String, Int>, name: String): Color =
 fun pigmentInkFor(slots: Map<String, Int>, name: String): Color =
     pigmentInkAt(slots[name] ?: PennedPigment.slotOf(name))
 
-/** [pigmentInkFor] 的槽位版本：给 `CategoryAvatar(slot = …)` 这类接口用。 */
+/** [pigmentInkFor] 的槽位版本：宫格"有子分类"小圆点按它取色。 */
 fun pigmentSlotFor(slots: Map<String, Int>, name: String): Int =
     slots[name] ?: PennedPigment.slotOf(name)

@@ -433,11 +433,7 @@ fun AccountEditContent(
                         value = state.group.title,
                         onClick = { showGroupPicker = true },
                         leading = {
-                            CategoryAvatar(
-                                name = state.group.title,
-                                size = PennedDimens.avatar,
-                                slot = accountPigmentSlot(state.type),
-                            )
+                            CategoryAvatar(name = state.group.title, size = PennedDimens.avatar)
                         },
                     )
                     PennedDivider()
@@ -622,11 +618,7 @@ private fun GroupPickerSheet(
                     .padding(horizontal = PennedSpacing.xl),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                CategoryAvatar(
-                    name = group.title,
-                    size = PennedDimens.avatar,
-                    slot = accountPigmentSlot(group.defaultType),
-                )
+                CategoryAvatar(name = group.title, size = PennedDimens.avatar)
                 Spacer(Modifier.width(PennedSpacing.md))
                 Text(group.title, style = PennedTextStyles.rowTitle, modifier = Modifier.weight(1f))
                 if (group == selected) {
