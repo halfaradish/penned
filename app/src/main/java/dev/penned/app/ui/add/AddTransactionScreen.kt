@@ -61,6 +61,7 @@ fun AddTransactionScreen(
     editId: String?,
     app: dev.penned.app.PennedApplication,
     onDone: () -> Unit,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier,
     onManageCategories: () -> Unit = {},
 ) {
@@ -127,7 +128,7 @@ fun AddTransactionScreen(
         onSave = { viewModel.save(onDone) },
         onSaveAgain = viewModel::saveAgain,
         onEvaluate = viewModel::evaluate,
-        onBack = onDone,
+        onBack = onBack,
         onEdit = onManageCategories,
         modifier = modifier,
     )

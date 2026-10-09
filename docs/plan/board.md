@@ -100,6 +100,14 @@
 
 ## 已完成
 
+### 记一笔顶栏返回闪退修复（2026-10-09，UI-11）
+
+- **背景**：用户报 bug：记一笔页面点左上角返回会"直接退出 app"，用系统返回则正常回首页。
+- **根因（两处叠加）**：①`PennedApp` 里 `getStateFlow(HOME_FLASH_KEY, null)` 的**裸 `null` 让泛型推成 `Nothing?`（JVM `Void`）**，首页读取 flash 时插 `checkcast java/lang/Void`，一旦真读到 String（"已记账"）就 `ClassCastException` 崩溃闪退（`javap` 反汇编可见合成方法签名 `…(State): java.lang.Void`）；②`AddTransactionScreen` 的 `onBack` 被错接成 `onDone`——"返回"走的是"保存完成"的流程（写 flash + pop），所以顶栏返回会写 flash 触发崩溃，而系统返回只 pop 不写、所以正常。附：AH/AQ 轮加的"保存完成提示条"从上线起就没成功显示过（每次都在读取时崩），日志里用户 16:41:53 保存那笔 6.00 元与 46ms 后的崩溃同秒可证。
+- **切片与提交**：**UI-11** 类型显式化（`getStateFlow<String?>` / `mutableStateOf<String?>` / `set<String?>` + 变量标 `String?`）+ `AddTransactionScreen` 新增 `onBack` 参数（PennedApp 里接 `popBackStack()`，不写 flash）+ 新增 `AddFlowNavigationTest`（真库 + 真导航，两条用例，修前必红）+ D052。
+- **实测**：`./gradlew build test lint` 全绿（含新用例；测试两个坑：Snackbar 的 4s 展示窗口要停表逐帧推、分类列表要 waitUntil）；模拟机（真机数据 756/2，浅色）：进记一笔 → 点顶栏返回 → **崩溃计数 0**、回首页无误导提示；系统返回同走一遍；本轮无写操作，库内仍 756 活跃 / 2 软删；截图归档 `docs/local/界面重构验证/ux4_*.png`（不入库）。
+- **遗留（本轮不做）**：从详情页进编辑（`add?editId=`）保存后，flash 写在"详情页"的 handle 上而详情页不读它 → "已保存"提示看不到（老问题，不属这次崩溃的范围）。
+
 ### 配色 v6：分类图标统一淡灰绿（2026-10-09，AS-1~AS-3）
 
 - **背景**：v4/v5 交付后用户复看真机：「**所有分类图标改为淡灰绿色。进度条/占比图颜色不改**」（附首页流水行与支出数据卡两张截图）。

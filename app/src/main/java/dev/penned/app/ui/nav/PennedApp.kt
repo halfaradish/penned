@@ -184,13 +184,16 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     initializer = { HomeViewModel(app) },
                 )
                 val entry = navController.currentBackStackEntry
-                val flash by entry?.savedStateHandle
-                    ?.getStateFlow(HOME_FLASH_KEY, null)
-                    ?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(null) }
+                // 类型必须显式写：getStateFlow(key, null) / mutableStateOf(null) 里的裸 null 会让
+                // Kotlin 把泛型推成 Nothing?（JVM Void），读取处插 checkcast java/lang/Void——
+                // 一旦真的读到值（"已记账"/"已保存"）就 ClassCastException 闪退（UI-11）
+                val flash: String? by entry?.savedStateHandle
+                    ?.getStateFlow<String?>(HOME_FLASH_KEY, null)
+                    ?.collectAsStateWithLifecycle() ?: remember { mutableStateOf<String?>(null) }
                 HomeScreen(
                     viewModel = vm,
                     flashMessage = flash,
-                    onFlashShown = { entry?.savedStateHandle?.set(HOME_FLASH_KEY, null) },
+                    onFlashShown = { entry?.savedStateHandle?.set<String?>(HOME_FLASH_KEY, null) },
                     onAdd = { navController.navigate("add") },
                     onOpenDetail = { id -> navController.navigate("detail/$id") },
                     onManageBooks = { navController.navigate("books") },
@@ -206,7 +209,7 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                 AddTransactionScreen(
                     app = app,
                     editId = editId,
-                    // 保存后给一次反馈：把消息挂到上一个目的地（首页）的 savedStateHandle 上，
+                    // 保存完成给一次反馈：把消息挂到上一个目的地（首页）的 savedStateHandle 上，
                     // 由首页的提示条读出来（此前保存完静默返回，用户不知道成没成）
                     onDone = {
                         navController.previousBackStackEntry
@@ -214,6 +217,9 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                             ?.set(HOME_FLASH_KEY, if (editId == null) "已记账" else "已保存")
                         navController.popBackStack()
                     },
+                    // 顶栏返回 = 放弃这次记账：只回退、不写提示。
+                    // 此前 onBack 错接成 onDone（返回也写"已记账"）——UI-11 与闪退一并修掉
+                    onBack = { navController.popBackStack() },
                     onManageCategories = { navController.navigate("categories") },
                 )
             }
