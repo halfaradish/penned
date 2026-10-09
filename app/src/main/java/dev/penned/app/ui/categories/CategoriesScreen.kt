@@ -61,9 +61,7 @@ import dev.penned.app.ui.components.PennedSectionHeader
 import dev.penned.app.ui.components.PennedTextAction
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
-import dev.penned.app.ui.theme.PennedPigment
 import dev.penned.app.ui.theme.PennedTextStyles
-import dev.penned.app.ui.theme.pigmentSlotFor
 
 /**
  * 分类管理页：支出/收入两域树形列表，支持新增（一级/子级）、重命名、软删除。
@@ -91,10 +89,6 @@ fun CategoriesScreen(
             val list = categories.orEmpty()
             listOf(CategoryType.EXPENSE to "支出分类", CategoryType.INCOME to "收入分类").forEach { (domain, title) ->
                 val parents = list.filter { it.type == domain && it.parentId == null }.sortedBy { it.sortOrder }
-                // 一屏列出全部一级分类的地方（宫格、这里、图表）走"同屏分配"，避免几个分类撞成同一个颜色；
-                // 单行/单卡出现分类的地方（首页列表、搜索结果、详情）仍走名字哈希，保证跨页稳定（D040 口径）
-                val domainNames = parents.map { it.name }
-                val slots = remember(domainNames) { PennedPigment.assignSlots(domainNames) }
                 PennedSectionHeader(
                     title = title,
                     action = { PennedTextAction("+ 新增", onClick = { addDomain = domain }) },
@@ -117,7 +111,6 @@ fun CategoriesScreen(
                         CategoryRow(
                             parent = parent,
                             subs = subs,
-                            slot = pigmentSlotFor(slots, parent.name),
                             onClick = { editTarget = parent },
                         )
                     }
@@ -159,7 +152,6 @@ private fun CategoryRow(
     parent: CategoryEntity,
     subs: List<CategoryEntity>,
     onClick: () -> Unit,
-    slot: Int? = null,
 ) {
     Row(
         Modifier
@@ -168,7 +160,7 @@ private fun CategoryRow(
             .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CategoryAvatar(parent.name, size = PennedDimens.iconTile, slot = slot)
+        CategoryAvatar(parent.name, size = PennedDimens.iconTile)
         Spacer(Modifier.width(PennedSpacing.md))
         Text(parent.name, style = PennedTextStyles.rowTitle, modifier = Modifier.weight(1f))
         if (subs.isEmpty()) {

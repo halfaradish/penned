@@ -51,12 +51,11 @@ import dev.penned.app.ui.components.PennedDivider
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.pigmentMarkFor
-import dev.penned.app.ui.theme.pigmentSlotFor
 
 /**
  * 统计的「占比 + 数据」两张卡（AI 轮抽出，统计页与分类详细页共用）。
  * 版式照参考图只借结构：标题在卡内、右侧留给调用方放切换/动作；
- * 数据行 = 颜料头像 + 名称 + 「N笔 P%」+ 自家颜料条 + 等宽金额，行可点下钻。
+ * 数据行 = 头像 + 名称 + 「N笔 P%」+ 自家颜料条 + 等宽金额，行可点下钻。
  */
 
 /**
@@ -65,8 +64,9 @@ import dev.penned.app.ui.theme.pigmentSlotFor
  * - 圆心「总支出」压到 11sp 弱化、金额顶到 20sp——先看到总数，再看环，再看图例；
  * - 图例：颜料圆点 + 名称（墨色）+ 右侧百分数（更实一档的 labelLarge、等宽数字）；
  * - [slots] 是"这一张图里分配好的槽位"（[dev.penned.app.ui.theme.PennedPigment.assignSlots]）：
- *   环、图例、下面数据卡的行与占比条共用同一份，段段不同色且三处对得上。
- *   三处都用**细件档**（`pigmentMarkFor`，色相 45%/65% 稀释）——比块面浓、比选中态淡，见 D048。
+ *   环、图例与下面数据卡的占比条共用同一份，段段不同色且对得上。
+ *   三处都用**细件档**（`pigmentMarkFor`，色相 45%/65% 稀释）——比图标底浓、比选中态淡，见 D048。
+ *   行首头像不吃这一份：AS 轮起图标底是统一的淡灰绿。
  */
 @Composable
 fun StatsDonutCard(
@@ -198,7 +198,7 @@ fun StatsDataCard(
                     .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                CategoryAvatar(cat.name, size = PennedDimens.avatarSmall, slot = pigmentSlotFor(slots, cat.name))
+                CategoryAvatar(cat.name, size = PennedDimens.avatarSmall)
                 Spacer(Modifier.width(PennedSpacing.md))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -216,7 +216,7 @@ fun StatsDataCard(
                         )
                     }
                     Spacer(Modifier.height(PennedSpacing.xs))
-                    // 占比条：用这张图里分配好的颜料（细件档），和环图/图例/头像都对得上
+                    // 占比条：用这张图里分配好的颜料（细件档），和环图/图例都对得上
                     Box(
                         Modifier
                             .fillMaxWidth()

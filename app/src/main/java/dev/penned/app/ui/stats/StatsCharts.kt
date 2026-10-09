@@ -188,7 +188,7 @@ private fun ChartBody(
                 drawLine(track, Offset(gutterPx, panelBottom), Offset(size.width, panelBottom), 1.dp.toPx())
                 val pressedIndex = pressed
                 if (pressedIndex != null) {
-                    // 被按的那一格：整条淡色竖带（与分类头像淡底同一档透明度）
+                    // 被按的那一格：整条淡色竖带（0.14 淡色，与图标底同量级的"纸"）
                     drawRect(
                         color = color.copy(alpha = 0.14f),
                         topLeft = Offset(gutterPx + pressedIndex * slotPx, panelTop),

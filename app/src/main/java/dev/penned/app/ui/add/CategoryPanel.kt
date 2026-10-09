@@ -46,7 +46,8 @@ data class CategoryUi(val id: String, val name: String, val hasSubs: Boolean)
 
 /**
  * 分类面板：5 列一级宫格，点一级在其下方就地展开子分类 chip 带（动效见原则五）。
- * 选中 = 该分类的全强度实心圆 + 反白；有子分类的圆内右上带小圆点提示可展开。
+ * 气泡走统一的淡灰绿底（AS 轮：分类色只在图表与小圆点上）；选中 = 品牌青绿实心圆 + 反白；
+ * 有子分类的圆内右上带小圆点提示可展开（小圆点用该分类的全强度色）。
  */
 @Composable
 fun CategoryPanel(
@@ -180,8 +181,8 @@ private fun CategoryCell(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(contentAlignment = Alignment.Center) {
-            // 气泡走颜料头像：分类在宫格里有自己的颜色（与统计图同一套分配口径）
-            CategoryAvatar(name = category.name, size = circleSize, selected = selected, slot = slot)
+            // 气泡走统一的淡灰绿底（AS 轮：图标底不再分槽）
+            CategoryAvatar(name = category.name, size = circleSize, selected = selected)
             // 有子分类：圆内右上小圆点（放到圆外会显得和单元格脱开），用该分类的全强度色
             if (category.hasSubs) {
                 Box(

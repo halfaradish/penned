@@ -102,7 +102,7 @@ object PennedDimens {
     /** 列表底部为悬浮件留出的清空高度（FAB / 悬浮记账入口 56 + 边距 + 余量）。 */
     val listBottomClearance = 96.dp
 
-    /** 统计页数据行的颜料圆点与金额列宽。 */
+    /** 统计页图例的颜料圆点、数据行的金额列宽。 */
     val legendDot = 10.dp
     val moneyColumn = 84.dp
 

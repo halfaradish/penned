@@ -57,6 +57,15 @@ class ContrastTest {
     private val markVisible = 1.40
     private val markVisibleDark = 2.30
 
+    /**
+     * 图标底（全 App 统一的淡灰绿圆）的"看得见"下限：**1.10:1**。
+     *
+     * 它和日头条底（1.12:1）是同一档的"纸"，**装饰性**——识别靠上面的墨色字形与旁边的名称
+     * （理由写在规范 §4/§11.1），所以不按 3:1 守；留一条下限是为了"改淡过头立刻红"：
+     * 淡到与卡片糊成一片（≤6%）就掉线。浅色实测 1.17:1、深色 1.75:1。
+     */
+    private val groundVisible = 1.10
+
     private fun pairs(): List<ContrastPair> {
         val out = mutableListOf<ContrastPair>()
         fun add(label: String, fg: Color, bg: Color, need: Double = body) =
@@ -126,36 +135,37 @@ class ContrastTest {
         add("iconMuted / surface（深）", IconMutedDark, SurfaceDark, nonText)
         add("进度填充 primary / surface（深）", PrimaryDark, SurfaceDark, nonText)
 
-        // —— 分类颜料 v4：一个色相三种强度（块面淡底 / 细件 / 全强度，D047 + D048）——
-        // 口径 = 日头条那一栏：大面积只给 12%（浅）/22%（深）的淡底（与白卡 1.16~1.21:1，
-        // 和日头条底 1.12:1 同档，**不设明度下限**——它是"纸"，识别靠上面的墨色字形）；
-        // 图表细件再浓一档（45%/65%）但够不上 3:1，按上面 markVisible 的两条"看得见"下限守；
-        // 色相给满只留在**状态**上：选中态实心、宫格"有子分类"小圆点。
+        // —— 分类颜料 v6（AS 轮）：图标底统一淡灰绿，色相只留给图表细件与宫格小圆点 ——
+        // 图标底**不再分槽**：全 App 一个色（`iconHue` 12%/22%），与白卡 1.17:1、跟日头条底 1.12:1
+        // 同档，是"纸"不是"色块"——识别靠上面的墨色字形（浅 15.6:1 / 深 8.2:1）与旁边的名称。
+        // 分类色只剩两处：①图表细件（45%/65%，够不上 3:1，按 markVisible 两条下限守）；
+        // ②宫格"有子分类"9dp 小圆点（全强度，压在图标底上按 nonText 守——翠点压翠底不再是同色压同色）。
+        val iconGroundLight = over(PennedPigment.iconHue, SurfaceLight, PennedPigment.TINT_ALPHA_LIGHT)
+        val iconGroundDark = over(PennedPigment.iconHueOnDark, SurfaceDark, PennedPigment.TINT_ALPHA_DARK)
+        add("图标底 墨色字 / 淡灰绿（浅）", OnSurfaceLight, iconGroundLight)
+        add("图标底 墨色字 / 淡灰绿（深）", OnSurfaceDark, iconGroundDark)
+        add("图标底 淡灰绿 / surface（浅）", iconGroundLight, SurfaceLight, groundVisible)
+        add("图标底 淡灰绿 / surface（深）", iconGroundDark, SurfaceDark, groundVisible)
+        // 宫格选中态：品牌青绿实心 + 反白（与日头条那根 3dp 竖条、下方选中的分类名同色）
+        add("白字 / primaryInk（宫格选中态·浅）", OnPrimaryLight, PrimaryInkLight)
+        add("深字 surface / primaryInk（宫格选中态·深）", SurfaceDark, PrimaryInkDark)
         PennedPigment.hue.forEachIndexed { i, full ->
             val onDark = PennedPigment.hueOnDark[i]
-            val groundLight = over(full, SurfaceLight, PennedPigment.TINT_ALPHA_LIGHT)
-            val groundDark = over(onDark, SurfaceDark, PennedPigment.TINT_ALPHA_DARK)
             val markLight = over(full, SurfaceLight, PennedPigment.MARK_ALPHA_LIGHT)
             val markDark = over(onDark, SurfaceDark, PennedPigment.MARK_ALPHA_DARK)
-            add("颜料$i 墨色字 / 淡底块面（浅）", OnSurfaceLight, groundLight)
-            add("颜料$i 墨色字 / 淡底块面（深）", OnSurfaceDark, groundDark)
             add("颜料$i 细件 / surface（浅）", markLight, SurfaceLight, markVisible)
             add("颜料$i 细件 / 占比条轨道（浅）", markLight, SurfaceContainerHighLight, markVisible)
             add("颜料$i 细件 / surface（深）", markDark, SurfaceDark, markVisibleDark)
-            add("白字 / 颜料$i 实心（选中态·浅）", OnPrimaryLight, full)
-            add("深字 surface / 颜料$i 实心（选中态·深）", SurfaceDark, onDark)
+            add("颜料$i 小圆点 / 图标底（浅）", full, iconGroundLight, nonText)
+            add("颜料$i 小圆点 / 图标底（深）", onDark, iconGroundDark, nonText)
         }
-        val neutralGroundLight = over(PennedPigment.neutralHue, SurfaceLight, PennedPigment.TINT_ALPHA_LIGHT)
-        val neutralGroundDark = over(PennedPigment.neutralHueOnDark, SurfaceDark, PennedPigment.TINT_ALPHA_DARK)
         val neutralMarkLight = over(PennedPigment.neutralHue, SurfaceLight, PennedPigment.MARK_ALPHA_LIGHT)
         val neutralMarkDark = over(PennedPigment.neutralHueOnDark, SurfaceDark, PennedPigment.MARK_ALPHA_DARK)
-        add("中性 墨色字 / 淡底块面（浅）", OnSurfaceLight, neutralGroundLight)
-        add("中性 墨色字 / 淡底块面（深）", OnSurfaceDark, neutralGroundDark)
         add("中性 细件 / surface（浅）", neutralMarkLight, SurfaceLight, markVisible)
         add("中性 细件 / 占比条轨道（浅）", neutralMarkLight, SurfaceContainerHighLight, markVisible)
         add("中性 细件 / surface（深）", neutralMarkDark, SurfaceDark, markVisibleDark)
-        add("白字 / 中性实心（选中态·浅）", OnPrimaryLight, PennedPigment.neutralHue)
-        add("深字 surface / 中性实心（选中态·深）", SurfaceDark, PennedPigment.neutralHueOnDark)
+        add("中性 小圆点 / 图标底（浅）", PennedPigment.neutralHue, iconGroundLight, nonText)
+        add("中性 小圆点 / 图标底（深）", PennedPigment.neutralHueOnDark, iconGroundDark, nonText)
         return out
     }
 
@@ -231,6 +241,9 @@ class ContrastTest {
             hex(PennedPigment.hueOnDark[7]) to "#EBC57A",
             hex(PennedPigment.neutralHue) to "#4B5563",
             hex(PennedPigment.neutralHueOnDark) to "#A8AEBA",
+            // AS 轮：全 App 统一的图标底（淡灰绿，与 2 号翠槽同值但独立成 token）
+            hex(PennedPigment.iconHue) to "#0D8557",
+            hex(PennedPigment.iconHueOnDark) to "#7AEBC0",
         )
         val mismatched = documented.filter { (actual, expected) -> actual != expected }
         assertTrue(
