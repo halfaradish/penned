@@ -29,7 +29,12 @@ class SettingsRepository(private val context: Context) {
     val notifiedUpdateVersionCode: Flow<Int?> =
         context.dataStore.data.map { it[KEY_NOTIFIED_UPDATE_VERSION_CODE] }
 
-    /** 启动时自动检查更新（默认开，关于页可关）。 */
+    /**
+     * 启动时自动检查更新。
+     *
+     * **当前没有开关**（D064）：自动检查恒为开，关于页的开关已下线、留后续里程碑；键与读写方法
+     * 先留着，接回开关时不用再动存储层。
+     */
     val autoUpdateCheck: Flow<Boolean> = context.dataStore.data.map { it[KEY_AUTO_UPDATE_CHECK] ?: true }
 
     suspend fun setCurrentBook(id: String) {

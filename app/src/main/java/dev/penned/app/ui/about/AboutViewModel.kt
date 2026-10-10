@@ -18,11 +18,9 @@ import dev.penned.app.domain.UpdateStatus
 import dev.penned.app.domain.UpdateThrottle
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -78,29 +76,27 @@ class AboutViewModel(
     /** 「安装未知应用」引导弹窗（可取消，D059）。 */
     val needsUnknownSources = MutableStateFlow(false)
 
-    val autoCheck: StateFlow<Boolean> = app.settings.autoUpdateCheck
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
-
     private var downloadJob: Job? = null
     private var available: UpdateUiState.Available? = null
-
-    fun setAutoCheck(enabled: Boolean) {
-        viewModelScope.launch { app.settings.setAutoUpdateCheck(enabled) }
-    }
 
     /** 手动检查（关于页按钮）：任何结果都要有反馈（规格 M2 S2）。 */
     fun checkNow() {
         if (_state.value is UpdateUiState.Checking) return
+        // 下载/校验在跑时不重开检查：那会把下载中的界面顶掉，残包白下
+        if (downloadJob?.isActive == true) return
         viewModelScope.launch { runCheck() }
     }
 
     /**
      * 启动时的自动检查（规格 M2 S2）：每天至多一次、无新版静默；有新版且**这个版本还没提示过**时
      * 返回它，交给调用方弹一次可取消的 changelog（D059）。同一版本不重复弹。
+     *
+     * 自动检查**恒为开**（D064）：关于页的开关已下线、留后续里程碑，`SettingsRepository` 的
+     * `autoUpdateCheck` 键保留待接回。
      */
     suspend fun autoCheckOnLaunch(): UpdateUiState.Available? {
         val lastCheckAt = app.settings.lastUpdateCheckAt.first()
-        if (!UpdateThrottle.shouldAutoCheck(System.currentTimeMillis(), lastCheckAt, app.settings.autoUpdateCheck.first())) {
+        if (!UpdateThrottle.shouldAutoCheck(System.currentTimeMillis(), lastCheckAt, autoCheckEnabled = true)) {
             return null
         }
         runCheck()

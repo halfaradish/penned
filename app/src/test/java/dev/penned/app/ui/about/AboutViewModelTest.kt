@@ -72,7 +72,6 @@ class AboutViewModelTest {
      */
     private fun resetThrottle() = runBlocking {
         app.settings.setLastUpdateCheckAt(0L)
-        app.settings.setAutoUpdateCheck(true)
     }
 
     @After
@@ -176,14 +175,18 @@ class AboutViewModelTest {
     }
 
     @Test
-    fun `auto check can be turned off`() {
-        server.on("/update.json", body = manifestJson())
+    fun `auto check ignores the retired switch and always runs`() {
+        resetThrottle()
+        server.on("/update.json", body = manifestJson(versionCode = 5))
         server.start()
         val vm = viewModel()
+        // 开关已下线（D064）：存储里就算留着旧版关掉的 false，自动检查也照跑
         runBlocking { app.settings.setAutoUpdateCheck(false) }
 
-        assertNull(runBlocking { vm.autoCheckOnLaunch() })
-        assertTrue("开关关掉时不该发请求", server.requests.isEmpty())
+        assertNotNull("自动检查恒为开", runBlocking { vm.autoCheckOnLaunch() })
+        assertTrue("开关下线后不该被存储里的旧值挡住", server.requests.isNotEmpty())
+
+        runBlocking { app.settings.setAutoUpdateCheck(true) }
     }
 
     @Test

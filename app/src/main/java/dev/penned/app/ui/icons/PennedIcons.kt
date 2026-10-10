@@ -248,6 +248,50 @@ object PennedIcons {
         }
     }
 
+    /**
+     * 刷新（关于页「检查更新」行）：右上缺口的环 + 缺口里的实心箭头。
+     * 环从右点顺时针绕 270° 收在顶点，箭头是**实心三角**、在顶点指向行进方向（向右）——
+     * 描边的 V 形箭头在 20dp 下会跟环糊成一个"缺角的圆"（第一版就是这么翻车的）。
+     */
+    val Refresh: ImageVector by lazy {
+        icon("refresh") {
+            stroke {
+                moveTo(19.4f, 12f)
+                arcTo(7.4f, 7.4f, 0f, true, true, 12f, 4.6f)
+            }
+            fill {
+                moveTo(16.2f, 4.6f)
+                lineTo(11.4f, 1.9f)
+                lineTo(11.4f, 7.3f)
+                close()
+            }
+        }
+    }
+
+    /**
+     * 品牌笔（关于页的 App 标记）：与启动图标同一支笔，**实心**（24 画布内已居中）。
+     * 笔杆与笔尾之间留一道 0.9 的发丝缝——就是启动图标里那道分界，缩到 36dp 仍读得出是铅笔。
+     */
+    val Pen: ImageVector by lazy {
+        icon("pen") {
+            fill {
+                moveTo(7.11f, 15.8f)
+                lineTo(7.11f, 17.58f)
+                lineTo(8.88f, 17.58f)
+                lineTo(15.11f, 11.36f)
+                lineTo(13.33f, 9.58f)
+                close()
+                moveTo(16.44f, 10.02f)
+                curveTo(16.88f, 9.58f, 16.88f, 8.91f, 16.44f, 8.47f)
+                lineTo(14.88f, 6.91f)
+                curveTo(14.44f, 6.47f, 13.77f, 6.47f, 13.33f, 6.91f)
+                lineTo(12.44f, 7.8f)
+                lineTo(15.55f, 10.91f)
+                close()
+            }
+        }
+    }
+
     // —— 构建辅助 ——
 
     private const val STROKE = 1.9f
