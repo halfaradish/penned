@@ -29,7 +29,12 @@ class DataScreenScreenshotTest {
     fun captureMineScreen() {
         composeRule.setContent {
             PennedTheme {
-                MineScreen(onOpenDataManagement = {}, onOpenCategories = {}, onOpenPinLock = {})
+                MineScreen(
+                    onOpenDataManagement = {},
+                    onOpenCategories = {},
+                    onOpenPinLock = {},
+                    onOpenAbout = {},
+                )
             }
         }
         composeRule.onNodeWithText("数据管理").assertIsDisplayed()

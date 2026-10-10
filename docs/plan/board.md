@@ -10,11 +10,11 @@
 
 - **M2 切片清单**（规格 `docs/specs/M2.md` 冻结后按序开工，每片 `build test lint` 全绿 + 独立提交）：
   - ✅ **M2-1 依赖与权限基建**（已完成）：catalog 加 `okhttp 4.12.0`（本机缓存离线可解析）+ Manifest 加 `INTERNET` / `REQUEST_INSTALL_PACKAGES` + FileProvider（`dev.penned.app.fileprovider` → `res/xml/file_paths.xml` 暴露 `cache-path updates/`）+ debug-only `networkSecurityConfig`（只放行 `10.0.2.2` 明文）+ `buildConfig = true` 与 `UPDATE_MANIFEST_URLS`（debug → 本机假清单服务；release → GitHub raw + jsDelivr 两个候选）。**踩坑（D060）**：加依赖后 `assembleDebug` 报 `JdkImageTransform ... jlink does not exist`——VS Code 的 Gradle 扩展用 redhat.java 自带 JRE 起了守护进程，Gradle 复用守护进程只比 JVM 版本、不比 java home，AGP 就把这个没有 jlink 的 JRE 当工具链；已在 `app/build.gradle.kts` 显式钉 `java { toolchain { 17 } }`（与 compileOptions/jvmTarget 一致），并用 `-Dorg.gradle.java.home=<那个 JRE>` 反向验证过（修前必红、修后绿）
-  - **M2-2 纯逻辑**：`update.json` 解析（平台自带 org.json）+ 版本比较 + 提示分级（低于 `minVersionCode` 只升级文案，D059）+ sha256（表驱动单测）
-  - **M2-3 检查器**：多 url 按序回退 + 超时 + 每日节流（DataStore `lastCheckAt`）；HTTP 抽 `HttpFetcher` 接口，生产走 OkHttp、测试用 JDK 自带 `com.sun.net.httpserver`（不引 mockwebserver）
-  - **M2-4 下载器**：OkHttp 流式 + `Range` 断点续传 + 进度回调 + sha256 校验（含"续传后摘要一致""摘要不符即中止"用例）
-  - **M2-5 安装链路**：签名一致性校验（`GET_SIGNING_CERTIFICATES` 比对）+ FileProvider content URI + `ACTION_VIEW` + Android 8+「安装未知应用」引导
-  - **M2-6 关于/更新页 UI**：状态机（idle→checking→up-to-date/available→downloading→verifying→ready/error）+ **可取消弹窗**（D059）+ Roborazzi 浅/深基线 + 界面规范补一节；顺带把 `MineScreen` 硬编码版本号改读 BuildConfig
+  - ✅ **M2-2 纯逻辑**（已完成）：`UpdateManifest` 解析（org.json，未知字段容忍、必填缺失=无效）+ `statusFor` 版本比较与提示分级 + `Sha256`（流式，续传后整文件重算）+ `UpdateThrottle`（每日节流/只提示一次）+ `UpdateText`（时间/百分比/大小文案）+ `ApkSignature.sameSigners`；表驱动测试 8+3+2+2 条
+  - ✅ **M2-3 检查器**（已完成）：`HttpFetcher` 抽象 + `OkHttpFetcher`（清单 10s/15s、下载 15s/30s 两套超时）+ `UpdateChecker`（多候选地址按序回退）+ DataStore 节流键；测试 11 条（含真 OkHttp 打本地假服务：404/500、跟随重定向、连接被拒、读取超时）。**测试坑**：AGP 给 Kotlin 单测编译传 `-no-jdk`，`com.sun.net.httpserver` 编译期不可见 → 自写 `FakeHttpServer`（ServerSocket，顺带能演"传一半断开"）
+  - ✅ **M2-4 下载器**（已完成）：`UpdateDownloader` 应用内流式 + `Range` 续传（服务端忽略 Range 时从头覆盖写，不拼坏）+ 进度回调 + 整文件 sha256；`DownloadResult` 三态（Success/Incomplete 留残包/Rejected 删坏包）；测试 6 条
+  - ✅ **M2-5 安装链路**（已完成）：`PackageSignatures`（API 28+ `GET_SIGNING_CERTIFICATES`，26~27 退回 `GET_SIGNATURES`）+ `UpdateInstaller`（authority / canInstall / 未知来源设置页 / 安装 Intent）+ FileProvider 声明与 `file_paths.xml`（只暴露 `cacheDir/updates/`）；测试 7 条。**测试坑**：Robolectric 读不到 FileProvider 的 `paths` 元数据（根全匹配不上）→ content URI 生成只能真机验（已进 M2-8 点名项）
+  - ✅ **M2-6 关于/更新页 UI**（已完成）：路由 `about` + `AboutViewModel`（状态机：idle/checking/upToDate/available/downloading/verifying/ready/failed）+ `AboutScreen`/`AboutContent`（无状态入口）+ 两个可取消弹窗 + 启动自动检查挂 PennedApp 层（`LockGate` 之外，不盖锁屏）+ 「我的」页关于行改入口与真实版本号（读 BuildConfig）；截图基线 11 张（逐张过目）+ `AboutViewModelTest` 7 条（真 HTTP 假服务 + 真 DataStore，覆盖检查→下载→校验→安装与节流/只提示一次）+ 界面规范 §13·补十。**测试坑**：`preferencesDataStore` 是静态单例，同测试类各方法共用一份文件 → 节流键会串，测试先复位
   - **M2-7 发布工程**：`version.properties` 作 versionCode/versionName 单一来源 + bump 任务；我生成 release keystore（仓库外路径）+ `signingConfigs` + `.gitignore` 补规则；release 打开 minify + `shrinkResources` + keep 规则；**体积验收 < 8MB**（当前 release 未签名包 8.97 MiB）
   - **M2-8 闭环验证**：GxuDev 原地 debug 签名升级（不碰真实数据，设备包已核实与本地 `app-debug.apk` 同签名）+ 同镜像新 AVD 走 release 签名闭环 + 负例（摘要不符 / 签名不符 / 取消提示后不重复弹）
   - **M2-9 文档收尾**：decisions（M2 口径）、界面规范（关于/更新页）、本看板

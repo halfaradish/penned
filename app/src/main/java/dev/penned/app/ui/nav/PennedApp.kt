@@ -18,6 +18,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.penned.app.ui.theme.PennedDimens
@@ -43,6 +45,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import dev.penned.app.ui.add.AddTransactionScreen
+import dev.penned.app.ui.about.AboutScreen
+import dev.penned.app.ui.about.AboutViewModel
+import dev.penned.app.ui.about.UpdateAvailableDialog
+import dev.penned.app.ui.about.UpdateUiState
 import dev.penned.app.ui.assets.AccountEditScreen
 import dev.penned.app.ui.assets.AccountGroup
 import dev.penned.app.ui.assets.AssetsScreen
@@ -91,6 +97,17 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
     val currentRoute = backStackEntry?.destination?.route
     val motion = rememberAnimationsEnabled()
     val tabRoutes = remember { TABS.map { it.route }.toSet() }
+
+    // 更新检查（规格 M2 S2/S6）：状态机与「关于」页共用同一个 VM。启动自动检查每天至多一次、
+    // 无新版静默；有新版且这个版本还没提示过 → 弹一次**可取消**的提示（D059，本 App 从不强制）。
+    // 挂在 PennedApp 层：LockGate 之外不渲染主界面，提示不会盖到锁屏上。
+    val updateVm: AboutViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        initializer = { AboutViewModel(app) },
+    )
+    var updateNotice by remember { mutableStateOf<UpdateUiState.Available?>(null) }
+    LaunchedEffect(Unit) {
+        updateNotice = updateVm.autoCheckOnLaunch()
+    }
 
     Scaffold(
         bottomBar = {
@@ -269,7 +286,11 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onOpenDataManagement = { navController.navigate("data") },
                     onOpenCategories = { navController.navigate("categories") },
                     onOpenPinLock = { navController.navigate("pin") },
+                    onOpenAbout = { navController.navigate("about") },
                 )
+            }
+            composable("about") {
+                AboutScreen(viewModel = updateVm, onBack = { navController.popBackStack() })
             }
             composable("data") {
                 val vm: DataViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
@@ -382,5 +403,18 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                 )
             }
         }
+    }
+
+    // 启动检查发现新版时的提示：可取消（点遮罩/返回键/「稍后」），不拦任何操作（D059）
+    updateNotice?.let { notice ->
+        UpdateAvailableDialog(
+            manifest = notice.manifest,
+            stronglyRecommended = notice.stronglyRecommended,
+            onDismiss = { updateNotice = null },
+            onViewDetails = {
+                updateNotice = null
+                navController.navigate("about")
+            },
+        )
     }
 }

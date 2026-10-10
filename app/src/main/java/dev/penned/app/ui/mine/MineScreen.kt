@@ -24,14 +24,16 @@ import dev.penned.app.ui.theme.PennedTextStyles
 private val ROW_DIVIDER_INDENT = 64.dp
 
 /**
- * 「我的」页（M1 第二批）：数据管理入口 + 关于。对标一木的信息结构，仅保留规格内条目。
+ * 「我的」页（M1 第二批）：数据管理入口 + 关于（M2 起可点，进关于/更新页）。
  */
 @Composable
 fun MineScreen(
     onOpenDataManagement: () -> Unit,
     onOpenCategories: () -> Unit,
     onOpenPinLock: () -> Unit,
+    onOpenAbout: () -> Unit,
     modifier: Modifier = Modifier,
+    versionName: String = dev.penned.app.BuildConfig.VERSION_NAME,
 ) {
     Column(
         modifier = modifier
@@ -86,12 +88,12 @@ fun MineScreen(
                 onClick = onOpenPinLock,
             )
             PennedDivider(startIndent = ROW_DIVIDER_INDENT)
-            // 纯信息行：不可点、无右箭头（关于页与更新检查随 M2）
+            // M2 起可点：进「关于 / 更新」页（版本信息 + 检查更新，规格 M2 S6）
             PennedListRow(
                 title = "关于",
-                subtitle = "版本 0.1.0（M1）",
+                subtitle = "版本 $versionName · 检查更新",
                 leadingIcon = PennedIcons.Info,
-                showChevron = false,
+                onClick = onOpenAbout,
             )
         }
     }

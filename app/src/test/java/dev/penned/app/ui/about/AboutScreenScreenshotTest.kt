@@ -1,0 +1,183 @@
+package dev.penned.app.ui.about
+
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import com.github.takahirom.roborazzi.captureRoboImage
+import dev.penned.app.domain.UpdateManifest
+import dev.penned.app.ui.theme.PennedTheme
+import org.junit.Assert.assertEquals
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import java.io.File
+
+/** 关于/更新页（规格 M2 S6）：各状态版面 + 关键接线断言。 */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35], qualifiers = "w400dp-h800dp")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class AboutScreenScreenshotTest {
+
+    @get:Rule
+    val composeRule = createComposeRule()
+
+    private val manifest = UpdateManifest(
+        versionCode = 3,
+        versionName = "0.3.0",
+        minVersionCode = 1,
+        changelog = listOf("新增：应用内更新", "修复：首页折叠时条目错位"),
+        sha256 = "aa",
+        size = 8_500_000L,
+        urls = listOf("https://example.com/penned-0.3.0.apk"),
+    )
+
+    private fun content(
+        state: UpdateUiState,
+        autoCheck: Boolean = true,
+        needsUnknownSources: Boolean = false,
+        onCheck: () -> Unit = {},
+        onDownload: () -> Unit = {},
+        onInstall: () -> Unit = {},
+    ) {
+        composeRule.setContent {
+            PennedTheme {
+                AboutContent(
+                    state = state,
+                    versionName = "0.2.0",
+                    versionCode = 2,
+                    autoCheck = autoCheck,
+                    needsUnknownSources = needsUnknownSources,
+                    onBack = {},
+                    onCheck = onCheck,
+                    onDownload = onDownload,
+                    onCancelDownload = {},
+                    onRetry = {},
+                    onInstall = onInstall,
+                    onToggleAutoCheck = {},
+                    onOpenUnknownSourcesSettings = {},
+                    onDismissUnknownSources = {},
+                )
+            }
+        }
+    }
+
+    private fun capture(name: String) {
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/$name.png")
+    }
+
+    @Test
+    fun captureIdle() {
+        content(UpdateUiState.Idle)
+        composeRule.onNodeWithText("版本 0.2.0（2）").assertIsDisplayed()
+        composeRule.onNodeWithText("启动时自动检查更新").assertIsDisplayed()
+        composeRule.onNodeWithText("更新检查只访问静态文件，不携带任何标识。").assertIsDisplayed()
+        capture("m2_about_idle")
+    }
+
+    @Test
+    fun captureChecking() {
+        content(UpdateUiState.Checking)
+        composeRule.onNodeWithText("正在检查更新…").assertIsDisplayed()
+        capture("m2_about_checking")
+    }
+
+    @Test
+    fun captureUpToDate() {
+        // 2026-10-10T21:30+08:00
+        content(UpdateUiState.UpToDate(1_791_639_000_000L))
+        composeRule.onNodeWithText("已是最新版本").assertIsDisplayed()
+        capture("m2_about_uptodate")
+    }
+
+    @Test
+    fun captureAvailableAndAssertDownloadWiring() {
+        var downloads = 0
+        content(UpdateUiState.Available(manifest, stronglyRecommended = false), onDownload = { downloads++ })
+        composeRule.onNodeWithText("发现新版本 0.3.0").assertIsDisplayed()
+        composeRule.onNodeWithText("· 新增：应用内更新").assertIsDisplayed()
+        composeRule.onNodeWithText("安装包 8.1 MB").assertIsDisplayed()
+        composeRule.onNodeWithText("下载更新").performClick()
+        assertEquals(1, downloads)
+        capture("m2_about_available")
+    }
+
+    @Test
+    fun captureAvailableStronglyRecommended() {
+        content(UpdateUiState.Available(manifest, stronglyRecommended = true))
+        composeRule.onNodeWithText("强烈建议更新").assertIsDisplayed()
+        capture("m2_about_available_strong")
+    }
+
+    @Test
+    fun captureDownloading() {
+        content(UpdateUiState.Downloading(downloaded = 3_570_000L, total = 8_500_000L))
+        composeRule.onNodeWithText("正在下载 42%").assertIsDisplayed()
+        composeRule.onNodeWithText("取消下载").assertIsDisplayed()
+        capture("m2_about_downloading")
+    }
+
+    @Test
+    fun captureVerifying() {
+        content(UpdateUiState.Verifying)
+        composeRule.onNodeWithText("正在校验安装包…").assertIsDisplayed()
+        capture("m2_about_verifying")
+    }
+
+    @Test
+    fun captureReadyAndAssertInstallWiring() {
+        var installs = 0
+        content(UpdateUiState.Ready(File("/tmp/penned-3.apk")), onInstall = { installs++ })
+        composeRule.onNodeWithText("已下载并校验通过").assertIsDisplayed()
+        composeRule.onNodeWithText("去安装").performClick()
+        assertEquals(1, installs)
+        capture("m2_about_ready")
+    }
+
+    @Test
+    fun captureFailed() {
+        content(UpdateUiState.Failed("安装包校验失败，已删除"))
+        composeRule.onNodeWithText("更新没成功").assertIsDisplayed()
+        composeRule.onNodeWithText("安装包校验失败，已删除").assertIsDisplayed()
+        composeRule.onNodeWithText("重试").assertIsDisplayed()
+        capture("m2_about_failed")
+    }
+
+    @Test
+    fun captureUnknownSourcesDialog() {
+        content(UpdateUiState.Ready(File("/tmp/penned-3.apk")), needsUnknownSources = true)
+        composeRule.onNodeWithText("需要允许安装应用").assertIsDisplayed()
+        composeRule.onNodeWithText("去设置").assertIsDisplayed()
+        composeRule.onNodeWithText("取消").assertIsDisplayed()
+        capture("m2_about_unknown_sources")
+    }
+
+    @Test
+    fun captureDarkAvailable() {
+        composeRule.setContent {
+            PennedTheme(darkTheme = true) {
+                AboutContent(
+                    state = UpdateUiState.Available(manifest, stronglyRecommended = true),
+                    versionName = "0.2.0",
+                    versionCode = 2,
+                    autoCheck = true,
+                    needsUnknownSources = false,
+                    onBack = {},
+                    onCheck = {},
+                    onDownload = {},
+                    onCancelDownload = {},
+                    onRetry = {},
+                    onInstall = {},
+                    onToggleAutoCheck = {},
+                    onOpenUnknownSourcesSettings = {},
+                    onDismissUnknownSources = {},
+                )
+            }
+        }
+        capture("dark_about_available")
+    }
+}

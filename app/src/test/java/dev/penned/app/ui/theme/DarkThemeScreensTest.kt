@@ -145,7 +145,14 @@ class DarkThemeScreensTest {
 
     @Test
     fun darkMine() {
-        dark { MineScreen(onOpenDataManagement = {}, onOpenCategories = {}, onOpenPinLock = {}) }
+        dark {
+            MineScreen(
+                onOpenDataManagement = {},
+                onOpenCategories = {},
+                onOpenPinLock = {},
+                onOpenAbout = {},
+            )
+        }
         composeRule.onNodeWithText("数据管理").assertIsDisplayed()
         capture("mine")
     }
