@@ -33,6 +33,9 @@ class UpdateCheckerTest {
             lastUserAgent = userAgent
             return responses[url]
         }
+
+        override suspend fun openStream(url: String, userAgent: String, resumeFrom: Long): HttpStream =
+            error("检查器不该发起下载")
     }
 
     @Test
