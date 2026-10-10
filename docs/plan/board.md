@@ -4,10 +4,22 @@
 
 ## 进行中
 
-（无——UI-14（首页折叠时条目错位）已收尾，见"已完成"）
+- **M2（应用内更新）**：阶段 A（M1 收官 + 决策沉淀）已完成，见"已完成"；**阶段 B＝`docs/specs/M2.md` 规格初稿待用户审**；阶段 C 切片清单见"待办"首条
 
 ## 待办
 
+- **M2 切片清单**（规格 `docs/specs/M2.md` 冻结后按序开工，每片 `build test lint` 全绿 + 独立提交）：
+  - **M2-1 依赖与权限基建**：catalog 加 `okhttp 4.12.0`（D058）+ Manifest 加 `INTERNET` / `REQUEST_INSTALL_PACKAGES` + FileProvider 声明 + `res/xml/file_paths.xml` + debug-only `networkSecurityConfig`（放行 `10.0.2.2` 明文，供模拟机连本机假清单服务）
+  - **M2-2 纯逻辑**：`update.json` 解析（平台自带 org.json）+ 版本比较 + 提示分级（低于 `minVersionCode` 只升级文案，D059）+ sha256（表驱动单测）
+  - **M2-3 检查器**：多 url 按序回退 + 超时 + 每日节流（DataStore `lastCheckAt`）；HTTP 抽 `HttpFetcher` 接口，生产走 OkHttp、测试用 JDK 自带 `com.sun.net.httpserver`（不引 mockwebserver）
+  - **M2-4 下载器**：OkHttp 流式 + `Range` 断点续传 + 进度回调 + sha256 校验（含"续传后摘要一致""摘要不符即中止"用例）
+  - **M2-5 安装链路**：签名一致性校验（`GET_SIGNING_CERTIFICATES` 比对）+ FileProvider content URI + `ACTION_VIEW` + Android 8+「安装未知应用」引导
+  - **M2-6 关于/更新页 UI**：状态机（idle→checking→up-to-date/available→downloading→verifying→ready/error）+ **可取消弹窗**（D059）+ Roborazzi 浅/深基线 + 界面规范补一节；顺带把 `MineScreen` 硬编码版本号改读 BuildConfig
+  - **M2-7 发布工程**：`version.properties` 作 versionCode/versionName 单一来源 + bump 任务；我生成 release keystore（仓库外路径）+ `signingConfigs` + `.gitignore` 补规则；release 打开 minify + `shrinkResources` + keep 规则；**体积验收 < 8MB**（当前 release 未签名包 8.97 MiB）
+  - **M2-8 闭环验证**：GxuDev 原地 debug 签名升级（不碰真实数据，设备包已核实与本地 `app-debug.apk` 同签名）+ 同镜像新 AVD 走 release 签名闭环 + 负例（摘要不符 / 签名不符 / 取消提示后不重复弹）
+  - **M2-9 文档收尾**：decisions（M2 口径）、界面规范（关于/更新页）、本看板
+  - （可选，需用户账号与点头）**M2-10 首次真实发布**：tag + GitHub Release 传 APK + 仓库内 `update.json` → 对线上地址再验一遍闭环
+- ~~**M2 规格**：update.json 协议 + UpdateChecker + 签名密钥生成与离线备份（**首次发版前 applicationId 终审 D013**）+ release minify 打开（D012）~~ → **已拆成上面的 M2 切片清单**；applicationId 已终审 `dev.penned.app`（D057，D013 关账）
 - ~~首页冷启动首帧会闪一下"还没有记账"空态~~ → **已修**（UI-8：`rows` 改可空，读到账本前不渲染空态；模拟机复验首帧只显示"日常账本"）
 - 记一笔顶栏「编辑」已接通分类管理（UI-4）；「不报销」chip 改只读禁用样式（如实表达"新记为不报销"，可编辑留 M3）
 - 一木 xls 导入器不解析 地址/多币种/报销 列（真实 751 行文件这些列全空，无数据损失）——等真出现带这些列的文件再补解析（报销列还涉及 M3 的报销语义）
@@ -103,6 +115,16 @@
 - **动效候选（AP 轮明确不做）**：预测性返回手势（`PredictiveBackHandler`，返回手势拖到一半能看见下页跟着走）、共享元素转场（分类头像/标题从列表 morph 到详情页）、**记一笔改从底部升起的模态**（现在是和别的下钻页一样的右推入）、**Tab 之间跟手横滑**（现在固定淡入淡出）；另有"转场时长/视差比例做成可调设置项"这一档（现在写死在 `MotionSpec`）
 
 ## 已完成
+
+### M1 正式收官 + M2 决策沉淀（2026-10-10，M1-C）
+
+- **背景**：用户要求核查「M1 规格有没有做完、能不能开 M2」。开工基线 `7adf089`（UI-15），工作区干净。
+- **核查方式**：按 `docs/specs/M1.md` 逐条比对代码实现（文件/符号级证据），并单独扫死 UI、TODO、空 `onClick`。
+- **结论**：**M1 判完成**——第一批 S1~S6 全部实现且入口已接、验收 7 条逐条核实；第二批 8 项完成 7 项，唯一开口是「账单详情退款流程」只交付只读展示（录入/编辑交互留 M3）。M1 规格文件的 7 个验收 checkbox 此前一直未勾（与看板记录矛盾），本轮补齐并附完成情况段。
+- **用户裁决（四项，2026-10-10）**：①退款交互**留 M3**（与报销/债务同族语义一起做）；②**批准引入 OkHttp**（D058，方案原文即 OkHttp；选 4.12.0——本机 Gradle 缓存已有、离线可解析；不引 mockwebserver，测试改用 JDK 自带 `com.sun.net.httpserver`）；③**我生成 release keystore、用户离线备份**；④**applicationId 终审 `dev.penned.app` 冻结**（D057，D013 关账）。
+- **追加裁决（计划审阅时）**：**本 App 从不强制更新**——所有更新弹窗可取消、可返回键关闭，`minVersionCode` 只降级为文案分级（D059）。
+- **落地**（本提交）：`docs/specs/M1.md` 勾验收 + 完成情况段；`MoneyExpressionTest` 补一条表驱动用例（贴合规格 S2 的"表驱动单测"措辞）；`decisions.md` 记 D057/D058/D059；本看板（M1 收官、M2 切片清单开列）。
+- **验证**：`./gradlew build test lint` 全绿（同提交上 UP-TO-DATE，另 `--rerun-tasks` 强制重跑单测与 lint 复核）；4.12.0 版本选择依据已核实（Gradle 缓存 `okhttp/4.12.0` + `okio-jvm/3.6.0`）。
 
 ### 首页折叠时条目错位（2026-10-10，UI-14）
 

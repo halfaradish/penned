@@ -58,6 +58,35 @@ class MoneyExpressionTest {
         assertEquals(1500L, MoneyExpression.evaluate("10÷2×3"))
     }
 
+    /** 表驱动（规格 S2 的口径）：一张表覆盖四则、连续运算、乘除优先、除零保护、精度与非法输入。 */
+    @Test
+    fun `evaluate - table driven`() {
+        // 表达式 to 期望分值（null = 不可求值）；结果一律以分为单位、HALF_UP
+        val cases = listOf(
+            "12+8" to 2000L,
+            "12-8" to 400L,
+            "3×8" to 2400L,
+            "6÷2" to 300L,
+            "3.5+11.5" to 1500L,
+            "2.5×5" to 1250L,
+            "16" to 1600L,
+            "999999999" to 99_999_999_900L,
+            "2+3×4" to 1400L,          // 乘除优先
+            "10-6÷3" to 800L,
+            "10÷2×3" to 1500L,         // 同级从左到右
+            "5÷3" to 167L,             // 166.67 分 → HALF_UP
+            "1.5÷1" to 150L,
+            "5÷0" to null,             // 除零保护
+            "" to null,
+            "12+" to null,
+            "+12" to null,
+            "abc" to null,
+        )
+        cases.forEach { (expr, expected) ->
+            assertEquals("表达式「$expr」", expected, MoneyExpression.evaluate(expr))
+        }
+    }
+
     @Test
     fun `pending operator detection`() {
         assertFalse(MoneyExpression.hasPendingOperator("12"))
