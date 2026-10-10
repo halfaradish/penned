@@ -1,10 +1,13 @@
 package dev.penned.app.ui.about
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -26,6 +29,7 @@ import dev.penned.app.ui.components.PennedDialog
 import dev.penned.app.ui.components.PennedDivider
 import dev.penned.app.ui.components.PennedProgressBar
 import dev.penned.app.ui.components.PennedSwitchRow
+import dev.penned.app.ui.components.PennedTextAction
 import dev.penned.app.ui.components.PennedTopBar
 import dev.penned.app.ui.components.SectionCard
 import dev.penned.app.ui.theme.PennedSpacing
@@ -287,7 +291,16 @@ private fun ColumnScope.UpdateSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(PennedSpacing.md))
+            // 「重试」沿用刚才那份清单（续传）；清单本身有问题（摘要/地址）时得能重新拉一份——
+            // 否则这里只有一条死路（M2-8 真机验证时踩到）
             PennedButton(text = "重试", onClick = onRetry, variant = PennedButtonVariant.Secondary)
+            Spacer(Modifier.height(PennedSpacing.xs))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                PennedTextAction(text = "重新检查", onClick = onCheck)
+            }
         }
     }
 }

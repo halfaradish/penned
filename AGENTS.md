@@ -51,6 +51,16 @@ Android 单端本地记账 App「一笔一记 / penned」，功能对标"一木�
 ./gradlew build                     # 全量
 ```
 
+发布相关（M2-7/D062）：
+```
+./gradlew bumpVersion -PversionName=x.y.z   # versionCode 自增 + 写回 version.properties（禁手改版本号）
+./gradlew :app:assembleRelease              # 签名 release 包（minify + 资源压缩，当前 2.10 MiB）
+./gradlew makeUpdateJson -Purls="主,备" -Pchangelog="新增：…;修复：…" [-PminVersionCode=n]
+```
+- **版本号只在 `version.properties`**；**签名 keystore 在仓库外**（`D:\Project\plaything\penned-signing\penned-release.jks`，参数在 `local.properties`，两者都不入库）——**丢了自更新链路即断**，动它前先确认备份在
+- 本地闭环测试用 `-PtestManifestUrls=http://10.0.2.2:8000/update.json -PtestCleartext=true`（默认关，发布物不受影响）；`PennedM2` 那台 AVD 是 M2 测试机，别当干净环境
+- 更新提示**一律可取消**（D059）：`minVersionCode` 只升级文案，不加不可取消的弹窗
+
 构建工具链已在 `app/build.gradle.kts` 显式钉成 JDK 17（D060）——不再依赖"守护进程碰巧是哪个 JVM"。
 若见到 `JdkImageTransform ... jlink executable ... does not exist`：Gradle 复用了编辑器扩展起的 JRE 守护进程（VS Code 的 Gradle 扩展用 redhat.java 自带 JRE 起过守护进程），`./gradlew --stop` 后重跑即可。
 

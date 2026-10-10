@@ -4,7 +4,7 @@
 
 ## 进行中
 
-- **M2（应用内更新）**：M2-0 规格冻结（`docs/specs/M2.md`）、M2-1 依赖与权限基建 已完成；下一步 M2-2 纯逻辑层。切片清单与状态见"待办"首条
+（无——**M2 应用内更新 M2-0~M2-9 已收尾**，两条闭环 + 三条负例都验过，见"已完成"；只剩可选的 M2-10 真实发布等你定托管渠道）
 
 ## 待办
 
@@ -15,10 +15,11 @@
   - ✅ **M2-4 下载器**（已完成）：`UpdateDownloader` 应用内流式 + `Range` 续传（服务端忽略 Range 时从头覆盖写，不拼坏）+ 进度回调 + 整文件 sha256；`DownloadResult` 三态（Success/Incomplete 留残包/Rejected 删坏包）；测试 6 条
   - ✅ **M2-5 安装链路**（已完成）：`PackageSignatures`（API 28+ `GET_SIGNING_CERTIFICATES`，26~27 退回 `GET_SIGNATURES`）+ `UpdateInstaller`（authority / canInstall / 未知来源设置页 / 安装 Intent）+ FileProvider 声明与 `file_paths.xml`（只暴露 `cacheDir/updates/`）；测试 7 条。**测试坑**：Robolectric 读不到 FileProvider 的 `paths` 元数据（根全匹配不上）→ content URI 生成只能真机验（已进 M2-8 点名项）
   - ✅ **M2-6 关于/更新页 UI**（已完成）：路由 `about` + `AboutViewModel`（状态机：idle/checking/upToDate/available/downloading/verifying/ready/failed）+ `AboutScreen`/`AboutContent`（无状态入口）+ 两个可取消弹窗 + 启动自动检查挂 PennedApp 层（`LockGate` 之外，不盖锁屏）+ 「我的」页关于行改入口与真实版本号（读 BuildConfig）；截图基线 11 张（逐张过目）+ `AboutViewModelTest` 7 条（真 HTTP 假服务 + 真 DataStore，覆盖检查→下载→校验→安装与节流/只提示一次）+ 界面规范 §13·补十。**测试坑**：`preferencesDataStore` 是静态单例，同测试类各方法共用一份文件 → 节流键会串，测试先复位
-  - **M2-7 发布工程**：`version.properties` 作 versionCode/versionName 单一来源 + bump 任务；我生成 release keystore（仓库外路径）+ `signingConfigs` + `.gitignore` 补规则；release 打开 minify + `shrinkResources` + keep 规则；**体积验收 < 8MB**（当前 release 未签名包 8.97 MiB）
-  - **M2-8 闭环验证**：GxuDev 原地 debug 签名升级（不碰真实数据，设备包已核实与本地 `app-debug.apk` 同签名）+ 同镜像新 AVD 走 release 签名闭环 + 负例（摘要不符 / 签名不符 / 取消提示后不重复弹）
-  - **M2-9 文档收尾**：decisions（M2 口径）、界面规范（关于/更新页）、本看板
-  - （可选，需用户账号与点头）**M2-10 首次真实发布**：tag + GitHub Release 传 APK + 仓库内 `update.json` → 对线上地址再验一遍闭环
+  - ✅ **M2-7 发布工程**（已完成）：`version.properties` 单一来源 + `bumpVersion`/`makeUpdateJson` 两个任务 + release 签名接线（keystore 在仓库外、参数在 local.properties）+ minify/`shrinkResources` 打开（**8.97 MiB → 2.10 MiB**，无需额外 keep 规则）+ `.gitignore` 补密钥规则 + `usesCleartextTraffic` 显式化
+  - ✅ **M2-8 闭环验证**（已完成）：debug 原地升级（GxuDev，真机数据 756/2 未动）+ release 签名闭环（新 AVD `PennedM2`，自更新 0.2.0→0.3.0）+ 三条负例（摘要不符 / debug↔release 签名互喂）+ 真机暴露的 `Failed` 死路已修（补「重新检查」）
+  - ✅ **M2-9 文档收尾**（已完成）：decisions D061~D063、界面规范 §13·补十、AGENTS 常用命令补发布两条、本看板
+  - （可选，需你点头/账号）**M2-10 首次真实发布**：定托管渠道（**首发必须国内可达**，GitHub raw 只作备）→ `bumpVersion` → tag → 签名 APK → `makeUpdateJson -Purls=主,备` → 传静态托管 → 用模拟机对着线上地址验一遍闭环
+  - **M2 遗留（可选/待定）**：①`Available` 态没有「重新检查」（清单变旧时只能重启 App 刷新——M2-8 实测发现，未改）；②托管渠道与镜像待定（urls 建议主 + 备两条）；③测试开关 `-PtestManifestUrls`/`-PtestCleartext` 默认关、只在本地闭环用（发布物不受影响）；④新 AVD **`PennedM2` 是 M2 的测试机**（装了带测试开关的 release 包，别拿它当干净环境用）
 - ~~**M2 规格**：update.json 协议 + UpdateChecker + 签名密钥生成与离线备份（**首次发版前 applicationId 终审 D013**）+ release minify 打开（D012）~~ → **已拆成上面的 M2 切片清单**；applicationId 已终审 `dev.penned.app`（D057，D013 关账）
 - ~~首页冷启动首帧会闪一下"还没有记账"空态~~ → **已修**（UI-8：`rows` 改可空，读到账本前不渲染空态；模拟机复验首帧只显示"日常账本"）
 - 记一笔顶栏「编辑」已接通分类管理（UI-4）；「不报销」chip 改只读禁用样式（如实表达"新记为不报销"，可编辑留 M3）
@@ -115,6 +116,21 @@
 - **动效候选（AP 轮明确不做）**：预测性返回手势（`PredictiveBackHandler`，返回手势拖到一半能看见下页跟着走）、共享元素转场（分类头像/标题从列表 morph 到详情页）、**记一笔改从底部升起的模态**（现在是和别的下钻页一样的右推入）、**Tab 之间跟手横滑**（现在固定淡入淡出）；另有"转场时长/视差比例做成可调设置项"这一档（现在写死在 `MotionSpec`）
 
 ## 已完成
+
+### M2 应用内更新（2026-10-10，M2-0~M2-9）
+
+- **背景**：M1 收官后按方案第七节打通"能自己迭代"的通道——全 App 唯一的服务端功能（纯静态托管，无鉴权/无数据库/无上报）。
+- **切片与提交**：M2-0 规格冻结（`docs/specs/M2.md`，含协议/客户端流程/发布工程/验收与不做清单）→ M2-1 依赖与权限基建（okhttp 4.12.0 + INTERNET/REQUEST_INSTALL_PACKAGES + FileProvider + debug 明文放行 + 清单地址 BuildConfig；**D060 钉编译工具链 JDK 17**）→ M2-2 纯逻辑（清单解析/版本比较/分级/sha256/节流/文案/签名判定）→ M2-3 检查器（`HttpFetcher` + OkHttp + 多地址回退 + 节流）→ M2-4 下载器（流式 + Range 续传 + 进度 + 摘要）→ M2-5 安装链路（签名一致性 + FileProvider URI + Intent + 未知来源引导）→ M2-6 关于/更新页（状态机 + 两个可取消弹窗 + 启动自动检查挂 PennedApp 层）→ M2-7 发布工程（version.properties/bumpVersion/makeUpdateJson/签名/minify）→ M2-8 闭环验证 → M2-9 文档。
+- **用户裁决**（贯穿全程）：批准引入 OkHttp（D058，选 4.12.0 因本机缓存离线可解析、不引 mockwebserver）；我生成 keystore 你备份；applicationId 终审 `dev.penned.app`（D057）；**本 App 从不强制更新**——所有更新弹窗可取消、`minVersionCode` 只升级文案（D059）。
+- **口径**：见 D061（协议与客户端）、D062（发布工程与密钥）、D063（闭环验证结论与测试开关）。
+- **实测（M2-8）**：
+  - **debug 原地升级**（GxuDev，**用户真实数据 756 活跃 / 2 软删全程未动**）：启动自动检查弹可取消提示 → 关于页 → 下载 13.6MB → 校验（摘要 + 真机签名一致性）→ 未授权引导 → 系统设置授权 → 系统安装器认下 FileProvider 的包 → 装完 **0.2.0（2）**；再检查「已是最新版本 + 上次检查 10月10日 15:00」。
+  - **release 签名闭环**（新建 AVD `PennedM2`，同 android-35 镜像，无需联网）：装签名 release 包 → 冒烟走查 6 屏（R8 没破坏 Room/Compose/DataStore/org.json）→ 自更新到 **0.3.0（3）**。
+  - **三条负例**全按预期拒绝并删文件：摘要不符、debug 装机喂 release 包、release 装机喂 debug 包；中途还撞上一次**真实的"没下完"**（python http.server + 模拟机虚拟网卡偶发丢尾部几字节）——App 判"下载未完成"、留残包、重试续传，行为正确。
+  - **体积**：release 8.97 MiB（未签名未压缩）→ **2.10 MiB**（minify + shrinkResources，已签名），远低于 8MB 预算；发布配置核对：release 禁明文、无测试开关、dex 里是线上地址（`raw.githubusercontent` + `jsdelivr`）。
+- **测试**：新增 45 条（域层/检查器/下载器/安装/文案 24 + `AboutViewModelTest` 7 + 截图 11 张基线 + `UpdateTextTest` 等），全量 **345 条**全绿；`./gradlew build test lint` 全绿。
+- **本轮明确不做**（规格已列）：强制更新、静默自动安装、增量/差分更新、DownloadManager、WorkManager、多渠道/灰度、商店上架、更新检查携带任何标识；日历视图（归属结清：不在 M2）。
+- **遗留**：①`Available` 态没有「重新检查」（清单变旧只能重启 App 刷新——真机发现、未改）；②托管渠道待定（首发必须国内可达，GitHub raw 只作备）；③线上地址的真实连通性 = M2-10 发布时验；④新 AVD `PennedM2` 是测试机（带测试开关的 release 包，别当干净环境）。
 
 ### M1 正式收官 + M2 决策沉淀（2026-10-10，M1-C）
 

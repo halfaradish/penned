@@ -144,6 +144,7 @@ class AboutScreenScreenshotTest {
         composeRule.onNodeWithText("更新没成功").assertIsDisplayed()
         composeRule.onNodeWithText("安装包校验失败，已删除").assertIsDisplayed()
         composeRule.onNodeWithText("重试").assertIsDisplayed()
+        composeRule.onNodeWithText("重新检查").assertIsDisplayed()
         capture("m2_about_failed")
     }
 
