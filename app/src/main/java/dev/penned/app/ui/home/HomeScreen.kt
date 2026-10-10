@@ -391,7 +391,13 @@ fun HomeContent(
                                         },
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .animateItem()
+                                            // ⚠️ 只留淡入淡出、**不做位移动画**（placementSpec = null）：
+                                            // 月卡头部是 `AnimatedVisibility`（高度逐帧变），行要是再各自跑一个
+                                            // 位置弹簧，就是在追一个每帧都在动的目标——行会落后几十 px 钻进日头条、
+                                            // 或被甩出几十 px 的空档（UI-14 实测：展开 −24dp / 收起 +32dp，约 400ms 才归位），
+                                            // 而日头条（stickyHeader）身上没有动画、直接落位，两边就错开了。
+                                            // 同一屏只留一条布局时间线：行跟着表头走，读起来就是"表头把行推下去/收上来"。
+                                            .animateItem(placementSpec = null)
                                             .padding(horizontal = PennedSpacing.lg)
                                             // 卡间距 12：留在卡片外，圆角贴着卡边走
                                             .then(
