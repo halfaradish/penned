@@ -75,6 +75,8 @@ import dev.penned.app.ui.components.PennedCardSection
 import dev.penned.app.ui.components.PennedCardSectionPosition
 import dev.penned.app.ui.components.PennedDialog
 import dev.penned.app.ui.components.SwipeActionRow
+import dev.penned.app.ui.components.rowDeleteAction
+import dev.penned.app.ui.components.rowEditAction
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
@@ -414,14 +416,16 @@ fun HomeContent(
                                                 onOpenChange = { open ->
                                                     onRevealedRowChange(if (open) row.id else null)
                                                 },
-                                                onEdit = {
-                                                    onRevealedRowChange(null)
-                                                    onEditRow(row.id)
-                                                },
-                                                onDelete = {
-                                                    onRevealedRowChange(null)
-                                                    onDeleteRow(row.id)
-                                                },
+                                                actions = listOf(
+                                                    rowEditAction {
+                                                        onRevealedRowChange(null)
+                                                        onEditRow(row.id)
+                                                    },
+                                                    rowDeleteAction {
+                                                        onRevealedRowChange(null)
+                                                        onDeleteRow(row.id)
+                                                    },
+                                                ),
                                             ) {
                                                 TransactionRow(
                                                     row = row,

@@ -277,6 +277,27 @@ class DarkThemeScreensTest {
         capture("assets")
     }
 
+    /** 账户行左滑动作区露满（UI-13）：深色下删除块 = error 实心 + onError 字（7.31:1）。 */
+    @Test
+    fun darkAssetsRowAction() {
+        dark {
+            AssetsContent(
+                state = AssetsUiState(
+                    accounts = listOf(
+                        dev.penned.app.data.db.dao.AccountWithBalance("a1", "支付宝", dev.penned.app.domain.AccountType.DEBIT, "资金账户", 128_450L),
+                        dev.penned.app.data.db.dao.AccountWithBalance("a2", "招行信用卡", dev.penned.app.domain.AccountType.CREDIT, "信贷账户", -58_900L),
+                    ),
+                    netCents = 69_550L, assetCents = 128_450L, liabilityCents = 58_900L,
+                ),
+                onAddAccount = { _, _ -> },
+                revealedRowId = "a1",
+            )
+        }
+        composeRule.waitForIdle()
+        composeRule.onAllNodesWithText("删除").onFirst().assertIsDisplayed()
+        capture("assets_row_action")
+    }
+
     @Test
     fun darkAccountEdit() {
         dark {

@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -83,6 +84,22 @@ class AssetsScreenScreenshotTest {
         }
         composeRule.onNodeWithText("你还没有任何账户").assertIsDisplayed()
         capture("m1_assets_empty")
+    }
+
+    /**
+     * 账户行左滑动作区露满（UI-13）：账户行点行进编辑页，所以动作区只放「删除」一个 64dp 块。
+     * `revealedRowId` 直接给值，省得在截图用例里挥手势。
+     */
+    @Test
+    fun captureAccountRowActionRevealed() {
+        composeRule.setContent {
+            PennedTheme {
+                AssetsContent(state = state(), onAddAccount = { _, _ -> }, revealedRowId = "a1")
+            }
+        }
+        composeRule.waitForIdle()
+        composeRule.onAllNodesWithText("删除").onFirst().assertIsDisplayed()
+        capture("ui13_assets_row_action")
     }
 
     @Test

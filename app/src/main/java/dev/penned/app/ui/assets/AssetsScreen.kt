@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -59,7 +60,8 @@ import dev.penned.app.ui.components.EmptyState
 import dev.penned.app.ui.components.PennedSnackbarHost
 import dev.penned.app.ui.components.PennedCard
 import dev.penned.app.ui.components.PennedDivider
-import dev.penned.app.ui.components.SwipeToDeleteRow
+import dev.penned.app.ui.components.SwipeActionRow
+import dev.penned.app.ui.components.rowDeleteAction
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedElevation
@@ -175,6 +177,8 @@ fun AssetsScreen(
     val message by viewModel.message.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
+    // 左滑动作区：只留一行为开（UI-13）；纯 UI 状态，不进 ViewModel
+    var revealedRowId: String? by rememberSaveable { mutableStateOf<String?>(null) }
 
     // 一次只显示一条提示：被拦下的说明优先，其次是「已删除 + 撤销」。
     // key 变化会取消上一条（SnackbarHostState 在取消时自行 dismiss），连续删除时后一条顶掉前一条。
@@ -199,6 +203,8 @@ fun AssetsScreen(
         onAddAccount = onAddAccount,
         onOpenAccount = onOpenAccount,
         onDeleteAccount = viewModel::deleteAccount,
+        revealedRowId = revealedRowId,
+        onRevealedRowChange = { revealedRowId = it },
         snackbarHostState = snackbarHostState,
         modifier = modifier,
     )
@@ -212,6 +218,9 @@ fun AssetsContent(
     modifier: Modifier = Modifier,
     onOpenAccount: (String) -> Unit = {},
     onDeleteAccount: (AccountWithBalance) -> Unit = {},
+    /** 当前左滑展开动作区的账户 id（null = 都收起）；只留一行为开。 */
+    revealedRowId: String? = null,
+    onRevealedRowChange: (String?) -> Unit = {},
     snackbarHostState: SnackbarHostState? = null,
 ) {
     // 眼睛藏金额：切 Tab 回来还在（rememberSaveable），重启重置
@@ -252,7 +261,13 @@ fun AssetsContent(
         },
     ) { padding ->
         // 整页一起滚：页头/净资产卡/汇总卡/分组卡都随列表滚走，只留 FAB 与底栏
+        val listState = rememberLazyListState()
+        // 动作区只留一行为开：滚列表就收起（与首页同一口径）
+        LaunchedEffect(listState.isScrollInProgress) {
+            if (listState.isScrollInProgress) onRevealedRowChange(null)
+        }
         LazyColumn(
+            state = listState,
             modifier = modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(bottom = PennedDimens.listBottomClearance),
         ) {
@@ -280,6 +295,7 @@ fun AssetsContent(
                             masked = masked,
                             collapsed = title in collapsedGroups,
                             onToggle = {
+                                onRevealedRowChange(null)   // 折叠/展开分组时收起动作区（行会跟着收起）
                                 collapsedGroups = if (title in collapsedGroups) {
                                     collapsedGroups - title
                                 } else {
@@ -288,6 +304,8 @@ fun AssetsContent(
                             },
                             onOpenAccount = onOpenAccount,
                             onDeleteAccount = onDeleteAccount,
+                            revealedRowId = revealedRowId,
+                            onRevealedRowChange = onRevealedRowChange,
                         )
                     }
                 }
@@ -441,8 +459,11 @@ private fun SummaryCard(
 }
 
 /**
- * 分组卡：组名 + 组小计 + 折叠箭头，组内是账户行（左滑删除、点进编辑）。
+ * 分组卡：组名 + 组小计 + 折叠箭头，组内是账户行（左滑动作区、点进编辑）。
  * 整组做成一个 LazyColumn item——分组天然是"一张卡"，行数少，不需要逐行虚拟化。
+ *
+ * 账户行的动作区只放「删除」（UI-13 用户裁决）：点行就是进编辑页，再给「编辑」是重复入口
+ * （首页那行点的是详情，所以那边才需要补「编辑」）。
  */
 @Composable
 private fun AccountGroupCard(
@@ -453,6 +474,8 @@ private fun AccountGroupCard(
     onToggle: () -> Unit,
     onOpenAccount: (String) -> Unit,
     onDeleteAccount: (AccountWithBalance) -> Unit,
+    revealedRowId: String? = null,
+    onRevealedRowChange: (String?) -> Unit = {},
 ) {
     val rotation by animateFloatAsState(if (collapsed) -90f else 0f, label = "group-chevron")
     PennedCard(
@@ -484,17 +507,30 @@ private fun AccountGroupCard(
         AnimatedVisibility(visible = !collapsed) {
             Column {
                 accounts.forEachIndexed { index, account ->
-                    SwipeToDeleteRow(
-                        onDelete = { onDeleteAccount(account) },
-                        rowBackground = MaterialTheme.colorScheme.surface,
-                        confirmTitle = "删除「${account.name}」？",
-                        // 藏金额时确认弹窗也不能漏出余额
-                        confirmSubject = "余额 " + (if (masked) MASK else Money.format(account.balanceCents)),
+                    SwipeActionRow(
+                        isOpen = revealedRowId == account.id,
+                        onOpenChange = { open ->
+                            onRevealedRowChange(if (open) account.id else null)
+                        },
+                        actions = listOf(
+                            // 删除直接做，拦下的说明走提示条（有流水时 deleteAccountIfEmpty 会返回原因）
+                            rowDeleteAction {
+                                onRevealedRowChange(null)
+                                onDeleteAccount(account)
+                            },
+                        ),
                     ) {
                         AccountRow(
                             account = account,
                             masked = masked,
-                            onClick = { onOpenAccount(account.id) },
+                            // 展开态点行 = 收起动作区，不进编辑页（QQ 口径）
+                            onClick = {
+                                if (revealedRowId == account.id) {
+                                    onRevealedRowChange(null)
+                                } else {
+                                    onOpenAccount(account.id)
+                                }
+                            },
                         )
                     }
                     if (index < accounts.lastIndex) PennedDivider()

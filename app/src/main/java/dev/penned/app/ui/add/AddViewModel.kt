@@ -97,8 +97,11 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
             type.value = tx.type
             amountText.value = Money.format(tx.amountCents, grouped = false)
             selectedCategoryId.value = tx.categoryId
+            // 父分类要**到库里查**：`categories` 是 WhileSubscribed 的 stateIn(…, emptyList())，
+            // 编辑页刚开时它还没被订阅、读到的必然是空表，`?: cid` 回落成子分类 id——
+            // 宫格判"哪一行展开"用的是「父格里有没有这个 id」，于是父格不选中、子分类条带也不展开（UI-13）
             expandedParentId.value = tx.categoryId?.let { cid ->
-                categories.value.firstOrNull { c -> c.id == cid }?.parentId ?: cid
+                db.categoryDao().get(cid)?.parentId ?: cid
             }
             accountId.value = tx.accountId
             transferFromId.value = tx.accountId

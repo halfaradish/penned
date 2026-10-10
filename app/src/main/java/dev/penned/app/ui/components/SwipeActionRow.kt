@@ -49,21 +49,53 @@ import kotlinx.coroutines.launch
 private val ActionSwipeFling = 500.dp
 
 /**
- * QQ 式左滑动作区（UI-12 / D053）：内容层 1:1 跟手左移，露出右侧固定的动作块（编辑 / 删除）。
+ * 动作块的内容：标签 + 配色 + 点击。用 [rowEditAction] / [rowDeleteAction] 造，
+ * 别在调用点自己配颜色（配色是"删除红"这类 token 决定的事，收在本文件里）。
+ */
+data class RowAction(
+    val label: String,
+    val container: Color,
+    val contentColor: Color,
+    val onClick: () -> Unit,
+)
+
+/** 「编辑」动作块：次级填充 + 墨色字（可操作但非破坏性）。 */
+@Composable
+fun rowEditAction(onClick: () -> Unit): RowAction = RowAction(
+    label = "编辑",
+    container = MaterialTheme.colorScheme.surfaceContainerHigh,
+    contentColor = MaterialTheme.colorScheme.onSurface,
+    onClick = onClick,
+)
+
+/** 「删除」动作块：`error` 实心 + `onError` 字（浅 6.54:1 / 深 7.31:1）。 */
+@Composable
+fun rowDeleteAction(onClick: () -> Unit): RowAction = RowAction(
+    label = "删除",
+    container = MaterialTheme.colorScheme.error,
+    contentColor = MaterialTheme.colorScheme.onError,
+    onClick = onClick,
+)
+
+/**
+ * QQ 式左滑动作区（UI-12 / D053，UI-13 起 [actions] 可配）：内容层 1:1 跟手左移，
+ * 露出右侧固定的动作块——首页是「编辑 / 删除」，资产页账户行只有「删除」（点行进编辑，不再重复给入口）。
  *
- * 与 [SwipeToDeleteRow]（滑过阈值即触发动作，资产页仍在用）的关键区别是**没有"滑到某个位置就执行"**：
- * 滑只负责把按钮露出来，动作必须再点一下按钮——首页的误触正出在"滑过 56dp 或甩速 125dp/s 就弹确认"。
+ * 与"滑到某处就执行"的关键区别是**滑只负责把按钮露出来**，动作必须再点一下按钮——
+ * 首页此前的误触正出在"滑过 56dp 或甩速 125dp/s 就弹确认"。旧的 `SwipeToDeleteRow` 已随
+ * 两处都改用本组件而退场（UI-13）。
  *
  * 口径：
  * - 露满（= 面板实测宽）后夹住，继续滑不再移动；松手时超过半宽或甩速够 → 定格为展开，否则收回；
  * - 展开是"定格"状态，不会自己消失：点按钮才动作；收起由调用方改 [isOpen]（点行内容 / 滚列表 / 开了另一行）
  *   或往回拖松手驱动；
- * - 面板宽按内容实测（字号放大时按钮变宽，不裁字），最小 [PennedDimens.rowActionWidth]。
+ * - [actions] 按**从左到右**排列，最后一个贴右边缘（删除习惯放最后）；面板宽按内容实测
+ *   （字号放大时按钮变宽，不裁字），每块最小 [PennedDimens.rowActionWidth]。
  *
  * 三个坑：
  * - 动作面板用 `matchParentSize` 才拿得到"与行同高"：在 LazyColumn 的无穷高约束里 `fillMaxHeight`
  *   会塌成内容高，按钮就只剩一行字那么高；
- * - 面板压在内容层底下，读屏会把两个按钮当成"可见控件"——关闭态补 `invisibleToUser` 挡掉焦点；
+ * - 面板压在内容层底下，读屏会把按钮当成"可见控件"——关闭态补 `invisibleToUser` 挡掉焦点；
  * - 偏移量用 `remember`（不 saveable）：删除后行被移出列表、撤销时同一 id 重新入列，
  *   被复原的"展开态"会立刻再删一次（旧组件踩过同型坑）。
  */
@@ -71,8 +103,7 @@ private val ActionSwipeFling = 500.dp
 fun SwipeActionRow(
     isOpen: Boolean,
     onOpenChange: (Boolean) -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
+    actions: List<RowAction>,
     modifier: Modifier = Modifier,
     rowBackground: Color = MaterialTheme.colorScheme.surface,
     content: @Composable () -> Unit,
@@ -122,11 +153,10 @@ fun SwipeActionRow(
                 },
             )
             .semantics {
-                // 左滑对读屏用户完全不可见：两个动作都补成无障碍动作（D044）
-                customActions = listOf(
-                    CustomAccessibilityAction("编辑") { onEdit(); true },
-                    CustomAccessibilityAction("删除") { onDelete(); true },
-                )
+                // 左滑对读屏用户完全不可见：每个动作都补一条无障碍动作（D044）
+                customActions = actions.map { action ->
+                    CustomAccessibilityAction(action.label) { action.onClick(); true }
+                }
             },
     ) {
         // 动作面板：与行同框、内容贴右，压在内容层底下（关闭态被内容层完全盖住）
@@ -137,8 +167,7 @@ fun SwipeActionRow(
             horizontalArrangement = Arrangement.End,
         ) {
             Row(Modifier.fillMaxHeight().onSizeChanged { panelWidth = it.width }) {
-                RowAction("编辑", MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.onSurface, onEdit)
-                RowAction("删除", MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.onError, onDelete)
+                actions.forEach { ActionBlock(it) }
             }
         }
         // 内容层：跟手平移；自带行底，不然没滑动时会透出按钮
@@ -153,18 +182,18 @@ fun SwipeActionRow(
     }
 }
 
-/** 动作块：直角、与行同高（QQ 同款是两个实心块，不是圆角按钮）。 */
+/** 动作块：直角、与行同高（QQ 同款是实心块，不是圆角按钮）。 */
 @Composable
-private fun RowAction(label: String, container: Color, contentColor: Color, onClick: () -> Unit) {
+private fun ActionBlock(action: RowAction) {
     Box(
         Modifier
             .fillMaxHeight()
             .widthIn(min = PennedDimens.rowActionWidth)
-            .background(container)
-            .clickable(onClick = onClick)
+            .background(action.container)
+            .clickable(onClick = action.onClick)
             .padding(horizontal = PennedSpacing.sm),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = contentColor, maxLines = 1)
+        Text(action.label, style = MaterialTheme.typography.labelLarge, color = action.contentColor, maxLines = 1)
     }
 }
