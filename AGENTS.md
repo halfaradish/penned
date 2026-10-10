@@ -51,6 +51,9 @@ Android 单端本地记账 App「一笔一记 / penned」，功能对标"一木�
 ./gradlew build                     # 全量
 ```
 
+构建工具链已在 `app/build.gradle.kts` 显式钉成 JDK 17（D060）——不再依赖"守护进程碰巧是哪个 JVM"。
+若见到 `JdkImageTransform ... jlink executable ... does not exist`：Gradle 复用了编辑器扩展起的 JRE 守护进程（VS Code 的 Gradle 扩展用 redhat.java 自带 JRE 起过守护进程），`./gradlew --stop` 后重跑即可。
+
 ## 文档地图
 
 - `docs/可行性分析与技术方案.md` 总方案与里程碑（M0~M6）
@@ -65,6 +68,6 @@ Android 单端本地记账 App「一笔一记 / penned」，功能对标"一木�
 
 ## 关键参数
 
-- applicationId `dev.penned.app`（**M2 发布前必须最终确认**，改了=换应用身份）
+- applicationId `dev.penned.app`（**已终审冻结，D057；改了=换应用身份、已装版本收不到更新**）
 - minSdk 26 / targetSdk 36 / compileSdk 36
 - 版本冻结见 `gradle/libs.versions.toml`

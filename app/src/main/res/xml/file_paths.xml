@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 更新包落在 cacheDir/updates/（规格 M2 S3/S5），经 FileProvider 交给系统安装器 -->
+<paths>
+    <cache-path
+        name="updates"
+        path="updates/" />
+</paths>

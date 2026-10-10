@@ -4,12 +4,12 @@
 
 ## 进行中
 
-- **M2（应用内更新）**：阶段 A（M1 收官 + 决策沉淀）与阶段 B（`docs/specs/M2.md` 规格冻结）已完成；按切片清单开工，进度看"待办"首条
+- **M2（应用内更新）**：M2-0 规格冻结（`docs/specs/M2.md`）、M2-1 依赖与权限基建 已完成；下一步 M2-2 纯逻辑层。切片清单与状态见"待办"首条
 
 ## 待办
 
 - **M2 切片清单**（规格 `docs/specs/M2.md` 冻结后按序开工，每片 `build test lint` 全绿 + 独立提交）：
-  - **M2-1 依赖与权限基建**：catalog 加 `okhttp 4.12.0`（D058）+ Manifest 加 `INTERNET` / `REQUEST_INSTALL_PACKAGES` + FileProvider 声明 + `res/xml/file_paths.xml` + debug-only `networkSecurityConfig`（放行 `10.0.2.2` 明文，供模拟机连本机假清单服务）
+  - ✅ **M2-1 依赖与权限基建**（已完成）：catalog 加 `okhttp 4.12.0`（本机缓存离线可解析）+ Manifest 加 `INTERNET` / `REQUEST_INSTALL_PACKAGES` + FileProvider（`dev.penned.app.fileprovider` → `res/xml/file_paths.xml` 暴露 `cache-path updates/`）+ debug-only `networkSecurityConfig`（只放行 `10.0.2.2` 明文）+ `buildConfig = true` 与 `UPDATE_MANIFEST_URLS`（debug → 本机假清单服务；release → GitHub raw + jsDelivr 两个候选）。**踩坑（D060）**：加依赖后 `assembleDebug` 报 `JdkImageTransform ... jlink does not exist`——VS Code 的 Gradle 扩展用 redhat.java 自带 JRE 起了守护进程，Gradle 复用守护进程只比 JVM 版本、不比 java home，AGP 就把这个没有 jlink 的 JRE 当工具链；已在 `app/build.gradle.kts` 显式钉 `java { toolchain { 17 } }`（与 compileOptions/jvmTarget 一致），并用 `-Dorg.gradle.java.home=<那个 JRE>` 反向验证过（修前必红、修后绿）
   - **M2-2 纯逻辑**：`update.json` 解析（平台自带 org.json）+ 版本比较 + 提示分级（低于 `minVersionCode` 只升级文案，D059）+ sha256（表驱动单测）
   - **M2-3 检查器**：多 url 按序回退 + 超时 + 每日节流（DataStore `lastCheckAt`）；HTTP 抽 `HttpFetcher` 接口，生产走 OkHttp、测试用 JDK 自带 `com.sun.net.httpserver`（不引 mockwebserver）
   - **M2-4 下载器**：OkHttp 流式 + `Range` 断点续传 + 进度回调 + sha256 校验（含"续传后摘要一致""摘要不符即中止"用例）

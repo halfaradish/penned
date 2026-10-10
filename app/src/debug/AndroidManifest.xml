@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 仅 debug：放行到宿主 10.0.2.2 的明文请求（模拟机连本机假清单服务，M2 闭环验证用）。
+     release 不带这份配置，明文照旧被系统禁止。 -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application android:networkSecurityConfig="@xml/network_security_config_debug" />
+
+</manifest>

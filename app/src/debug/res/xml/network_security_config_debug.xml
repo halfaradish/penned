@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 仅 debug：只放行 10.0.2.2（模拟机眼里的宿主回环）明文，其余域名保持默认禁明文 -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

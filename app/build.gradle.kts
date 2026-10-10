@@ -19,9 +19,24 @@ android {
     }
 
     buildTypes {
+        debug {
+            // M2 闭环验证：模拟机经 10.0.2.2 连宿主的假清单服务（明文仅 debug 放行，见 src/debug）
+            buildConfigField(
+                "String",
+                "UPDATE_MANIFEST_URLS",
+                "\"http://10.0.2.2:8000/update.json\"",
+            )
+        }
         release {
             isMinifyEnabled = false // D012：M2 打开并做体积验收
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // 清单候选地址按序回退（规格 M2 S1）；首发托管定稿后换主地址，备地址保持 GitHub raw
+            buildConfigField(
+                "String",
+                "UPDATE_MANIFEST_URLS",
+                "\"https://raw.githubusercontent.com/halfaradish/penned/main/update.json," +
+                    "https://cdn.jsdelivr.net/gh/halfaradish/penned@main/update.json\"",
+            )
         }
     }
 
@@ -30,8 +45,18 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // 显式钉住编译工具链（与 compileOptions / jvmTarget 的 17 一致）：不钉的话 AGP 会拿
+    // "当前 JVM"（= Gradle 守护进程所在 JVM）当工具链，而编辑器扩展自带的 JRE 没有 jlink，
+    // JdkImageTransform 会直接失败（2026-10-10 实际踩到：VS Code 的 Gradle 扩展起了 JRE 守护进程）
+    java {
+        toolchain {
+            languageVersion.set(JavaLanguageVersion.of(17))
+        }
+    }
+
     buildFeatures {
         compose = true
+        buildConfig = true // M2：UPDATE_MANIFEST_URLS / 版本号进 BuildConfig
     }
 
     sourceSets {
@@ -93,6 +118,7 @@ dependencies {
     ksp(libs.room.compiler)
 
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.okhttp)
 
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
