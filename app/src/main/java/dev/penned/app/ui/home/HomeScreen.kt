@@ -41,6 +41,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -73,7 +74,7 @@ import dev.penned.app.ui.theme.iconMutedColor
 import dev.penned.app.ui.components.PennedCardSection
 import dev.penned.app.ui.components.PennedCardSectionPosition
 import dev.penned.app.ui.components.PennedDialog
-import dev.penned.app.ui.components.SwipeToDeleteRow
+import dev.penned.app.ui.components.SwipeActionRow
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
@@ -102,6 +103,8 @@ fun HomeScreen(
     onManageBooks: () -> Unit,
     onManageBudgets: () -> Unit = {},
     onSearch: () -> Unit = {},
+    /** 行左滑动作区的「编辑」：进编辑页（与详情页的编辑同一条路由）。 */
+    onEditRow: (String) -> Unit = {},
     /** 一次性提示（如"已记账"）：由记一笔页写进本页的 savedStateHandle，展示后回调 [onFlashShown]。 */
     flashMessage: String? = null,
     onFlashShown: () -> Unit = {},
@@ -116,6 +119,8 @@ fun HomeScreen(
 
     var showBookMenu by remember { mutableStateOf(false) }
     var showAddBook by remember { mutableStateOf(false) }
+    // 左滑动作区：只留一行为开（UI-12）；纯 UI 状态，不进 ViewModel
+    var revealedRowId: String? by rememberSaveable { mutableStateOf<String?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -187,6 +192,9 @@ fun HomeScreen(
         onToggleSelect = viewModel::toggleSelect,
         onLongPressRow = viewModel::enterSelection,
         onOpenRow = onOpenDetail,
+        onEditRow = onEditRow,
+        revealedRowId = revealedRowId,
+        onRevealedRowChange = { revealedRowId = it },
         onDeleteRow = { id ->
             viewModel.deleteRow(id)
             showUndo("已删除 1 条")
@@ -229,6 +237,10 @@ fun HomeContent(
     onToggleSelect: (String) -> Unit = {},
     onLongPressRow: (String) -> Unit = {},
     onOpenRow: (String) -> Unit = {},
+    onEditRow: (String) -> Unit = {},
+    /** 当前左滑展开动作区的行 id（null = 都收起）；只留一行为开。 */
+    revealedRowId: String? = null,
+    onRevealedRowChange: (String?) -> Unit = {},
     onDeleteRow: (String) -> Unit = {},
     onDeleteSelected: () -> Unit = {},
     onExitSelection: () -> Unit = {},
@@ -276,6 +288,14 @@ fun HomeContent(
                             return Offset.Zero
                         }
                     }
+                }
+
+                // 左滑动作区只留一行为开：滚列表、进多选都收起（QQ 口径）
+                LaunchedEffect(listState.isScrollInProgress) {
+                    if (listState.isScrollInProgress) onRevealedRowChange(null)
+                }
+                LaunchedEffect(selectionMode) {
+                    if (selectionMode) onRevealedRowChange(null)
                 }
 
                 val currentMonth = YearMonth.from(LocalDate.now(zone))
@@ -389,17 +409,32 @@ fun HomeContent(
                                                 onLongClick = { onLongPressRow(row.id) },
                                             )
                                         } else {
-                                            SwipeToDeleteRow(
-                                                onDelete = { onDeleteRow(row.id) },
-                                                rowBackground = MaterialTheme.colorScheme.surface,
-                                                confirmTitle = "删除这条流水？",
-                                                confirmSubject = txSummary(row),
+                                            SwipeActionRow(
+                                                isOpen = revealedRowId == row.id,
+                                                onOpenChange = { open ->
+                                                    onRevealedRowChange(if (open) row.id else null)
+                                                },
+                                                onEdit = {
+                                                    onRevealedRowChange(null)
+                                                    onEditRow(row.id)
+                                                },
+                                                onDelete = {
+                                                    onRevealedRowChange(null)
+                                                    onDeleteRow(row.id)
+                                                },
                                             ) {
                                                 TransactionRow(
                                                     row = row,
                                                     selectionMode = false,
                                                     selected = false,
-                                                    onClick = { onOpenRow(row.id) },
+                                                    // 展开态点行 = 收起动作区，不进详情（QQ 口径）
+                                                    onClick = {
+                                                        if (revealedRowId == row.id) {
+                                                            onRevealedRowChange(null)
+                                                        } else {
+                                                            onOpenRow(row.id)
+                                                        }
+                                                    },
                                                     onLongClick = { onLongPressRow(row.id) },
                                                 )
                                             }

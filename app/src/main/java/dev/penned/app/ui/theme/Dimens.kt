@@ -113,6 +113,9 @@ object PennedDimens {
     val selectionDot = 22.dp
     val selectionCheck = 14.dp
 
+    /** 左滑动作区每个动作块的最小宽度（`SwipeActionRow`；字号放大时按内容变宽，不裁字）。 */
+    val rowActionWidth = 64.dp
+
     /** 分类宫格里"有子分类"的小圆点。 */
     val categoryDot = 9.dp
 

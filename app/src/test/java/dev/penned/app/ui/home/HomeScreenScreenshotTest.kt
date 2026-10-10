@@ -325,6 +325,30 @@ class HomeScreenScreenshotTest {
         )
     }
 
+    /**
+     * 左滑动作区露满（UI-12）：内容层左移两个 64dp，露出「编辑」（中性填充）+「删除」（朱砂实心）。
+     * 截图留档用；`revealedRowId` 直接给值，省得在截图用例里挥手势。
+     */
+    @Test
+    fun captureRowActionRevealed() {
+        composeRule.setContent {
+            PennedTheme {
+                HomeContent(
+                    bookName = "日常账本",
+                    rows = rows,
+                    onAdd = {},
+                    budgetSummary = budget,
+                    revealedRowId = "tx-1",
+                )
+            }
+        }
+        composeRule.waitForIdle()
+        // 每行都有一套动作区，取第一行那套
+        composeRule.onAllNodesWithText("编辑").onFirst().assertIsDisplayed()
+        composeRule.onAllNodesWithText("删除").onFirst().assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/ui12_home_row_action.png")
+    }
+
     @Test
     fun addEntryHiddenInSelectionMode() {
         composeRule.setContent {

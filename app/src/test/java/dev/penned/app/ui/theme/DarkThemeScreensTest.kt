@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.test.core.app.ApplicationProvider
@@ -91,6 +93,25 @@ class DarkThemeScreensTest {
         composeRule.onNodeWithText("结余").assertIsDisplayed()
         composeRule.onNodeWithText("转账 · 转入 储蓄卡").assertIsDisplayed()
         capture("home")
+    }
+
+    /** 左滑动作区露满（UI-12）：深色下两个实心块（编辑 = surfaceContainerHigh，删除 = error）。 */
+    @Test
+    fun darkHomeRowAction() {
+        dark {
+            HomeContent(
+                bookName = "日常账本",
+                rows = listOf(
+                    txRow("1", TxType.EXPENSE, 1600, "晚餐", "食品餐饮"),
+                    txRow("2", TxType.INCOME, 150000, "工资", null),
+                ),
+                onAdd = {},
+                revealedRowId = "1",
+            )
+        }
+        composeRule.waitForIdle()
+        composeRule.onAllNodesWithText("删除").onFirst().assertIsDisplayed()
+        capture("home_row_action")
     }
 
     @Test

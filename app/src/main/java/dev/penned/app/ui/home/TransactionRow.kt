@@ -25,7 +25,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.penned.app.data.db.dao.TxWithCategory
-import dev.penned.app.domain.Money
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.components.CategoryAvatar
 import dev.penned.app.ui.components.MoneyText
@@ -35,21 +34,11 @@ import dev.penned.app.ui.theme.PennedPigment
 import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.PennedTextStyles
 
-/** 流水标题：分类路径（父 · 子）或转账行的「转账 · 转入 X」（D007 单表多态）。列表行与删除确认共用。 */
+/** 流水标题：分类路径（父 · 子）或转账行的「转账 · 转入 X」（D007 单表多态）。 */
 internal fun txTitle(row: TxWithCategory): String = when (row.type) {
     TxType.TRANSFER -> listOfNotNull("转账", row.targetAccountName?.let { "转入 $it" }).joinToString(" · ")
     else -> listOfNotNull(row.categoryParentName, row.categoryName).joinToString(" · ")
         .ifEmpty { PennedPigment.UNKNOWN }
-}
-
-/** 删除确认里"删的是哪一条"：标题 + 带符号金额（符号口径与 [MoneyText] 一致）。 */
-internal fun txSummary(row: TxWithCategory): String {
-    val sign = when (row.type) {
-        TxType.EXPENSE -> "-"
-        TxType.INCOME -> "+"
-        else -> ""
-    }
-    return "${txTitle(row)}  $sign${Money.format(row.amountCents)}"
 }
 
 /** 流水行（首页 / 搜索结果共用）。 */

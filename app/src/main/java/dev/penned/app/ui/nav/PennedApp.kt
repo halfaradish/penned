@@ -199,6 +199,8 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onManageBooks = { navController.navigate("books") },
                     onManageBudgets = { navController.navigate("budgets") },
                     onSearch = { navController.navigate("search") },
+                    // 行左滑动作区的「编辑」：与详情页同一条编辑路由
+                    onEditRow = { id -> navController.navigate("add?editId=$id") },
                 )
             }
             composable(

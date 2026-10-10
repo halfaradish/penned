@@ -3,17 +3,23 @@ package dev.penned.app.ui.nav
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.test.core.app.ApplicationProvider
 import dev.penned.app.PennedApplication
 import dev.penned.app.data.db.entity.BookEntity
 import dev.penned.app.data.db.entity.CategoryEntity
+import dev.penned.app.data.db.entity.TransactionEntity
 import dev.penned.app.domain.CategoryType
+import dev.penned.app.domain.TxType
 import dev.penned.app.ui.LocalApp
 import dev.penned.app.ui.theme.PennedTheme
 import kotlinx.coroutines.runBlocking
@@ -24,6 +30,8 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * 记一笔的进出链路（UI-11 回归）：真库 + 真导航图，覆盖 flash 提示条的读写。
@@ -61,6 +69,23 @@ class AddFlowNavigationTest {
                 bookId = bookId,
                 name = "食品餐饮",
                 type = CategoryType.EXPENSE,
+                createdAt = now,
+                updatedAt = now,
+                deviceId = "test",
+            ),
+        )
+        // 一条已有流水：给"左滑 → 编辑"用例当被编辑对象
+        app.database.transactionDao().upsert(
+            TransactionEntity(
+                id = "tx-edit-flow",
+                bookId = bookId,
+                type = TxType.EXPENSE,
+                amountCents = 1234,
+                categoryId = "cat-food",
+                dateEpochMinute = LocalDate.now(ZoneId.systemDefault()).atTime(12, 0)
+                    .atZone(ZoneId.systemDefault()).toEpochSecond() / 60,
+                note = "左滑测试流水",
+                creatorDeviceId = "test",
                 createdAt = now,
                 updatedAt = now,
                 deviceId = "test",
@@ -125,6 +150,27 @@ class AddFlowNavigationTest {
         composeRule.mainClock.autoAdvance = true
         assertTrue("保存后首页没有显示「已记账」提示条", shown)
         composeRule.onNodeWithText("已记账").assertIsDisplayed()
+    }
+
+    /**
+     * 首页行左滑动作区的「编辑」（UI-12）：点它进的是记一笔的编辑态，且带出原值。
+     * 这条入口是新加的（此前首页行只能点进详情、再从详情的「编辑」进）——路由复用 `add?editId=`。
+     */
+    @Test
+    fun `左滑动作区点编辑_编辑页带出原值`() {
+        renderApp()
+        composeRule.waitUntil(5_000) { count("左滑测试流水") == 1 }   // 流水是从库里异步到达的
+
+        composeRule.onNodeWithText("左滑测试流水").performTouchInput { swipeLeft() }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("编辑").performClick()
+        composeRule.waitUntil(5_000) { count("完成") == 1 }   // 记一笔页（明细页没有「完成」）
+
+        // 备注在输入框里（首页那行也有同一串字，用"可输入"把范围钉在编辑页）
+        composeRule.onNode(hasText("左滑测试流水") and hasSetTextAction()).assertIsDisplayed()
+        // 金额不带符号：12.34（首页行是 -12.34）
+        composeRule.onNodeWithText("12.34").assertIsDisplayed()
+        composeRule.onNodeWithText("完成").assertIsEnabled()
     }
 
     private fun count(text: String): Int =
