@@ -1,8 +1,20 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+}
+
+// 版本号单一来源（M2-7）：仓库根 version.properties，禁手改；发布前 ./gradlew bumpVersion
+val versionProps = Properties().apply {
+    rootProject.file("version.properties").inputStream().use { load(it) }
+}
+// release 签名参数（M2-7）：只从 local.properties 读（不入库），keystore 也在仓库外
+val signingProps = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
 }
 
 android {
@@ -13,9 +25,21 @@ android {
         applicationId = "dev.penned.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = versionProps.getProperty("versionCode").trim().toInt()
+        versionName = versionProps.getProperty("versionName").trim()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        create("release") {
+            val storePath = signingProps.getProperty("penned.storeFile")
+            if (storePath != null) {
+                storeFile = file(storePath)
+                storePassword = signingProps.getProperty("penned.storePassword")
+                keyAlias = signingProps.getProperty("penned.keyAlias")
+                keyPassword = signingProps.getProperty("penned.keyPassword")
+            }
+        }
     }
 
     buildTypes {
@@ -28,7 +52,8 @@ android {
             )
         }
         release {
-            isMinifyEnabled = false // D012：M2 打开并做体积验收
+            isMinifyEnabled = true // D012：M2 打开并做体积验收
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // 清单候选地址按序回退（规格 M2 S1）；首发托管定稿后换主地址，备地址保持 GitHub raw
             buildConfigField(
@@ -37,6 +62,10 @@ android {
                 "\"https://raw.githubusercontent.com/halfaradish/penned/main/update.json," +
                     "https://cdn.jsdelivr.net/gh/halfaradish/penned@main/update.json\"",
             )
+            // 有签名配置就签（local.properties 里配了 penned.storeFile），没配就照旧出 unsigned
+            if (signingConfigs.getByName("release").storeFile != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

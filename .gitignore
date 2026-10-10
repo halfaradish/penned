@@ -14,6 +14,14 @@ local.properties
 captures/
 .cxx/
 
+# 签名与密钥：keystore 一律放仓库外（M2-7），这里再兜一层，防手滑拷进来
+*.jks
+*.keystore
+*.p12
+*.pem
+signing/
+penned-signing/
+
 # OS
 .DS_Store
 Thumbs.db
