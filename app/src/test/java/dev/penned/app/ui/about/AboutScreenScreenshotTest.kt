@@ -148,20 +148,16 @@ class AboutScreenScreenshotTest {
     }
 
     @Test
-    fun captureFailedAndAssertBothActions() {
+    fun captureFailedAndAssertSingleRetryAction() {
         var retries = 0
-        var checks = 0
-        content(
-            UpdateUiState.Failed("安装包校验失败，已删除"),
-            onRetry = { retries++ },
-            onCheck = { checks++ },
-        )
+        content(UpdateUiState.Failed("安装包校验失败，已删除"), onRetry = { retries++ })
         composeRule.onNodeWithText("未成功").assertIsDisplayed()
         composeRule.onNodeWithText("安装包校验失败，已删除").assertIsDisplayed()
         composeRule.onNodeWithText("重试").performClick()
-        composeRule.onNodeWithText("重新检查").performClick()
-        assertEquals("「重试」走续传，不重新拉清单", 1, retries)
-        assertEquals("「重新检查」要重新拉清单", 1, checks)
+        assertEquals(1, retries)
+        // 失败态只留一个动作：「重新检查」与「重试」是同一个动作（retry() 没清单时就走重新检查），
+        // 重新拉清单的入口是上面那行「检查更新」——别把两个按钮写回来
+        composeRule.onNodeWithText("重新检查").assertDoesNotExist()
         capture("ui16_about_failed")
     }
 

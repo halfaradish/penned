@@ -1,10 +1,8 @@
 package dev.penned.app.ui.about
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,7 +34,6 @@ import dev.penned.app.ui.components.PennedDialog
 import dev.penned.app.ui.components.PennedDivider
 import dev.penned.app.ui.components.PennedListRow
 import dev.penned.app.ui.components.PennedProgressBar
-import dev.penned.app.ui.components.PennedTextAction
 import dev.penned.app.ui.components.PennedTopBar
 import dev.penned.app.ui.components.SectionCard
 import dev.penned.app.ui.icons.PennedIcons
@@ -143,7 +140,6 @@ fun AboutContent(
                         PennedDivider(startIndent = 0.dp)
                         UpdateDetail(
                             state = state,
-                            onCheck = onCheck,
                             onDownload = onDownload,
                             onCancelDownload = onCancelDownload,
                             onRetry = onRetry,
@@ -284,7 +280,6 @@ private fun hasUpdateDetail(state: UpdateUiState): Boolean = when (state) {
 @Composable
 private fun UpdateDetail(
     state: UpdateUiState,
-    onCheck: () -> Unit,
     onDownload: () -> Unit,
     onCancelDownload: () -> Unit,
     onRetry: () -> Unit,
@@ -371,16 +366,10 @@ private fun UpdateDetail(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Spacer(Modifier.height(PennedSpacing.md))
-                // 「重试」沿用刚才那份清单（续传）；清单本身有问题（摘要/地址）时得能重新拉一份——
-                // 否则这里只有一条死路（M2-8 真机验证时踩到）
-                PennedButton(text = "重试", onClick = onRetry, variant = PennedButtonVariant.Secondary)
-                Spacer(Modifier.height(PennedSpacing.xs))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    PennedTextAction(text = "重新检查", onClick = onCheck)
-                }
+                // 只有一个动作：`retry()` 自己分路——手上有清单就续传下载，没清单就重新检查
+                // （M2-8 那条死路的出路）。「重新检查」不再单列：重新拉清单的入口就是上面那行
+                // 「检查更新」，块里再放一个只是把同一个动作写两遍。
+                PennedButton(text = "重试", onClick = onRetry)
             }
 
             // Idle / Checking / Verifying / UpToDate 不渲染详情块（调用方已用 hasUpdateDetail 挡住）
