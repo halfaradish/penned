@@ -1,0 +1,136 @@
+name: release
+
+# 自动发包（D067）：打 v* tag 即发版。
+#   构建（bumpVersion → commit → tag -a 写发布说明 → push）之后的一切都由这里做：
+#   签名 APK → 建 GitHub Release（标题 = tag 名、说明 = tag 注释、附件 = APK + update.json）
+#   → 把 update.json 提回 main（raw / jsDelivr 的应用内更新清单随发版自动更新）。
+#
+# 一次性前置（仓库 Secrets，Settings → Secrets and variables → Actions）：
+#   PENNED_STORE_FILE_B64   keystore 的 base64（单行；本地 penned-signing/keystore.base64.txt）
+#   PENNED_STORE_PASSWORD   keystore 口令
+#   PENNED_KEY_ALIAS        别名（penned）
+#   PENNED_KEY_PASSWORD     别名口令
+#
+# 本地发版动作（全部）：
+#   ./gradlew bumpVersion -PversionName=0.2.0
+#   git commit -am "..."（含 version.properties）
+#   git tag -a v0.2.0 -m "新增：……
+#   修复：……"            ← 每个非空行 = update.json 的一条 changelog，全文 = Release 说明
+#   git push origin main v0.2.0
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 要 tag 注释与 origin/main（update.json 提回去）
+
+      - name: 校验 tag 与 version.properties 一致
+        run: |
+          V=$(sed -n 's/^versionName=//p' version.properties | tr -d '\r')
+          if [ "${GITHUB_REF_NAME}" != "v${V}" ]; then
+            echo "::error::tag（${GITHUB_REF_NAME}）与 version.properties（v${V}）不一致——先 bumpVersion、提交，再打 tag"
+            exit 1
+          fi
+          echo "VERSION_NAME=${V}" >> "$GITHUB_ENV"
+
+      - name: 检查签名 Secrets
+        env:
+          B64: ${{ secrets.PENNED_STORE_FILE_B64 }}
+          STORE: ${{ secrets.PENNED_STORE_PASSWORD }}
+          ALIAS: ${{ secrets.PENNED_KEY_ALIAS }}
+          KEY: ${{ secrets.PENNED_KEY_PASSWORD }}
+        run: |
+          ok=1
+          [ -n "$B64" ]   || { echo "::error::缺 Secret PENNED_STORE_FILE_B64（keystore 的 base64）"; ok=0; }
+          [ -n "$STORE" ] || { echo "::error::缺 Secret PENNED_STORE_PASSWORD"; ok=0; }
+          [ -n "$ALIAS" ] || { echo "::error::缺 Secret PENNED_KEY_ALIAS"; ok=0; }
+          [ -n "$KEY" ]   || { echo "::error::缺 Secret PENNED_KEY_PASSWORD"; ok=0; }
+          exit $ok
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: 还原 keystore、生成 local.properties
+        env:
+          B64: ${{ secrets.PENNED_STORE_FILE_B64 }}
+          STORE: ${{ secrets.PENNED_STORE_PASSWORD }}
+          ALIAS: ${{ secrets.PENNED_KEY_ALIAS }}
+          KEY: ${{ secrets.PENNED_KEY_PASSWORD }}
+        run: |
+          echo "$B64" | base64 -d > penned-release.jks
+          cat > local.properties <<EOF
+          penned.storeFile=${GITHUB_WORKSPACE}/penned-release.jks
+          penned.storePassword=${STORE}
+          penned.keyAlias=${ALIAS}
+          penned.keyPassword=${KEY}
+          EOF
+
+      - name: 接受 Android SDK 许可（缺的组件由 AGP 自取）
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+
+      - name: 构建签名 release
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease --no-daemon
+
+      - name: 验签（绝不发未签名包）
+        run: |
+          BT=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
+          "$ANDROID_HOME/build-tools/$BT/apksigner" verify --print-certs \
+            app/build/outputs/apk/release/app-release.apk | head -2
+
+      - name: 生成 update.json（清单说明也从 tag 来）
+        run: |
+          # tag 注释 = 发布说明；每个非空行 = update.json 的一条 changelog（行首 "- " 会被剥掉）
+          git tag -l --format='%(contents)' "${GITHUB_REF_NAME}" \
+            | sed '/-----BEGIN PGP SIGNATURE-----/,/-----END PGP SIGNATURE-----/d' > tag-message.txt
+          CHANGELOG=$(grep -v '^[[:space:]]*$' tag-message.txt | sed 's/^[[:space:]]*-[[:space:]]*//' | paste -sd';' -)
+          # minVersionCode（"强烈建议更新"的下限）不常动：沿用上一份清单的值，首版缺省 1
+          MIN=$(python3 -c "import json;print(json.load(open('update.json')).get('minVersionCode', 1))" 2>/dev/null || echo 1)
+          ./gradlew makeUpdateJson --no-daemon \
+            -Purls="https://github.com/${{ github.repository }}/releases/download/${GITHUB_REF_NAME}/penned-${VERSION_NAME}.apk" \
+            -Pchangelog="$CHANGELOG" \
+            -PminVersionCode="$MIN"
+          cat update.json
+
+      - name: 建 GitHub Release（APK + update.json，说明 = tag 注释）
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk "penned-${VERSION_NAME}.apk"
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes-file tag-message.txt \
+            "penned-${VERSION_NAME}.apk" update.json
+
+      - name: 把 update.json 提回 main（应用内更新清单随发版自动更新）
+        run: |
+          cp update.json /tmp/update.json
+          git config user.name "penned-release-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B main origin/main
+          cp /tmp/update.json update.json
+          git add update.json
+          if git diff --cached --quiet; then
+            echo "update.json 无变化，跳过提交"
+          else
+            git commit -m "release: update.json ${GITHUB_REF_NAME}"
+            git push origin main
+          fi

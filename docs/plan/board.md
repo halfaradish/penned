@@ -119,6 +119,14 @@ obolectric-*`，其中两个 `robolectric-nativeruntime*` 各 40–200MB）：�
 
 ## 已完成
 
+### 自动发包：push tag 即发版（2026-10-11，D067）
+
+- **用户裁决**：「现在的发包链路太长了，改为自动发包，上传 tag 到 GitHub 时触发，发布信息即 tag 信息」。
+- **落地**：`.github/workflows/release.yml`——tag 校验（tag ≠ version.properties 直接红）→ Secrets 还原 keystore + local.properties → 签名构建 + apksigner 验签门 → `makeUpdateJson`（urls = 本次 Release 资产直链；changelog = tag 注释逐行；minVersionCode 沿用上一份清单）→ `gh release create`（标题 = tag 名、说明 = tag 注释、附件 APK + update.json）→ update.json 提回 main（bot 提交，无变化跳过）。YAML 与 tag 注释/清单生成两段均在本地干跑过（v0.1.0 tag 实测）。
+- **此后发版** = `bumpVersion` → commit → `git tag -a vX -m "每行一条说明"` → `git push origin main vX`，其余全自动（约 3~6 分钟，Actions 页可看）。
+- **待用户一次性配置**：仓库 Secrets 配 4 个值（`PENNED_STORE_FILE_B64` = `penned-signing/keystore.base64.txt` 的内容、口令/别名在 `local.properties`）——配置好前的 tag 推送会在 CI 上红着并提示缺哪个。
+- **文档**：D067、AGENTS 发布流程改写、本看板。
+
 ### 关于页改版 + 版本回到 0.1.0 + 自动检查开关下线（2026-10-10，UI-16）
 
 - **背景**：M2 收尾后用户三点：①**版本号改回 0.1.0**（「目前才算是发布的第一版」）；②关于页「太丑」，照 QQ / 微信的关于页提升质感与高级感；③「启动时自动检查更新」开关去掉——「现在默认自动检查，开关放到后期的工程中」。

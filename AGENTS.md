@@ -51,14 +51,18 @@ Android 单端本地记账 App「一笔一记 / penned」，功能对标"一木�
 ./gradlew build                     # 全量
 ```
 
-发布相关（M2-7/D062）：
+发布相关（M2-7/D062，CI 自动发包 D067）：
 ```
-./gradlew bumpVersion -PversionName=x.y.z   # versionCode 自增 + 写回 version.properties（禁手改版本号）
-./gradlew :app:assembleRelease              # 签名 release 包（minify + 资源压缩，当前 2.10 MiB）
-./gradlew makeUpdateJson -Purls="主,备" -Pchangelog="新增：…;修复：…" [-PminVersionCode=n]
+./gradlew bumpVersion -PversionName=x.y.z   # 发版前：versionCode 自增（禁手改版本号）
+git commit -am "..."                        # 提交（含 version.properties）
+git tag -a v0.2.0 -m "新增：……
+修复：……"                                   # ← tag 注释 = Release 说明 = update.json 的 changelog（每行一条）
+git push origin main v0.2.0                 # 推 tag 触发 CI：签名出包 → 建 Release（APK+update.json）→ 清单自动提回 main
 ```
+- 其余（assembleRelease / makeUpdateJson / apksigner 验签）由 `.github/workflows/release.yml` 在 CI 做；本地手动跑也行，参数同 D062
+- CI 一次性前置：仓库 Secrets 配 `PENNED_STORE_FILE_B64` / `PENNED_STORE_PASSWORD` / `PENNED_KEY_ALIAS` / `PENNED_KEY_PASSWORD`（keystore base64 在 `penned-signing/keystore.base64.txt`）
 - **版本号只在 `version.properties`**；**签名 keystore 在仓库外**（`D:\Project\plaything\penned-signing\penned-release.jks`，参数在 `local.properties`，两者都不入库）——**丢了自更新链路即断**，动它前先确认备份在
-- 本地闭环测试用 `-PtestManifestUrls=http://10.0.2.2:8000/update.json -PtestCleartext=true`（默认关，发布物不受影响）；`PennedM2` 那台 AVD 是 M2 测试机，别当干净环境
+- 本地闭环测试用 `-PtestManifestUrls=http://10.0.2.2:8000/update.json -PtestCleartext=true`（默认关，发布物不受影响）；`PennedM2` 那台 AVD 是 M2-10 重建的干净测试机（装着 release 0.1.0）
 - 更新提示**一律可取消**（D059）：`minVersionCode` 只升级文案，不加不可取消的弹窗
 
 构建工具链已在 `app/build.gradle.kts` 显式钉成 JDK 17（D060）——不再依赖"守护进程碰巧是哪个 JVM"。
