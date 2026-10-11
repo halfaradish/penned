@@ -18,7 +18,7 @@
   - ✅ **M2-7 发布工程**（已完成）：`version.properties` 单一来源 + `bumpVersion`/`makeUpdateJson` 两个任务 + release 签名接线（keystore 在仓库外、参数在 local.properties）+ minify/`shrinkResources` 打开（**8.97 MiB → 2.10 MiB**，无需额外 keep 规则）+ `.gitignore` 补密钥规则 + `usesCleartextTraffic` 显式化
   - ✅ **M2-8 闭环验证**（已完成）：debug 原地升级（GxuDev，真机数据 756/2 未动）+ release 签名闭环（新 AVD `PennedM2`，自更新 0.2.0→0.3.0）+ 三条负例（摘要不符 / debug↔release 签名互喂）+ 真机暴露的 `Failed` 死路已修（补「重新检查」）
   - ✅ **M2-9 文档收尾**（已完成）：decisions D061~D063、界面规范 §13·补十、AGENTS 常用命令补发布两条、本看板
-  - （可选，需你点头/账号）**M2-10 首次真实发布**：定托管渠道（**首发必须国内可达**，GitHub raw 只作备）→ `bumpVersion` → tag → 签名 APK → `makeUpdateJson -Purls=主,备` → 传静态托管 → 用模拟机对着线上地址验一遍闭环
+  - **M2-10 首次真实发布**（2026-10-11 开工，D066：用户裁决「先用 GitHub 顶着发」，明知偏离"国内可达"与"urls ≥2"两条，0.2.0 前换主地址）：✅ 签名 APK（0.1.0(1)，2.10 MiB，sha256 与 update.json 核对一致）→ ✅ `update.json` 已生成并提交（urls = GitHub Release 资产直链单条）→ ⏳ push main + tag `v0.1.0`（等用户点头）→ ⏳ 用户在 GitHub Release 传 `penned-0.1.0.apk` → ⏳ 对着线上 raw 清单验一遍（curl + 模拟机 release 测试包）
   - **M2 遗留（可选/待定）**：①`Available` 态没有「重新检查」（清单变旧时只能重启 App 刷新——M2-8 实测发现，未改）；②托管渠道与镜像待定（urls 建议主 + 备两条）；③测试开关 `-PtestManifestUrls`/`-PtestCleartext` 默认关、只在本地闭环用（发布物不受影响）；④新 AVD **`PennedM2` 是 M2 的测试机**（装了带测试开关的 release 包，别拿它当干净环境用）
 - ~~**M2 规格**：update.json 协议 + UpdateChecker + 签名密钥生成与离线备份（**首次发版前 applicationId 终审 D013**）+ release minify 打开（D012）~~ → **已拆成上面的 M2 切片清单**；applicationId 已终审 `dev.penned.app`（D057，D013 关账）
 - **启动图标还是旧品牌色**（UI-16 顺带发现，未改）：`app/src/main/res/drawable/ic_launcher.xml` 的底色是 `#2F9E8F`（D043 之前的旧青绿），现在的品牌色是 `#0F766E`——关于页的 App 标记已用新色，桌面图标没跟上。要不要对齐、以及要不要顺手做自适应图标（前景/背景分层），等你点名。
