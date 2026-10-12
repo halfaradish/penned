@@ -4,29 +4,48 @@
 
 ## 进行中
 
-（无——**M2 应用内更新 M2-0~M2-9 已收尾**（两条闭环 + 三条负例都验过）+ **UI-16 关于页改版 / 版本回到 0.1.0 / 自动检查开关下线**已提交，见"已完成"；只剩可选的 M2-10 真实发布等你定托管渠道）
+**M3 规格草案已出，等你裁决 §五（7 条）后冻结**：`docs/specs/M3.md` —— 会员功能解锁（标签 / 退款 / 报销 / 债务 / 模板 / 周期 / 组合筛选 / 账单组合 / 资产模块 / 理财快照 / 房贷年费 / 主题 / 首页显示 / 统计设置 / 愿望清单 / 分享卡片，共 `M3-0`~`M3-17` 十八片）。**开工前请先看 §五·1~7**；点头后从 `M3-0`（schema 地基 v5→v6）起按批次推进。
+
+（M2 应用内更新与 M2-10 首次真实发布均已收尾，见「已完成」；遗留与测试坑见下方「待办 · M2 遗留与测试坑」）
 
 ## 待办
 
-- **M2 切片清单**（规格 `docs/specs/M2.md` 冻结后按序开工，每片 `build test lint` 全绿 + 独立提交）：
-  - ✅ **M2-1 依赖与权限基建**（已完成）：catalog 加 `okhttp 4.12.0`（本机缓存离线可解析）+ Manifest 加 `INTERNET` / `REQUEST_INSTALL_PACKAGES` + FileProvider（`dev.penned.app.fileprovider` → `res/xml/file_paths.xml` 暴露 `cache-path updates/`）+ debug-only `networkSecurityConfig`（只放行 `10.0.2.2` 明文）+ `buildConfig = true` 与 `UPDATE_MANIFEST_URLS`（debug → 本机假清单服务；release → GitHub raw + jsDelivr 两个候选）。**踩坑（D060）**：加依赖后 `assembleDebug` 报 `JdkImageTransform ... jlink does not exist`——VS Code 的 Gradle 扩展用 redhat.java 自带 JRE 起了守护进程，Gradle 复用守护进程只比 JVM 版本、不比 java home，AGP 就把这个没有 jlink 的 JRE 当工具链；已在 `app/build.gradle.kts` 显式钉 `java { toolchain { 17 } }`（与 compileOptions/jvmTarget 一致），并用 `-Dorg.gradle.java.home=<那个 JRE>` 反向验证过（修前必红、修后绿）
-  - ✅ **M2-2 纯逻辑**（已完成）：`UpdateManifest` 解析（org.json，未知字段容忍、必填缺失=无效）+ `statusFor` 版本比较与提示分级 + `Sha256`（流式，续传后整文件重算）+ `UpdateThrottle`（每日节流/只提示一次）+ `UpdateText`（时间/百分比/大小文案）+ `ApkSignature.sameSigners`；表驱动测试 8+3+2+2 条
-  - ✅ **M2-3 检查器**（已完成）：`HttpFetcher` 抽象 + `OkHttpFetcher`（清单 10s/15s、下载 15s/30s 两套超时）+ `UpdateChecker`（多候选地址按序回退）+ DataStore 节流键；测试 11 条（含真 OkHttp 打本地假服务：404/500、跟随重定向、连接被拒、读取超时）。**测试坑**：AGP 给 Kotlin 单测编译传 `-no-jdk`，`com.sun.net.httpserver` 编译期不可见 → 自写 `FakeHttpServer`（ServerSocket，顺带能演"传一半断开"）
-  - ✅ **M2-4 下载器**（已完成）：`UpdateDownloader` 应用内流式 + `Range` 续传（服务端忽略 Range 时从头覆盖写，不拼坏）+ 进度回调 + 整文件 sha256；`DownloadResult` 三态（Success/Incomplete 留残包/Rejected 删坏包）；测试 6 条
-  - ✅ **M2-5 安装链路**（已完成）：`PackageSignatures`（API 28+ `GET_SIGNING_CERTIFICATES`，26~27 退回 `GET_SIGNATURES`）+ `UpdateInstaller`（authority / canInstall / 未知来源设置页 / 安装 Intent）+ FileProvider 声明与 `file_paths.xml`（只暴露 `cacheDir/updates/`）；测试 7 条。**测试坑**：Robolectric 读不到 FileProvider 的 `paths` 元数据（根全匹配不上）→ content URI 生成只能真机验（已进 M2-8 点名项）
-  - ✅ **M2-6 关于/更新页 UI**（已完成）：路由 `about` + `AboutViewModel`（状态机：idle/checking/upToDate/available/downloading/verifying/ready/failed）+ `AboutScreen`/`AboutContent`（无状态入口）+ 两个可取消弹窗 + 启动自动检查挂 PennedApp 层（`LockGate` 之外，不盖锁屏）+ 「我的」页关于行改入口与真实版本号（读 BuildConfig）；截图基线 11 张（逐张过目）+ `AboutViewModelTest` 7 条（真 HTTP 假服务 + 真 DataStore，覆盖检查→下载→校验→安装与节流/只提示一次）+ 界面规范 §13·补十。**测试坑**：`preferencesDataStore` 是静态单例，同测试类各方法共用一份文件 → 节流键会串，测试先复位
-  - ✅ **M2-7 发布工程**（已完成）：`version.properties` 单一来源 + `bumpVersion`/`makeUpdateJson` 两个任务 + release 签名接线（keystore 在仓库外、参数在 local.properties）+ minify/`shrinkResources` 打开（**8.97 MiB → 2.10 MiB**，无需额外 keep 规则）+ `.gitignore` 补密钥规则 + `usesCleartextTraffic` 显式化
-  - ✅ **M2-8 闭环验证**（已完成）：debug 原地升级（GxuDev，真机数据 756/2 未动）+ release 签名闭环（新 AVD `PennedM2`，自更新 0.2.0→0.3.0）+ 三条负例（摘要不符 / debug↔release 签名互喂）+ 真机暴露的 `Failed` 死路已修（补「重新检查」）
-  - ✅ **M2-9 文档收尾**（已完成）：decisions D061~D063、界面规范 §13·补十、AGENTS 常用命令补发布两条、本看板
-  - ✅ **M2-10 首次真实发布**（2026-10-11 完成，D066：用户裁决「先用 GitHub 顶着发」，明知偏离"国内可达"与"urls ≥2"两条）：push main + tag `v0.1.0` → 用户在 GitHub Release 传 `penned-0.1.0.apk` + `update.json`（API 核对：资产 2,203,335 B 与清单 size 一字不差）→ **线上验收全过**：raw 与 jsDelivr 都能拉到正确清单（raw 实测首次超时/16s，jsDelivr 秒回——回退机制就是为此）；**重建 PennedM2**（旧机被清，android-35 本地镜像重建成干净环境）装 release 0.1.0 → 启动自动检查直打线上 → 关于页「已是最新 / 上次检查 10月11日 08:20」，手动再查 08:21 同样通过；截图 `docs/local/界面重构验证/m2_10_online_check.png`。**遗留**：①Release 标题误写成 "v1.1.0"（纯展示，网页上改）；②`github.com` 的 Release 资产直链在开发机直连超时，字节级复核靠 API 的 size 与本地 sha256 链条（同一个文件改名上传）；③0.1.0→0.2.0 的**完整下载安装闭环**留到下个版本对着线上验（M2-8 已在本地验过全链路）
-  - **M2 遗留（可选/待定）**：①`Available` 态没有「重新检查」（清单变旧时只能重启 App 刷新——M2-8 实测发现，未改）；②托管渠道与镜像待定（urls 建议主 + 备两条）；③测试开关 `-PtestManifestUrls`/`-PtestCleartext` 默认关、只在本地闭环用（发布物不受影响）；④**`PennedM2` 已于 M2-10 重建**（旧机被清）——现在是干净环境 + 无测试开关的 release 0.1.0，可当测试机用（android-35 镜像在本地，随时可删可建）
-- ~~**M2 规格**：update.json 协议 + UpdateChecker + 签名密钥生成与离线备份（**首次发版前 applicationId 终审 D013**）+ release minify 打开（D012）~~ → **已拆成上面的 M2 切片清单**；applicationId 已终审 `dev.penned.app`（D057，D013 关账）
-- **启动图标还是旧品牌色**（UI-16 顺带发现，未改）：`app/src/main/res/drawable/ic_launcher.xml` 的底色是 `#2F9E8F`（D043 之前的旧青绿），现在的品牌色是 `#0F766E`——关于页的 App 标记已用新色，桌面图标没跟上。要不要对齐、以及要不要顺手做自适应图标（前景/背景分层），等你点名。
+- **M3 切片清单**（规格 `docs/specs/M3.md`（**草案**，§五 7 条待裁决点头后冻结）；每片一个会话、独立提交、`./gradlew build test lint` 全绿）：
+  - **批次一 · 把一笔账记全（P0）**
+    - `M3-0` schema 地基（v5→v6 一次迁移）：新表 `tx_templates` / `template_tags` / `recurring_rules` / `bill_filters` / `asset_snapshots`；新列 `transactions.reimburseCents` / `recurringRuleId`、`accounts` 年费四列；`6.json` 入库 + `MIGRATION_5_6` + migration 测试
+    - `M3-1` 标签（无 schema 变更，`tags`/`transaction_tags` v1 已建）：`TagDao` + 记一笔「标签」抽屉（两级、新建即选、多选）+ 标签管理页（重命名/软删/隐藏）+ 详情页标签行
+    - `M3-2` 退款/优惠录入（M1 遗留 D057）：记一笔两个 chip + **保存净额**口径（待裁决 §五·2）+ 编辑反推幂等 + 详情页标记沿用
+    - `M3-3` 报销录入：`reimburseCents` 启用 + 「不报销」chip 改可点（三态 + 报销账户）+ 资产页报销卡改口径（缺省 0 = 按净额全额）
+    - `M3-4` 债务（**形态待裁决 §五·1**，推荐实体式）：`debts` 表（v6→v7）+ 记一笔第四 Tab + 债务列表/详情 + 净资产并入（账户净额 − 应付 + 应收）+ 负债类账户允许负初始余额
+  - **批次二 · 复用与时间（P0）**
+    - `M3-5` 模板记账：`tx_templates`/`template_tags` + 管理页 + 记一笔「模板」chip 预填 + 保存后「存为模板」
+    - `M3-6` 周期记账：规则表 + 期次推进纯函数（月末对齐）+ 生成策略（**待裁决 §五·3**，推荐"打开即补"）+ 管理页启停 + 幂等去重
+  - **批次三 · 找账与资产（P1）**
+    - `M3-7` 组合筛选 + 精准导出（关键词/类型/日期/账户/分类/标签/金额区间 + 结果导出 CSV）
+    - `M3-8` 账单组合：`bill_filters` 保存 / 应用 / 重命名 / 删除（多值条件逗号分隔 + 编解码纯函数）
+    - `M3-9` 资产模块：账户停用（`archived` 启用）+ 流水迁移账户（解 D026「有流水删不掉」）+ 自定义分组（`groupName` 启用）
+    - `M3-10` 理财快照与盈亏：`asset_snapshots` + 理财详情/记快照 + 资产页理财卡接真数据
+    - `M3-11` 分期房贷计算器（等额本息/本金，表驱动）+ 信用卡年费（账户四列 + 资产页提示，不做通知）
+  - **批次四 · 个性化与产出（P2）**
+    - `M3-12` 多主题（**范围待裁决 §五·4**：推荐只换品牌色相 4 套，分类色/语义色不动）
+    - `M3-13` 首页数据自定义（月卡汇总块勾选 + 预算块开关）
+    - `M3-14` 自定义统计（模块开关 + 顺序 + 标签/资产模块）
+    - `M3-15` 愿望清单（**形态 §五·5**；单独迁移 v7→v8）
+    - `M3-16` 数据小卡片（月汇总 / 占比 / 小票三款，Canvas→Bitmap→FileProvider 分享）
+  - **批次五 · 待裁决**
+    - `M3-17` 日历视图（**进不进 M3 见 §五·6**；进则默认不做农历/节气）
+- **M2 遗留与测试坑**（M2 切片本身已收尾，逐片细节见「已完成 · M2 应用内更新」）：
+  - `Available` 态没有「重新检查」（清单变旧只能重启 App 刷新——M2-8 真机发现，未改）
+  - 托管渠道与镜像待定：现为 GitHub 单地址顶着（D066 明知偏离两条规格线）——0.2.0 前换国内主地址 + `urls` 补足 2 条
+  - 测试坑①AGP 给 Kotlin 单测传 `-no-jdk`，`com.sun.net.httpserver` 编译期不可见 → 假服务自写 `FakeHttpServer`（ServerSocket）；②Robolectric 读不到 FileProvider 的 `paths` 元数据，content URI 只能真机验；③`preferencesDataStore` 是静态单例，同测试类各方法共用一份文件，节流键会串（测试先复位）
+  - 测试开关 `-PtestManifestUrls` / `-PtestCleartext` 默认关，只在本地闭环用（发布物不受影响）
+- ~~**M2 规格**：update.json 协议 + UpdateChecker + 签名密钥生成与离线备份（**首次发版前 applicationId 终审 D013**）+ release minify 打开（D012）~~ → **已收尾**（切片与实测见「已完成 · M2 应用内更新」，遗留见上方「M2 遗留与测试坑」）；applicationId 已终审 `dev.penned.app`（D057，D013 关账）
+- **启动图标还是旧品牌色**（UI-16 顺带发现，未改）：`app/src/main/res/drawable/ic_launcher.xml` 的底色是 `#2F9E8F`（D043 之前的旧青绿），现在的品牌色是 `#0F766E`——关于页的 App 标记已用新色，桌面图标没跟上。`M3-12` 多主题**只换品牌色相**、顺手把启动图标对齐新品牌色；要不要做自适应图标（前景/背景分层）与图标自定义（权益表 free 档）另说——都等你点名。
 - ~~首页冷启动首帧会闪一下"还没有记账"空态~~ → **已修**（UI-8：`rows` 改可空，读到账本前不渲染空态；模拟机复验首帧只显示"日常账本"）
-- 记一笔顶栏「编辑」已接通分类管理（UI-4）；「不报销」chip 改只读禁用样式（如实表达"新记为不报销"，可编辑留 M3）
-- 一木 xls 导入器不解析 地址/多币种/报销 列（真实 751 行文件这些列全空，无数据损失）——等真出现带这些列的文件再补解析（报销列还涉及 M3 的报销语义）
-- ~~日历 Tab 占位文案 "M1 第二批" 已过时~~ → **已改**（UI-6：改为"日历视图还没做，先在首页按日回看流水"）；~~日历页归属仍待 M2 规格明确~~ → **已结清**（`docs/specs/M2.md` 不做清单：日历不在 M2 范围，占位页保持，是否做留给后续里程碑裁决）
-- 首页流水行对全额退款流水显示 "-0.00"——可加「退款」小标记（详情页已有只读展示，polish）
+- 记一笔顶栏「编辑」已接通分类管理（UI-4）；「不报销」chip 现为只读禁用样式（如实表达"新记为不报销"）→ **可编辑入口在 `M3-3`**（三态 + 报销账户）
+- 一木 xls 导入器不解析 地址/多币种/报销 列（真实 751 行文件这些列全空，无数据损失）——**报销列随 M3-3 一起补**（映射到 `reimburseState`/`reimburseCents`/`reimburseAccountId`，仍需真实样本验）；地址/多币种仍等样本
+- ~~日历 Tab 占位文案 "M1 第二批" 已过时~~ → **已改**（UI-6：改为"日历视图还没做，先在首页按日回看流水"）；~~日历页归属仍待 M2 规格明确~~ → **M2 结清**（不在 M2）；**M3 里的归属 = `M3-17`，进不进 M3 由 §五·6 裁决**（进则默认不做农历/节气）
+- 首页流水行对全额退款流水显示 "-0.00"——可加「退款」小标记（详情页已有只读展示）；**随 `M3-2` 退款录入一起定**（录入后这类行会变多，标记值得做）
 - 统计页新增（AI 轮）后的待办：分类详细页流水行没有左滑删除/长按多选（设计如此：详细页只读 + 点进详情）；若希望"在分类里直接删"再补
 - 统计页的**期间聚合仍是"拉窗口流水 + Kotlin 重算"**（D004）——实测全库 754 条无压力；将来单账本上万条时，年统计/`近七日`这类窗口要考虑走 DAO 聚合（提案区候选）
 - 首页**月卡标题行只显示 `yyyy/m`，月合计在展开块里**（AF 轮用户裁决"不要标题行"，AG 轮改回标题行但仍只要 `yyyy/m`，AQ 轮把汇总搬进卡头展开块）——标题行右侧若要再放个"支 X"是另一回事；顶部已不再有单独的月汇总卡
@@ -43,7 +62,6 @@ obolectric-*`，其中两个 `robolectric-nativeruntime*` 各 40–200MB）：�
 - 界面重构新增待办：`IconGalleryTest`/`PennedSheetTest` 是人工评审用截图（非回归基线），M6 打磨图标时可复用
 - M1 引入 Roborazzi gradle 插件，把"每次测试都重录截图"改为 record/verify 双任务（D018）
 - 升级 robolectric >4.17 时回归试 `@Config(sdk=[36])`（D016）
-- **M2 规格**：update.json 协议 + UpdateChecker + 签名密钥生成与离线备份（**首次发版前 applicationId 终审 D013**）+ release minify 打开（D012）
 - M5 提案候选：CSV 目前是「当前账本流水级备份」（带 id），全实体（账本/分类/账户）无损备份留给离线备份设计时统一考虑
 
 ## 复查结论（2026-10-06）
@@ -110,11 +128,11 @@ obolectric-*`，其中两个 `robolectric-nativeruntime*` 各 40–200MB）：�
 
 ### 后续提案候选（本轮明确不做）
 
-- 账户停用/归档、把流水迁移到另一个账户（有流水的账户目前删不掉，出路在 M3 资产模块）
+- ~~账户停用/归档、把流水迁移到另一个账户（有流水的账户目前删不掉）~~ → **已进 M3 规格**：`M3-9`（`accounts.archived` 与 `groupName` 列 v1 就有，零迁移）
 - 新建账户大类（充值账户/二手货物…）、自选头像颜色与图标（要扩枚举或加 accounts 列）
 - 参考图里我们没做的表单行：简称、卡号、账户图标/夜间图标、收益同步、计入总资产（各自都要新列或新语义；「计入总资产」还牵动 D004 的重算口径）
 - 把账户**移出**所属账本（= 迁移账户归属，是另一件事；现在所属账本恒定可见且不可取消勾选）
-- 初始余额不支持负数（信贷/负债的存量欠款暂时只能记 0）；要支持得先定"欠款怎么输入"的交互或键盘方案
+- ~~初始余额不支持负数~~（信贷/负债的存量欠款暂时只能记 0）→ **已进 M3 规格**：`M3-4` 放开 `DEBT`/`CREDIT` 两类账户的负初始余额（"欠款怎么输入"= 余额框直接输 `-1200`）
 - **动效候选（AP 轮明确不做）**：预测性返回手势（`PredictiveBackHandler`，返回手势拖到一半能看见下页跟着走）、共享元素转场（分类头像/标题从列表 morph 到详情页）、**记一笔改从底部升起的模态**（现在是和别的下钻页一样的右推入）、**Tab 之间跟手横滑**（现在固定淡入淡出）；另有"转场时长/视差比例做成可调设置项"这一档（现在写死在 `MotionSpec`）
 
 ## 已完成
