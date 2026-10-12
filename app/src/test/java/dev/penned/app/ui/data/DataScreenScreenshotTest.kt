@@ -32,6 +32,7 @@ class DataScreenScreenshotTest {
                 MineScreen(
                     onOpenDataManagement = {},
                     onOpenCategories = {},
+                    onOpenTags = {},
                     onOpenPinLock = {},
                     onOpenAbout = {},
                 )

@@ -2,9 +2,11 @@ package dev.penned.app.ui.add
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import dev.penned.app.PennedApplication
 import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.data.db.entity.CategoryEntity
+import dev.penned.app.data.db.entity.TagEntity
 import dev.penned.app.data.db.entity.TransactionEntity
 import dev.penned.app.domain.AddDate
 import dev.penned.app.domain.CategoryType
@@ -50,6 +52,9 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
         private set
     var note = MutableStateFlow("")
         private set
+    /** 本笔选中的标签 id（多选，M3-1）。 */
+    var selectedTagIds = MutableStateFlow<Set<String>>(emptySet())
+        private set
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val currentBook = db.bookDao().observeAll()
@@ -71,6 +76,55 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
             if (book == null) flowOf(emptyList()) else db.accountDao().observeByBook(book.id)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val allTags: StateFlow<List<TagEntity>> = currentBook
+        .flatMapLatest { book ->
+            if (book == null) flowOf(emptyList()) else db.tagDao().observeByBook(book.id)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * 记账宫格可见的分类（M3-1 分类隐藏）：隐藏的分类不进选择器，**隐藏的一级分类连它的子树一起收起来**
+     * （父格都不画了，二级没有入口）；但**本笔已选中的那一个（及其父级）要留着**——否则编辑一条用隐藏分类
+     * 记的流水时，宫格显示不出所属分类、[saveInternal] 也查不到它（UI-13 同型坑）。
+     */
+    val selectableCategories: StateFlow<List<CategoryEntity>> =
+        combine(categories, selectedCategoryId) { all, selectedId ->
+            val hiddenIds = all.filter { it.hidden }.map { it.id }.toSet()
+            val keep = buildSet {
+                selectedId?.let { id ->
+                    all.firstOrNull { it.id == id }?.let { c ->
+                        add(c.id)
+                        c.parentId?.let { add(it) }
+                    }
+                }
+            }
+            all.filter { c ->
+                c.id in keep || (!c.hidden && (c.parentId == null || c.parentId !in hiddenIds))
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * 标签选择器可见的标签：隐藏的不出现，**隐藏的一级标签连它的子树一起收起来**（父 chip 都不画了，
+     * 二级没有入口——与分类同一口径，模拟机走查时发现"只有二级可见"会让它无处显示）；
+     * 本笔已选中的（及其父级）一律保留。
+     */
+    val selectableTags: StateFlow<List<TagEntity>> =
+        combine(allTags, selectedTagIds) { all, selected ->
+            val hiddenIds = all.filter { it.hidden }.map { it.id }.toSet()
+            val keep = buildSet {
+                selected.forEach { id ->
+                    all.firstOrNull { it.id == id }?.let { t ->
+                        add(t.id)
+                        t.parentId?.let { add(it) }
+                    }
+                }
+            }
+            all.filter { t ->
+                t.id in keep || (!t.hidden && (t.parentId == null || t.parentId !in hiddenIds))
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val canSave: StateFlow<Boolean> = combine(
         amountText, selectedCategoryId, type, transferFromId, transferToId,
@@ -109,6 +163,8 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
             feeText.value = if (tx.feeCents > 0) Money.format(tx.feeCents, grouped = false) else ""
             note.value = tx.note.orEmpty()
             dateEpochDay.value = AddDate.dayFromMinute(tx.dateEpochMinute)
+            // 标签引用直查关系表（`allTags` 与 `categories` 同病：WhileSubscribed 的 stateIn 在刚开页时是空表）
+            selectedTagIds.value = db.tagDao().tagsForTx(id).map { it.id }.toSet()
         }
     }
 
@@ -198,6 +254,35 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
         note.value = text
     }
 
+    /** 多选：点一下切换选中（M3-1 标签抽屉）。 */
+    fun toggleTag(id: String) {
+        val current = selectedTagIds.value
+        selectedTagIds.value = if (id in current) current - id else current + id
+    }
+
+    /** 记一笔里新建标签并直接选中（M3-1；parentId 为空 = 新增一级标签）。 */
+    fun addTagAndSelect(name: String, parentId: String?) {
+        viewModelScope.launch {
+            val trimmed = name.trim()
+            if (trimmed.isEmpty()) return@launch
+            val book = currentBook.value ?: return@launch
+            val siblings = db.tagDao().allInBook(book.id).filter { it.parentId == parentId }
+            val now = System.currentTimeMillis()
+            val tag = TagEntity(
+                id = UUID.randomUUID().toString(),
+                bookId = book.id,
+                parentId = parentId,
+                name = trimmed,
+                sortOrder = siblings.size,
+                createdAt = now,
+                updatedAt = now,
+                deviceId = app.deviceId,
+            )
+            db.tagDao().upsert(tag)
+            selectedTagIds.value = selectedTagIds.value + tag.id
+        }
+    }
+
     private fun effectiveCents(expr: String): Long? {
         val cents = if (MoneyExpression.hasPendingOperator(expr)) {
             MoneyExpression.evaluate(expr)
@@ -271,7 +356,16 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
         // 本页管不着的字段一律原样保留（重建实体曾把它们全部重置——复查 P0 bug）。
         val tx = original?.let { TxEdit.applyEdit(it, editable, now, app.deviceId) }
             ?: TxEdit.newTransaction(book.id, editable, now, app.deviceId)
-        db.transactionDao().upsert(tx)
+        // 流水与标签关系一次提交（单事务）：否则"保存了流水、标签还没写"之间有半成品窗口，
+        // 首页列表会先冒出一条没有标签的行（测试也抓到过这个竞态）
+        db.withTransaction {
+            db.transactionDao().upsert(tx)
+            // 转账信息条没有标签 chip，所以保存转账时不动已有关系——
+            // 外部来源（将来的导入/同步）若给转账带了标签，不该被本页静默清掉。
+            if (tx.type != TxType.TRANSFER) {
+                db.tagDao().setTagsForTx(tx.id, selectedTagIds.value.toList())
+            }
+        }
         return true
     }
 

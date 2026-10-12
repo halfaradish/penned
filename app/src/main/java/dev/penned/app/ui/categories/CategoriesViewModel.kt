@@ -63,12 +63,15 @@ class CategoriesViewModel(private val app: PennedApplication) : ViewModel() {
         }
     }
 
-    fun rename(id: String, newName: String) {
+    /** 重命名 + 隐藏一次保存（编辑弹窗的「保存」；M3-1 起含隐藏，D074）。 */
+    fun saveCategory(id: String, newName: String, hidden: Boolean) {
         viewModelScope.launch {
             val trimmed = newName.trim()
             if (trimmed.isEmpty()) return@launch
             val original = db.categoryDao().get(id) ?: return@launch
-            db.categoryDao().upsert(original.copy(name = trimmed, updatedAt = System.currentTimeMillis()))
+            db.categoryDao().upsert(
+                original.copy(name = trimmed, hidden = hidden, updatedAt = System.currentTimeMillis())
+            )
         }
     }
 

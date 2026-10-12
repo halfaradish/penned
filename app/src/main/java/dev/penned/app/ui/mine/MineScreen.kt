@@ -30,6 +30,7 @@ private val ROW_DIVIDER_INDENT = 64.dp
 fun MineScreen(
     onOpenDataManagement: () -> Unit,
     onOpenCategories: () -> Unit,
+    onOpenTags: () -> Unit,
     onOpenPinLock: () -> Unit,
     onOpenAbout: () -> Unit,
     modifier: Modifier = Modifier,
@@ -73,9 +74,16 @@ fun MineScreen(
             PennedDivider(startIndent = ROW_DIVIDER_INDENT)
             PennedListRow(
                 title = "分类管理",
-                subtitle = "新增 / 重命名 / 删除支出与收入分类",
+                subtitle = "新增 / 重命名 / 隐藏 / 删除支出与收入分类",
                 leadingIcon = PennedIcons.Tag,
                 onClick = onOpenCategories,
+            )
+            PennedDivider(startIndent = ROW_DIVIDER_INDENT)
+            PennedListRow(
+                title = "标签管理",
+                subtitle = "两级标签 · 隐藏不用的标签",
+                leadingIcon = PennedIcons.Tag,
+                onClick = onOpenTags,
             )
         }
 

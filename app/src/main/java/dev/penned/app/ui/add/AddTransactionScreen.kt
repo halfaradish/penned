@@ -48,6 +48,7 @@ import dev.penned.app.ui.components.PennedDialog
 import dev.penned.app.ui.components.PennedListRow
 import dev.penned.app.ui.components.PennedSegmentedTabs
 import dev.penned.app.ui.components.PennedSheet
+import dev.penned.app.ui.components.TagCreateDialog
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
@@ -78,8 +79,11 @@ fun AddTransactionScreen(
     val fromId by viewModel.transferFromId.collectAsStateWithLifecycle()
     val toId by viewModel.transferToId.collectAsStateWithLifecycle()
     val feeText by viewModel.feeText.collectAsStateWithLifecycle()
-    val categories by viewModel.categories.collectAsStateWithLifecycle()
+    // 记账宫格用"可见分类"（隐藏分类不进选择器；本笔已选中的那个保留，M3-1）
+    val categories by viewModel.selectableCategories.collectAsStateWithLifecycle()
     val accounts by viewModel.accounts.collectAsStateWithLifecycle()
+    val tags by viewModel.selectableTags.collectAsStateWithLifecycle()
+    val selectedTagIds by viewModel.selectedTagIds.collectAsStateWithLifecycle()
     val canSave by viewModel.canSave.collectAsStateWithLifecycle()
     val showEquals by viewModel.showEquals.collectAsStateWithLifecycle()
     val dateEpochDay by viewModel.dateEpochDay.collectAsStateWithLifecycle()
@@ -113,12 +117,16 @@ fun AddTransactionScreen(
         accounts = accounts,
         parents = parents,
         expandedSubs = expandedSubs,
+        tags = tags,
+        selectedTagIds = selectedTagIds,
         onSelectType = viewModel::selectType,
         onKey = viewModel::pressKey,
         onSelectParent = { viewModel.selectParent(it.id, it.hasSubs) },
         onSelectSub = { viewModel.selectSub(it.id) },
         onNoteChange = viewModel::setNote,
         onPickAccount = viewModel::pickAccount,
+        onToggleTag = viewModel::toggleTag,
+        onCreateTag = { name, parentId -> viewModel.addTagAndSelect(name, parentId) },
         onPickFrom = viewModel::pickTransferFrom,
         onPickTo = viewModel::pickTransferTo,
         onSwap = viewModel::swapTransfer,
@@ -154,6 +162,8 @@ fun AddTransactionContent(
     accounts: List<AccountEntity>,
     parents: List<CategoryUi>,
     expandedSubs: List<CategoryUi>,
+    tags: List<dev.penned.app.data.db.entity.TagEntity> = emptyList(),
+    selectedTagIds: Set<String> = emptySet(),
     onSelectType: (TxType) -> Unit,
     onKey: (String) -> Unit,
     onSelectParent: (CategoryUi) -> Unit,
@@ -163,6 +173,8 @@ fun AddTransactionContent(
     onPickFrom: (String?) -> Unit,
     onPickTo: (String?) -> Unit,
     onSwap: () -> Unit,
+    onToggleTag: (String) -> Unit = {},
+    onCreateTag: (name: String, parentId: String?) -> Unit = { _, _ -> },
     onFeeChange: (String) -> Unit,
     onPickDate: (Long?) -> Unit = {},
     onAddCategory: (name: String, parentId: String?) -> Unit = { _, _ -> },
@@ -181,6 +193,8 @@ fun AddTransactionContent(
     var showDatePicker by remember { mutableStateOf(false) }
     var showAddCategory by remember { mutableStateOf(false) }
     var addCategoryParent by remember { mutableStateOf<String?>(null) }
+    var showTagPicker by remember { mutableStateOf(false) }
+    var showTagCreate by remember { mutableStateOf(false) }
     val amountColor = when (type) {
         TxType.EXPENSE -> expenseColor()
         TxType.INCOME -> incomeColor()
@@ -334,6 +348,13 @@ fun AddTransactionContent(
                         )
                     }
                     if (type != TxType.TRANSFER) {
+                        // 标签（M3-1）：多选；信息条只回显数量，明细在抽屉里
+                        PennedChip(
+                            label = if (selectedTagIds.isEmpty()) "标签" else "标签 · ${selectedTagIds.size}",
+                            icon = PennedIcons.Tag,
+                            selected = selectedTagIds.isNotEmpty(),
+                            onClick = { showTagPicker = true },
+                        )
                         // 报销状态是 M3 的编辑能力，这里保持只读语义（新记为"不报销"）
                         PennedChip(label = "不报销", icon = PennedIcons.Info, enabled = false)
                     }
@@ -433,6 +454,29 @@ fun AddTransactionContent(
         ) {
             androidx.compose.material3.DatePicker(state = pickerState, title = { Text("选择记账日期", modifier = Modifier.padding(PennedSpacing.lg)) })
         }
+    }
+    if (showTagPicker) {
+        TagPickerSheet(
+            tags = tags,
+            selectedIds = selectedTagIds,
+            onToggle = onToggleTag,
+            // 新建走独立弹窗（不在抽屉里再套一层）：先收抽屉，建完即选中、回到表单
+            onCreateRequest = {
+                showTagPicker = false
+                showTagCreate = true
+            },
+            onDismiss = { showTagPicker = false },
+        )
+    }
+    if (showTagCreate) {
+        TagCreateDialog(
+            parents = tags.filter { it.parentId == null }.sortedBy { it.sortOrder },
+            onConfirm = { name, parentId ->
+                onCreateTag(name, parentId)
+                showTagCreate = false
+            },
+            onDismiss = { showTagCreate = false },
+        )
     }
 }
 

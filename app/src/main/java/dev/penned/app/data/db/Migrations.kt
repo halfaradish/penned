@@ -131,3 +131,15 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
         db.execSQL("CREATE INDEX IF NOT EXISTS `index_debts_bookId` ON `debts` (`bookId`)")
     }
 }
+
+/**
+ * v6→v7：分类加 `hidden`（M3-1，D074）。
+ *
+ * 规格原本以为这是 v1 就留的字段——实际**从没有过**（1~6.json 都没有），所以由本片真加一列。
+ * 默认 0 = 现有分类全部照旧可见（隐藏只是"不再出现在记账宫格与筛选"，历史流水照常显示）。
+ */
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE categories ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0")
+    }
+}

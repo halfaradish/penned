@@ -33,7 +33,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -63,28 +62,33 @@ data class DetailUi(
     val accountName: String?,
     val targetAccountName: String?,
     val bookName: String,
+    /** 标签名（M3-1），详情页「标签」行按 `·` 连接展示。 */
+    val tagNames: List<String> = emptyList(),
 )
 
 class DetailViewModel(app: PennedApplication, txId: String) : ViewModel() {
 
     private val db = app.database
 
-    val state: StateFlow<DetailUi?> = db.transactionDao().observeById(txId)
-        .map { tx ->
-            tx ?: return@map null
-            val category = tx.categoryId?.let { db.categoryDao().get(it) }
-            val account = tx.accountId?.let { db.accountDao().get(it) }
-            val target = tx.targetAccountId?.let { db.accountDao().get(it) }
-            val book = db.bookDao().get(tx.bookId)
-            DetailUi(
-                tx = tx,
-                categoryName = category?.name,
-                categoryParentName = category?.parentId?.let { pid -> db.categoryDao().get(pid)?.name },
-                accountName = account?.name,
-                targetAccountName = target?.name,
-                bookName = book?.name ?: "",
-            )
-        }
+    val state: StateFlow<DetailUi?> = combine(
+        db.transactionDao().observeById(txId),
+        db.tagDao().observeTagsForTx(txId),
+    ) { tx, tags ->
+        tx ?: return@combine null
+        val category = tx.categoryId?.let { db.categoryDao().get(it) }
+        val account = tx.accountId?.let { db.accountDao().get(it) }
+        val target = tx.targetAccountId?.let { db.accountDao().get(it) }
+        val book = db.bookDao().get(tx.bookId)
+        DetailUi(
+            tx = tx,
+            categoryName = category?.name,
+            categoryParentName = category?.parentId?.let { pid -> db.categoryDao().get(pid)?.name },
+            accountName = account?.name,
+            targetAccountName = target?.name,
+            bookName = book?.name ?: "",
+            tagNames = tags.map { it.name },
+        )
+    }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun setExcludeStats(value: Boolean) = update { it.copy(excludeFromStats = value) }
@@ -215,6 +219,10 @@ fun DetailContent(
                 DetailRow("账单日期", formatMinute(d.tx.dateEpochMinute))
                 PennedDivider()
                 DetailRow("备注", d.tx.note ?: "无")
+                if (d.tagNames.isNotEmpty()) {
+                    PennedDivider()
+                    DetailRow("标签", d.tagNames.joinToString(" · "))
+                }
                 if (d.tx.type != TxType.TRANSFER) {
                     PennedDivider()
                     DetailRow("账户", d.accountName ?: "无账户")

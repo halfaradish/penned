@@ -76,6 +76,8 @@ import dev.penned.app.ui.stats.StatsScreen
 import dev.penned.app.ui.stats.categoryDetailRoute
 import dev.penned.app.ui.stats.StatsViewModel
 import dev.penned.app.ui.stub.StubScreen
+import dev.penned.app.ui.tags.TagsScreen
+import dev.penned.app.ui.tags.TagsViewModel
 
 /** 首页提示条的一次性消息键（保存完成后由记一笔页写进首页的 savedStateHandle）。 */
 private const val HOME_FLASH_KEY = "home-flash"
@@ -275,6 +277,12 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                 )
                 CategoriesScreen(viewModel = vm, onBack = { navController.popBackStack() })
             }
+            composable("tags") {
+                val vm: TagsViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+                    initializer = { TagsViewModel(app) },
+                )
+                TagsScreen(viewModel = vm, onBack = { navController.popBackStack() })
+            }
             composable("pin") {
                 val vm: PinViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
                     initializer = { PinViewModel(app) },
@@ -285,6 +293,7 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                 MineScreen(
                     onOpenDataManagement = { navController.navigate("data") },
                     onOpenCategories = { navController.navigate("categories") },
+                    onOpenTags = { navController.navigate("tags") },
                     onOpenPinLock = { navController.navigate("pin") },
                     onOpenAbout = { navController.navigate("about") },
                 )

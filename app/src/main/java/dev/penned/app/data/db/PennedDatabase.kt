@@ -10,6 +10,7 @@ import dev.penned.app.data.db.dao.BookDao
 import dev.penned.app.data.db.dao.BudgetDao
 import dev.penned.app.data.db.dao.CategoryDao
 import dev.penned.app.data.db.dao.ImportBatchDao
+import dev.penned.app.data.db.dao.TagDao
 import dev.penned.app.data.db.dao.TransactionDao
 import dev.penned.app.data.db.entity.AccountBookRefEntity
 import dev.penned.app.data.db.entity.AccountEntity
@@ -47,7 +48,7 @@ import dev.penned.app.data.db.entity.TxTemplateEntity
         AssetSnapshotEntity::class,
         DebtEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -58,10 +59,13 @@ abstract class PennedDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao
     abstract fun importBatchDao(): ImportBatchDao
     abstract fun budgetDao(): BudgetDao
+    abstract fun tagDao(): TagDao
 
     companion object {
         /** 全部迁移。生产构建与 migration 测试共用这一份，测试不会漏掉新迁移。 */
-        val MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+        val MIGRATIONS = arrayOf(
+            MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
+        )
 
         fun build(context: Context): PennedDatabase =
             Room.databaseBuilder(context, PennedDatabase::class.java, "penned.db")

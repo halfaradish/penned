@@ -29,6 +29,10 @@ interface CategoryDao {
     @Query("UPDATE categories SET deleted = 1, updatedAt = :now WHERE id = :id")
     suspend fun softDelete(id: String, now: Long)
 
+    /** 隐藏/取消隐藏（M3-1）：只影响记账宫格与筛选里的可见性，历史流水与统计口径不变。 */
+    @Query("UPDATE categories SET hidden = :hidden, updatedAt = :now WHERE id = :id")
+    suspend fun setHidden(id: String, hidden: Boolean, now: Long)
+
     @Query("UPDATE categories SET deleted = 1, updatedAt = :now WHERE bookId = :bookId")
     suspend fun softDeleteByBook(bookId: String, now: Long)
 }

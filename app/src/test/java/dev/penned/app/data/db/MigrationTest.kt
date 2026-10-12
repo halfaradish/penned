@@ -258,6 +258,38 @@ class MigrationTest {
     }
 
     @Test
+    fun `migrate 6 to 7 adds category hidden column with default visible`() {
+        createLegacyDatabase(6) { db ->
+            db.execSQL(
+                "INSERT INTO books (id, name, sortOrder, createdAt, updatedAt, deleted, deviceId) " +
+                    "VALUES ('b1', '测试账本', 0, 1, 1, 0, 'd')"
+            )
+            db.execSQL(
+                "INSERT INTO categories (id, bookId, parentId, name, type, sortOrder, iconKey, createdAt, " +
+                    "updatedAt, deleted, deviceId) " +
+                    "VALUES ('c1', 'b1', NULL, '食品餐饮', 'EXPENSE', 0, NULL, 1, 1, 0, 'd')"
+            )
+        }
+        val real = Room.databaseBuilder(context, PennedDatabase::class.java, dbName)
+            .addMigrations(*PennedDatabase.MIGRATIONS)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            runTest {
+                // 旧数据保留，且默认可见（隐藏是"用户主动收起来"，迁移不该悄悄藏掉任何分类）
+                val category = real.categoryDao().get("c1")!!
+                assertEquals("食品餐饮", category.name)
+                assertFalse(category.hidden)
+                // 新列可写可读
+                real.categoryDao().setHidden("c1", hidden = true, now = 2L)
+                assertTrue(real.categoryDao().get("c1")!!.hidden)
+            }
+        } finally {
+            real.close()
+        }
+    }
+
+    @Test
     fun `seed still works on fresh v2 database`() = runTest {
         val db = Room.inMemoryDatabaseBuilder(context, PennedDatabase::class.java)
             .allowMainThreadQueries()

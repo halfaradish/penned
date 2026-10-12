@@ -1,5 +1,6 @@
 package dev.penned.app.data.db.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -15,6 +16,11 @@ data class CategoryEntity(
     val type: CategoryType,
     val sortOrder: Int = 0,
     val iconKey: String? = null,
+    /**
+     * 隐藏（M3-1，D074）：不出现在记账宫格与筛选里，**已记账的流水仍照常显示**。
+     * 与软删 [deleted] 的区别：隐藏只是"不再用"，历史数据与统计口径一律不变。
+     */
+    @ColumnInfo(defaultValue = "0") val hidden: Boolean = false,
     val createdAt: Long,
     val updatedAt: Long,
     val deleted: Boolean = false,

@@ -58,6 +58,7 @@ import dev.penned.app.ui.components.PennedButtonVariant
 import dev.penned.app.ui.components.PennedChip
 import dev.penned.app.ui.components.PennedDialog
 import dev.penned.app.ui.components.PennedSectionHeader
+import dev.penned.app.ui.components.PennedSwitchRow
 import dev.penned.app.ui.components.PennedTextAction
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
@@ -134,8 +135,8 @@ fun CategoriesScreen(
     editTarget?.let { target ->
         EditCategoryDialog(
             category = target,
-            onRename = { newName ->
-                viewModel.rename(target.id, newName)
+            onSave = { newName, hidden ->
+                viewModel.saveCategory(target.id, newName, hidden)
                 editTarget = null
             },
             onDelete = {
@@ -163,6 +164,11 @@ private fun CategoryRow(
         CategoryAvatar(parent.name, size = PennedDimens.iconTile)
         Spacer(Modifier.width(PennedSpacing.md))
         Text(parent.name, style = PennedTextStyles.rowTitle, modifier = Modifier.weight(1f))
+        if (parent.hidden) {
+            // 隐藏的分类仍在管理页里可见可改（只是不进记账宫格与筛选）
+            PennedBadge(text = "已隐藏")
+            Spacer(Modifier.width(PennedSpacing.sm))
+        }
         if (subs.isEmpty()) {
             Text(
                 "点击编辑",
@@ -253,18 +259,27 @@ private fun CategoryNameField(name: String, onNameChange: (String) -> Unit) {
 @Composable
 private fun EditCategoryDialog(
     category: CategoryEntity,
-    onRename: (String) -> Unit,
+    onSave: (name: String, hidden: Boolean) -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     var name by remember { mutableStateOf(category.name) }
+    var hidden by remember { mutableStateOf(category.hidden) }
     PennedDialog(
         onDismiss = onDismiss,
         title = "编辑分类",
         confirmEnabled = name.isNotBlank(),
-        onConfirm = { onRename(name) },
+        onConfirm = { onSave(name, hidden) },
     ) {
         CategoryNameField(name = name, onNameChange = { name = it })
+        Spacer(Modifier.height(PennedSpacing.sm))
+        // 隐藏（M3-1）：只是"不再出现在记账宫格与筛选"，已记账的流水照常显示——与软删是两回事
+        PennedSwitchRow(
+            title = "隐藏",
+            subtitle = "不出现在记账宫格与筛选里",
+            checked = hidden,
+            onCheckedChange = { hidden = it },
+        )
         Spacer(Modifier.height(PennedSpacing.md))
         PennedButton(text = "删除分类", onClick = onDelete, variant = PennedButtonVariant.Danger)
     }

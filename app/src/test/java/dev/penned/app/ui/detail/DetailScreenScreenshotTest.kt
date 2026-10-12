@@ -49,13 +49,14 @@ class DetailScreenScreenshotTest {
         deviceId = "device-1",
     )
 
-    private fun ui(tx: TransactionEntity) = DetailUi(
+    private fun ui(tx: TransactionEntity, tagNames: List<String> = emptyList()) = DetailUi(
         tx = tx,
         categoryName = "食品餐饮",
         categoryParentName = null,
         accountName = null,
         targetAccountName = null,
         bookName = "日常账本",
+        tagNames = tagNames,
     )
 
     @androidx.compose.runtime.Composable
@@ -114,10 +115,27 @@ class DetailScreenScreenshotTest {
     }
 
     @Test
+    fun captureDetailWithTags() {
+        // 标签行（M3-1）：多个标签用 `·` 连接；没有标签时这一行不出现（见 capturePlainDetailHasNoRefundRows）
+        composeRule.setContent {
+            PennedTheme {
+                DetailContent(
+                    detail = ui(row(amountCents = 1600, note = "北苑餐厅"), tagNames = listOf("出差", "交通")),
+                    onEdit = {}, onDelete = {}, onToggleStats = {}, onToggleBudget = {}, onBack = {},
+                )
+            }
+        }
+        composeRule.onNodeWithText("标签").assertIsDisplayed()
+        composeRule.onNodeWithText("出差 · 交通").assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m3_detail_with_tags.png")
+    }
+
+    @Test
     fun capturePlainDetailHasNoRefundRows() {
         composeRule.setContent { PennedTheme { content(row(amountCents = 1600, note = "北苑餐厅")) } }
         composeRule.onNodeWithText("退款").assertDoesNotExist()
         composeRule.onNodeWithText("优惠").assertDoesNotExist()
+        composeRule.onNodeWithText("标签").assertDoesNotExist()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_detail_plain.png")
     }
 }

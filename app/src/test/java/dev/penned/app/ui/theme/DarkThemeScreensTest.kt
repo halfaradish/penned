@@ -37,6 +37,8 @@ import dev.penned.app.ui.home.HomeGroups
 import dev.penned.app.ui.stats.StatsContent
 import dev.penned.app.ui.lock.LockScreen
 import dev.penned.app.ui.mine.MineScreen
+import dev.penned.app.ui.tags.TagsScreen
+import dev.penned.app.ui.tags.TagsViewModel
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -149,6 +151,7 @@ class DarkThemeScreensTest {
             MineScreen(
                 onOpenDataManagement = {},
                 onOpenCategories = {},
+                onOpenTags = {},
                 onOpenPinLock = {},
                 onOpenAbout = {},
             )
@@ -191,6 +194,15 @@ class DarkThemeScreensTest {
         dark { CategoriesScreen(viewModel, onBack = {}) }
         composeRule.onNodeWithText("支出分类").assertIsDisplayed()
         capture("categories")
+    }
+
+    @Test
+    fun darkTags() {
+        val app = ApplicationProvider.getApplicationContext<PennedApplication>()
+        val viewModel = TagsViewModel(app)
+        dark { TagsScreen(viewModel, onBack = {}) }
+        composeRule.onNodeWithText("标签管理").assertIsDisplayed()
+        capture("tags")
     }
 
     @Test
