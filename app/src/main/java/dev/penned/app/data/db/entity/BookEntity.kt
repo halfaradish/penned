@@ -1,5 +1,6 @@
 package dev.penned.app.data.db.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -35,6 +36,13 @@ data class AccountEntity(
      * false（默认，也是迁移前所有老账户的行为）= 只在 [bookId] 所属账本 + [AccountBookRefEntity] 里勾选的账本可见。
      */
     val scopeAllBooks: Boolean = false,
+    /** 信用卡年费金额（M3-11）；0 = 没设年费。 */
+    @ColumnInfo(defaultValue = "0") val annualFeeCents: Long = 0,
+    /** 年费收费月/日（1~12 / 1~31，可空 = 未设）。 */
+    val feeMonth: Int? = null,
+    val feeDay: Int? = null,
+    /** 最近一次标记"已记年费"的年份（M3-11）；null = 从没标记过，到期判定只在打开资产页时做。 */
+    val lastFeePaidYear: Int? = null,
     val createdAt: Long,
     val updatedAt: Long,
     val deleted: Boolean = false,

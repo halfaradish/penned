@@ -13,14 +13,20 @@ import dev.penned.app.data.db.dao.ImportBatchDao
 import dev.penned.app.data.db.dao.TransactionDao
 import dev.penned.app.data.db.entity.AccountBookRefEntity
 import dev.penned.app.data.db.entity.AccountEntity
+import dev.penned.app.data.db.entity.AssetSnapshotEntity
 import dev.penned.app.data.db.entity.AttachmentEntity
+import dev.penned.app.data.db.entity.BillFilterEntity
 import dev.penned.app.data.db.entity.BookEntity
 import dev.penned.app.data.db.entity.BudgetEntity
 import dev.penned.app.data.db.entity.CategoryEntity
+import dev.penned.app.data.db.entity.DebtEntity
 import dev.penned.app.data.db.entity.ImportBatchEntity
+import dev.penned.app.data.db.entity.RecurringRuleEntity
 import dev.penned.app.data.db.entity.TagEntity
+import dev.penned.app.data.db.entity.TemplateTagRefEntity
 import dev.penned.app.data.db.entity.TransactionEntity
 import dev.penned.app.data.db.entity.TransactionTagRefEntity
+import dev.penned.app.data.db.entity.TxTemplateEntity
 
 @Database(
     entities = [
@@ -34,8 +40,14 @@ import dev.penned.app.data.db.entity.TransactionTagRefEntity
         AttachmentEntity::class,
         BudgetEntity::class,
         ImportBatchEntity::class,
+        TxTemplateEntity::class,
+        TemplateTagRefEntity::class,
+        RecurringRuleEntity::class,
+        BillFilterEntity::class,
+        AssetSnapshotEntity::class,
+        DebtEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -48,9 +60,12 @@ abstract class PennedDatabase : RoomDatabase() {
     abstract fun budgetDao(): BudgetDao
 
     companion object {
+        /** 全部迁移。生产构建与 migration 测试共用这一份，测试不会漏掉新迁移。 */
+        val MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+
         fun build(context: Context): PennedDatabase =
             Room.databaseBuilder(context, PennedDatabase::class.java, "penned.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(*MIGRATIONS)
                 .build()
     }
 }

@@ -3,6 +3,8 @@ package dev.penned.app.data.db
 import androidx.room.TypeConverter
 import dev.penned.app.domain.AccountType
 import dev.penned.app.domain.CategoryType
+import dev.penned.app.domain.DebtDirection
+import dev.penned.app.domain.RecurringPeriod
 import dev.penned.app.domain.ReimburseState
 import dev.penned.app.domain.TxSource
 import dev.penned.app.domain.TxType
@@ -22,4 +24,10 @@ class Converters {
 
     @TypeConverter fun txSourceToString(v: TxSource): String = v.name
     @TypeConverter fun stringToTxSource(s: String): TxSource = TxSource.valueOf(s)
+
+    @TypeConverter fun recurringPeriodToString(v: RecurringPeriod): String = v.name
+    @TypeConverter fun stringToRecurringPeriod(s: String): RecurringPeriod = RecurringPeriod.valueOf(s)
+
+    @TypeConverter fun debtDirectionToString(v: DebtDirection): String = v.name
+    @TypeConverter fun stringToDebtDirection(s: String): DebtDirection = DebtDirection.valueOf(s)
 }

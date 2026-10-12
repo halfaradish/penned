@@ -14,7 +14,10 @@ import dev.penned.app.domain.TxType
  */
 @Entity(
     tableName = "transactions",
-    indices = [Index("bookId"), Index("dateEpochMinute"), Index("categoryId"), Index("accountId"), Index("importBatchId")],
+    indices = [
+        Index("bookId"), Index("dateEpochMinute"), Index("categoryId"), Index("accountId"),
+        Index("importBatchId"), Index("recurringRuleId"), Index("debtId"),
+    ],
 )
 data class TransactionEntity(
     @PrimaryKey val id: String,
@@ -46,6 +49,12 @@ data class TransactionEntity(
     @ColumnInfo(defaultValue = "MANUAL") val source: TxSource = TxSource.MANUAL,
     /** 所属导入批次（v3）；手动记账为 null。 */
     val importBatchId: String? = null,
+    /** 报销金额（M3-3）：0 = 按流水净额全额报销（D008 的口径，资产页"可报/已报"按它 CASE 求和）。 */
+    @ColumnInfo(defaultValue = "0") val reimburseCents: Long = 0,
+    /** 周期记账生成时归属的规则（M3-6）；手动记账为 null。 */
+    val recurringRuleId: String? = null,
+    /** 债务资金流水归属的债务（D068）；手动记账为 null。 */
+    val debtId: String? = null,
     val creatorDeviceId: String,
     val createdAt: Long,
     val updatedAt: Long,

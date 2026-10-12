@@ -71,7 +71,7 @@ class MigrationTest {
             )
         }
         val real = Room.databaseBuilder(context, PennedDatabase::class.java, dbName)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(*PennedDatabase.MIGRATIONS)
             .allowMainThreadQueries()
             .build()
         try {
@@ -112,7 +112,7 @@ class MigrationTest {
             )
         }
         val real = Room.databaseBuilder(context, PennedDatabase::class.java, dbName)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(*PennedDatabase.MIGRATIONS)
             .allowMainThreadQueries()
             .build()
         try {
@@ -146,7 +146,7 @@ class MigrationTest {
             )
         }
         val real = Room.databaseBuilder(context, PennedDatabase::class.java, dbName)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(*PennedDatabase.MIGRATIONS)
             .allowMainThreadQueries()
             .build()
         try {
@@ -179,7 +179,7 @@ class MigrationTest {
             )
         }
         val real = Room.databaseBuilder(context, PennedDatabase::class.java, dbName)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(*PennedDatabase.MIGRATIONS)
             .allowMainThreadQueries()
             .build()
         try {
@@ -191,6 +191,66 @@ class MigrationTest {
                 assertEquals(100_000L, real.accountDao().observeWithBalance("b1").first().single().balanceCents)
                 // 新表可用且初始为空：账户仍只在自己账本可见
                 assertEquals(emptyList<String>(), real.accountDao().bookIdsFor("a1"))
+            }
+        } finally {
+            real.close()
+        }
+    }
+
+    @Test
+    fun `migrate 5 to 6 adds M3 columns and tables and keeps data`() {
+        createLegacyDatabase(5) { db ->
+            db.execSQL(
+                "INSERT INTO books (id, name, sortOrder, createdAt, updatedAt, deleted, deviceId) " +
+                    "VALUES ('b1', '测试账本', 0, 1, 1, 0, 'd')"
+            )
+            db.execSQL(
+                "INSERT INTO accounts (id, bookId, name, type, groupName, initialBalanceCents, currencyCode, " +
+                    "archived, remark, scopeAllBooks, createdAt, updatedAt, deleted, deviceId) " +
+                    "VALUES ('a1', 'b1', '招商银行', 'CREDIT', NULL, 0, 'CNY', 0, NULL, 0, 1, 1, 0, 'd')"
+            )
+            db.execSQL(
+                "INSERT INTO transactions (id, bookId, type, amountCents, accountId, targetAccountId, categoryId, " +
+                    "dateEpochMinute, note, refundCents, discountCents, reimburseState, reimburseAccountId, " +
+                    "currencyCode, rate, address, feeCents, excludeFromStats, excludeFromBudget, source, " +
+                    "importBatchId, creatorDeviceId, createdAt, updatedAt, deleted, deviceId) " +
+                    "VALUES ('t1', 'b1', 'EXPENSE', 1600, 'a1', NULL, NULL, 100, NULL, 0, 0, 'PENDING', NULL, " +
+                    "NULL, NULL, NULL, 0, 0, 0, 'MANUAL', NULL, 'd', 1, 1, 0, 'd')"
+            )
+        }
+        val real = Room.databaseBuilder(context, PennedDatabase::class.java, dbName)
+            .addMigrations(*PennedDatabase.MIGRATIONS)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            runTest {
+                // 旧数据保留（含 v5 的报销状态）
+                val tx = real.transactionDao().all().single()
+                assertEquals(1600L, tx.amountCents)
+                assertEquals("PENDING", tx.reimburseState.name)
+                val account = real.accountDao().get("a1")!!
+                assertEquals("招商银行", account.name)
+                // 新列默认值：报销金额 0（= 按净额全额）、两个关联 id 为空、年费四列为 0/空
+                assertEquals(0L, tx.reimburseCents)
+                assertNull(tx.recurringRuleId)
+                assertNull(tx.debtId)
+                assertEquals(0L, account.annualFeeCents)
+                assertNull(account.feeMonth)
+                assertNull(account.feeDay)
+                assertNull(account.lastFeePaidYear)
+                // 新表可用：债务表（D068）写入一行再读回
+                real.openHelper.writableDatabase.execSQL(
+                    "INSERT INTO debts (id, bookId, direction, counterparty, principalCents, startEpochDay, " +
+                        "dueEpochDay, note, closed, sortOrder, createdAt, updatedAt, deleted, deviceId) " +
+                        "VALUES ('d1', 'b1', 'BORROW', '小明', 100000, 20000, NULL, NULL, 0, 0, 1, 1, 0, 'd')"
+                )
+                val c = real.openHelper.readableDatabase
+                    .query("SELECT direction, principalCents, closed FROM debts WHERE bookId = 'b1'")
+                c.moveToFirst()
+                assertEquals("BORROW", c.getString(0))
+                assertEquals(100_000L, c.getLong(1))
+                assertEquals(0, c.getInt(2))
+                c.close()
             }
         } finally {
             real.close()
