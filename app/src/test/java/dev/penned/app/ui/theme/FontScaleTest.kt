@@ -149,5 +149,6 @@ class FontScaleTest {
         dateEpochMinute = date.atZone(zone).toEpochSecond() / 60, note = note,
         categoryName = name, categoryParentName = parent,
         categoryIconKey = null, targetAccountName = null, excludeFromStats = false,
+        refundCents = 0, discountCents = 0,
     )
 }

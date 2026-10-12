@@ -39,6 +39,7 @@ class ImportBatchDetailScreenshotTest {
             note = note, categoryName = category, categoryParentName = null, categoryIconKey = null,
             targetAccountName = null,
             excludeFromStats = false,
+            refundCents = 0, discountCents = 0,
         )
 
     @Test

@@ -23,6 +23,9 @@ data class TxWithCategory(
     val targetAccountName: String?,
     /** D020「不计入收支」：仍显示在列表里，但不计入日/月/分类合计。 */
     val excludeFromStats: Boolean,
+    /** 退款额 / 优惠额（M3-2）：行上给一个「退款」标记，说明金额为什么变小甚至是 0。 */
+    val refundCents: Long,
+    val discountCents: Long,
 )
 
 @Dao
@@ -34,7 +37,8 @@ interface TransactionDao {
                t.dateEpochMinute AS dateEpochMinute, t.note AS note,
                c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey,
                ta.name AS targetAccountName,
-               t.excludeFromStats AS excludeFromStats
+               t.excludeFromStats AS excludeFromStats,
+               t.refundCents AS refundCents, t.discountCents AS discountCents
         FROM transactions t
         LEFT JOIN categories c ON c.id = t.categoryId
         LEFT JOIN categories p ON p.id = c.parentId
@@ -60,7 +64,8 @@ interface TransactionDao {
                t.dateEpochMinute AS dateEpochMinute, t.note AS note,
                c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey,
                ta.name AS targetAccountName,
-               t.excludeFromStats AS excludeFromStats
+               t.excludeFromStats AS excludeFromStats,
+               t.refundCents AS refundCents, t.discountCents AS discountCents
         FROM transactions t
         LEFT JOIN categories c ON c.id = t.categoryId
         LEFT JOIN categories p ON p.id = c.parentId
@@ -86,7 +91,8 @@ interface TransactionDao {
                t.dateEpochMinute AS dateEpochMinute, t.note AS note,
                c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey,
                ta.name AS targetAccountName,
-               t.excludeFromStats AS excludeFromStats
+               t.excludeFromStats AS excludeFromStats,
+               t.refundCents AS refundCents, t.discountCents AS discountCents
         FROM transactions t
         LEFT JOIN categories c ON c.id = t.categoryId
         LEFT JOIN categories p ON p.id = c.parentId
@@ -164,7 +170,8 @@ interface TransactionDao {
                t.dateEpochMinute AS dateEpochMinute, t.note AS note,
                c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey,
                ta.name AS targetAccountName,
-               t.excludeFromStats AS excludeFromStats
+               t.excludeFromStats AS excludeFromStats,
+               t.refundCents AS refundCents, t.discountCents AS discountCents
         FROM transactions t
         LEFT JOIN categories c ON c.id = t.categoryId
         LEFT JOIN categories p ON p.id = c.parentId

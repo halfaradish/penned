@@ -28,6 +28,7 @@ import dev.penned.app.data.db.dao.TxWithCategory
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.components.CategoryAvatar
 import dev.penned.app.ui.components.MoneyText
+import dev.penned.app.ui.components.PennedBadge
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedPigment
@@ -39,6 +40,16 @@ internal fun txTitle(row: TxWithCategory): String = when (row.type) {
     TxType.TRANSFER -> listOfNotNull("转账", row.targetAccountName?.let { "转入 $it" }).joinToString(" · ")
     else -> listOfNotNull(row.categoryParentName, row.categoryName).joinToString(" · ")
         .ifEmpty { PennedPigment.UNKNOWN }
+}
+
+/**
+ * 行上的退优惠标记（M3-2）：金额列显示的是净额，没标记的话"0.00"与变小的数都说不清来路。
+ * 全额退款单独给词（那是这一行最容易被当成记错的情况），优惠只在没有退款时才顶上（一行一个，不堆）。
+ */
+internal fun refundMarker(row: TxWithCategory): String? = when {
+    row.refundCents <= 0L -> if (row.discountCents > 0L) "优惠" else null
+    row.amountCents == 0L -> "全额退款"
+    else -> "退款"
 }
 
 /** 流水行（首页 / 搜索结果共用）。 */
@@ -105,11 +116,18 @@ internal fun TransactionRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(
-                HomeGroups.clockLabel(row.dateEpochMinute),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    HomeGroups.clockLabel(row.dateEpochMinute),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                // 退款/优惠标记（M3-2）：金额列是净额，行上得有一句"为什么变小/是 0"
+                refundMarker(row)?.let { marker ->
+                    Spacer(Modifier.width(PennedSpacing.sm))
+                    PennedBadge(marker)
+                }
+            }
             if (!row.note.isNullOrBlank()) {
                 Text(
                     row.note,

@@ -72,6 +72,10 @@ fun AddTransactionScreen(
     )
     val type by viewModel.type.collectAsStateWithLifecycle()
     val amount by viewModel.amountText.collectAsStateWithLifecycle()
+    val refundText by viewModel.refundText.collectAsStateWithLifecycle()
+    val discountText by viewModel.discountText.collectAsStateWithLifecycle()
+    val amountField by viewModel.amountField.collectAsStateWithLifecycle()
+    val paySummary by viewModel.paySummary.collectAsStateWithLifecycle()
     val selectedId by viewModel.selectedCategoryId.collectAsStateWithLifecycle()
     val expandedId by viewModel.expandedParentId.collectAsStateWithLifecycle()
     val note by viewModel.note.collectAsStateWithLifecycle()
@@ -119,8 +123,13 @@ fun AddTransactionScreen(
         expandedSubs = expandedSubs,
         tags = tags,
         selectedTagIds = selectedTagIds,
+        refundText = refundText,
+        discountText = discountText,
+        amountField = amountField,
+        paySummary = paySummary,
         onSelectType = viewModel::selectType,
         onKey = viewModel::pressKey,
+        onFocusField = viewModel::focusAmountField,
         onSelectParent = { viewModel.selectParent(it.id, it.hasSubs) },
         onSelectSub = { viewModel.selectSub(it.id) },
         onNoteChange = viewModel::setNote,
@@ -164,6 +173,13 @@ fun AddTransactionContent(
     expandedSubs: List<CategoryUi>,
     tags: List<dev.penned.app.data.db.entity.TagEntity> = emptyList(),
     selectedTagIds: Set<String> = emptySet(),
+    /** 退款额 / 优惠额（M3-2）：信息条上各自的 chip 回显，落库时算净额（D069）。 */
+    refundText: String = "",
+    discountText: String = "",
+    /** 键盘当前指到哪一格（退款/优惠复用同一个键盘）。 */
+    amountField: AmountField = AmountField.AMOUNT,
+    /** 「实付」行文案（[dev.penned.app.domain.RefundMath.summaryText]）；没退优惠时为 null。 */
+    paySummary: String? = null,
     onSelectType: (TxType) -> Unit,
     onKey: (String) -> Unit,
     onSelectParent: (CategoryUi) -> Unit,
@@ -175,6 +191,7 @@ fun AddTransactionContent(
     onSwap: () -> Unit,
     onToggleTag: (String) -> Unit = {},
     onCreateTag: (name: String, parentId: String?) -> Unit = { _, _ -> },
+    onFocusField: (AmountField) -> Unit = {},
     onFeeChange: (String) -> Unit,
     onPickDate: (Long?) -> Unit = {},
     onAddCategory: (name: String, parentId: String?) -> Unit = { _, _ -> },
@@ -355,11 +372,42 @@ fun AddTransactionContent(
                             selected = selectedTagIds.isNotEmpty(),
                             onClick = { showTagPicker = true },
                         )
+                        // 退款 / 优惠（M3-2）：点开把键盘指过去，值就地回显在这两个 chip 上
+                        PennedChip(
+                            label = if (refundText.isBlank()) "退款" else "退款 $refundText",
+                            icon = PennedIcons.Refund,
+                            selected = refundText.isNotBlank() || amountField == AmountField.REFUND,
+                            onClick = { onFocusField(AmountField.REFUND) },
+                        )
+                        PennedChip(
+                            label = if (discountText.isBlank()) "优惠" else "优惠 $discountText",
+                            icon = PennedIcons.Discount,
+                            selected = discountText.isNotBlank() || amountField == AmountField.DISCOUNT,
+                            onClick = { onFocusField(AmountField.DISCOUNT) },
+                        )
                         // 报销状态是 M3 的编辑能力，这里保持只读语义（新记为"不报销"）
                         PennedChip(label = "不报销", icon = PennedIcons.Info, enabled = false)
                     }
                 }
+                // 实付 = 原价 − 退款 − 优惠（只回显，落库在 saveInternal 一次算清）
+                paySummary?.let { summary ->
+                    Spacer(Modifier.height(PennedSpacing.xs))
+                    Text(
+                        summary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
+        }
+
+        // 键盘正指在退款/优惠格时的提示条：值由上面的 chip 与这里同时回显，右端给一条回主金额的出路
+        if (amountField != AmountField.AMOUNT) {
+            AmountFocusBar(
+                label = if (amountField == AmountField.REFUND) "退款" else "优惠",
+                value = if (amountField == AmountField.REFUND) refundText else discountText,
+                onBackToAmount = { onFocusField(AmountField.AMOUNT) },
+            )
         }
 
         // 键盘
@@ -480,6 +528,36 @@ fun AddTransactionContent(
     }
 }
 
+
+/**
+ * 键盘指到退款/优惠格时的提示条（M3-2）：说明键位现在打在哪个数上、值是多少，
+ * 右端「回到金额」把键盘还给主金额（主金额本身一直在信息条右上，不被顶掉）。
+ */
+@Composable
+private fun AmountFocusBar(label: String, value: String, onBackToAmount: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = PennedSpacing.xs)
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(start = PennedSpacing.lg, end = PennedSpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "正在输入：$label",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.weight(1f))
+        Text(
+            if (value.isEmpty()) "0.00" else value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        TextButton(onClick = onBackToAmount) { Text("回到金额") }
+    }
+}
 
 @Composable
 private fun AccountFieldRow(label: String, account: AccountEntity?, onClick: () -> Unit) {
@@ -623,37 +701,63 @@ private fun TextAmountDialog(title: String, initial: String, onConfirm: (String)
     }
 }
 
+@Composable
+private fun previewContent(
+    amountText: String = "16.5",
+    refundText: String = "",
+    discountText: String = "",
+    amountField: AmountField = AmountField.AMOUNT,
+    paySummary: String? = null,
+) = AddTransactionContent(
+    type = TxType.EXPENSE,
+    amountText = amountText,
+    note = "",
+    selectedId = "p0",
+    expandedId = "p0",
+    canSave = true,
+    showEquals = false,
+    accountId = null,
+    fromId = null,
+    toId = null,
+    feeText = "",
+    refundText = refundText,
+    discountText = discountText,
+    amountField = amountField,
+    paySummary = paySummary,
+    accounts = emptyList(),
+    parents = listOf(
+        CategoryUi("p0", "其他", hasSubs = true),
+        CategoryUi("p1", "购物消费", hasSubs = true),
+        CategoryUi("p2", "食品餐饮", hasSubs = false),
+        CategoryUi("p3", "出行交通", hasSubs = false),
+        CategoryUi("p4", "休闲娱乐", hasSubs = false),
+    ),
+    expandedSubs = listOf(
+        CategoryUi("s0", "罚款赔偿", hasSubs = false),
+        CategoryUi("s1", "理财支出", hasSubs = false),
+    ),
+    onSelectType = {}, onKey = {}, onSelectParent = {}, onSelectSub = {},
+    onNoteChange = {}, onPickAccount = {}, onPickFrom = {}, onPickTo = {},
+    onSwap = {}, onFeeChange = {}, onEvaluate = {}, onSave = {}, onSaveAgain = {}, onBack = {}, onEdit = {},
+)
+
 @Preview(showBackground = true, name = "记一笔-支出", widthDp = 400, heightDp = 800)
 @Composable
 private fun AddScreenPreview() {
+    PennedTheme { previewContent() }
+}
+
+/** 退款态（M3-2）：两个 chip 回显金额、键盘指在退款格、信息条下方一条实付算式。 */
+@Preview(showBackground = true, name = "记一笔-退款态", widthDp = 400, heightDp = 800)
+@Composable
+private fun AddScreenRefundPreview() {
     PennedTheme {
-        AddTransactionContent(
-            type = TxType.EXPENSE,
-            amountText = "16.5",
-            note = "",
-            selectedId = "p0",
-            expandedId = "p0",
-            canSave = true,
-            showEquals = false,
-            accountId = null,
-            fromId = null,
-            toId = null,
-            feeText = "",
-            accounts = emptyList(),
-            parents = listOf(
-                CategoryUi("p0", "其他", hasSubs = true),
-                CategoryUi("p1", "购物消费", hasSubs = true),
-                CategoryUi("p2", "食品餐饮", hasSubs = false),
-                CategoryUi("p3", "出行交通", hasSubs = false),
-                CategoryUi("p4", "休闲娱乐", hasSubs = false),
-            ),
-            expandedSubs = listOf(
-                CategoryUi("s0", "罚款赔偿", hasSubs = false),
-                CategoryUi("s1", "理财支出", hasSubs = false),
-            ),
-            onSelectType = {}, onKey = {}, onSelectParent = {}, onSelectSub = {},
-            onNoteChange = {}, onPickAccount = {}, onPickFrom = {}, onPickTo = {},
-            onSwap = {}, onFeeChange = {}, onEvaluate = {}, onSave = {}, onSaveAgain = {}, onBack = {}, onEdit = {},
+        previewContent(
+            amountText = "20.00",
+            refundText = "3.00",
+            discountText = "5.00",
+            amountField = AmountField.REFUND,
+            paySummary = dev.penned.app.domain.RefundMath.summaryText(2000L, 300L, 500L),
         )
     }
 }

@@ -292,6 +292,31 @@ object PennedIcons {
         }
     }
 
+    /**
+     * 退款（记一笔信息条，M3-2）：指向左的回退箭头——钱原路退回。
+     * 不做成环形"撤销"，那个在 16dp 的 chip 里会糊成一团（Refresh 的经验）。
+     */
+    val Refund: ImageVector by lazy {
+        icon("refund") {
+            stroke {
+                line(20.4f, 12f, 8.4f, 12f)
+                line(12.4f, 8f, 8.4f, 12f)
+                line(8.4f, 12f, 12.4f, 16f)
+            }
+        }
+    }
+
+    /** 优惠（记一笔信息条，M3-2）：百分号。 */
+    val Discount: ImageVector by lazy {
+        icon("discount") {
+            stroke {
+                circle(8.3f, 8.3f, 2.9f)
+                circle(15.7f, 15.7f, 2.9f)
+                line(18f, 6f, 6f, 18f)
+            }
+        }
+    }
+
     // —— 构建辅助 ——
 
     private const val STROKE = 1.9f

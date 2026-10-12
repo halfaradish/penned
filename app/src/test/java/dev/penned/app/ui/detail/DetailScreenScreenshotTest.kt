@@ -4,6 +4,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.penned.app.data.db.entity.TransactionEntity
 import dev.penned.app.domain.ReimburseState
@@ -137,5 +139,26 @@ class DetailScreenScreenshotTest {
         composeRule.onNodeWithText("优惠").assertDoesNotExist()
         composeRule.onNodeWithText("标签").assertDoesNotExist()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_detail_plain.png")
+    }
+
+    @Test
+    fun refundRowsOpenTheEditor() {
+        // M3-2：退款/优惠两行可点 → 跳编辑页（原来只能从底部「编辑」进）
+        var edits = 0
+        composeRule.setContent {
+            PennedTheme {
+                DetailContent(
+                    detail = ui(row(amountCents = 2200, refundCents = 520, discountCents = 100)),
+                    onEdit = { edits++ }, onDelete = {}, onToggleStats = {}, onToggleBudget = {}, onBack = {},
+                )
+            }
+        }
+        composeRule.onNodeWithText("退款").performScrollTo().performClick()
+        composeRule.onNodeWithText("优惠").performScrollTo().performClick()
+        org.junit.Assert.assertEquals(2, edits)
+        // 其余行（备注/账单日期）照旧不可点：点它不该触发编辑
+        composeRule.onNodeWithText("备注").performScrollTo().performClick()
+        org.junit.Assert.assertEquals(2, edits)
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m3_detail_refund_rows.png")
     }
 }

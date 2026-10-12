@@ -39,6 +39,7 @@ class CategoryDetailScreenScreenshotTest {
             dateEpochMinute = LocalDateTime.parse(isoDateTime).atZone(zone).toEpochSecond() / 60,
             note = note, categoryName = name, categoryParentName = parent,
             categoryIconKey = null, targetAccountName = null, excludeFromStats = false,
+            refundCents = 0, discountCents = 0,
         )
 
     /** 一级分类页：hero 三数 + 子分类占比/数据（照参考图 3）。 */

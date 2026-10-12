@@ -391,4 +391,7 @@ private fun tx(id: String, isoDateTime: String, cents: Long, name: String, paren
     categoryIconKey = null,
     targetAccountName = null,
     excludeFromStats = false,
+    // 分类详细页的占位数据不带退款/优惠（这页要演的是排序与占比）
+    refundCents = 0,
+    discountCents = 0,
 )

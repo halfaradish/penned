@@ -29,6 +29,7 @@ class StatsMathTest {
         dateEpochMinute = minute(isoDateTime), note = null, categoryName = name,
         categoryParentName = parent, categoryIconKey = null, targetAccountName = null,
         excludeFromStats = excluded,
+        refundCents = 0, discountCents = 0,
     )
 
     private val october = StatsPeriods.window(StatsPeriod.Month(YearMonth.of(2026, 10)), zone)

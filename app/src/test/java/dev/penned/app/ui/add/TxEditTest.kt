@@ -12,7 +12,8 @@ import java.lang.reflect.Modifier
 
 /**
  * 复查 P0 回归（纯函数）：编辑流水只改记一笔页能改的字段，
- * 退款/优惠/不计收支/不计预算/导入批次/报销等一律原样保留。
+ * 不计收支/不计预算/导入批次/报销等一律原样保留。
+ * 退款/优惠自 M3-2 起**属于**可改字段（D069：金额存净额、退优惠存原值）。
  */
 class TxEditTest {
 
@@ -55,6 +56,8 @@ class TxEditTest {
         dateEpochMinute = 7,
         note = "新备注",
         feeCents = 55,
+        refundCents = 300,
+        discountCents = 20,
     )
 
     @Test
@@ -71,14 +74,14 @@ class TxEditTest {
         assertEquals(7L, edited.dateEpochMinute)
         assertEquals("新备注", edited.note)
         assertEquals(55L, edited.feeCents)
+        assertEquals(300L, edited.refundCents)
+        assertEquals(20L, edited.discountCents)
         assertEquals(5000L, edited.updatedAt)
         assertEquals("device-1", edited.deviceId)
 
         // 本页管不着的：一个都不能丢
         assertEquals("tx-1", edited.id)
         assertEquals("book-1", edited.bookId)
-        assertEquals(2000L, edited.refundCents)
-        assertEquals(100L, edited.discountCents)
         assertEquals(ReimburseState.PENDING, edited.reimburseState)
         assertEquals("acc-2", edited.reimburseAccountId)
         assertEquals("USD", edited.currencyCode)
@@ -112,7 +115,8 @@ class TxEditTest {
         assertEquals(
             setOf(
                 "type", "amountCents", "accountId", "targetAccountId", "categoryId",
-                "dateEpochMinute", "note", "feeCents", "updatedAt", "deviceId",
+                "dateEpochMinute", "note", "feeCents", "refundCents", "discountCents",
+                "updatedAt", "deviceId",
             ),
             changed,
         )
@@ -128,8 +132,8 @@ class TxEditTest {
         assertEquals("device-1", tx.creatorDeviceId)
         assertEquals(5000L, tx.createdAt)
         assertEquals(5000L, tx.updatedAt)
-        assertEquals(0L, tx.refundCents)
-        assertEquals(0L, tx.discountCents)
+        assertEquals(300L, tx.refundCents)
+        assertEquals(20L, tx.discountCents)
         assertEquals(ReimburseState.NONE, tx.reimburseState)
         assertEquals(null, tx.importBatchId)
         assertFalse(tx.excludeFromStats)

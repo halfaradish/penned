@@ -30,6 +30,7 @@ class StatsTrendTest {
         dateEpochMinute = minute(isoDateTime), note = null, categoryName = null,
         categoryParentName = null, categoryIconKey = null, targetAccountName = null,
         excludeFromStats = excluded,
+        refundCents = 0, discountCents = 0,
     )
 
     private fun windowOf(period: StatsPeriod) =

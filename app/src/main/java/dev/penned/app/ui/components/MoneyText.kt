@@ -33,6 +33,8 @@ fun MoneyText(
     }
     val prefix = when {
         !signed -> ""
+        // 净额为 0（全额退款）不写符号："-0.00" 会被读成"记错了"；退款说明由行上的标记给（M3-2）
+        cents == 0L -> ""
         type == TxType.EXPENSE -> "-"
         type == TxType.INCOME -> "+"
         else -> ""

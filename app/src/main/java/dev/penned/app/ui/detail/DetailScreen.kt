@@ -1,5 +1,6 @@
 package dev.penned.app.ui.detail
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,9 +9,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -27,6 +30,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.penned.app.PennedApplication
 import dev.penned.app.data.db.entity.TransactionEntity
 import dev.penned.app.domain.Money
+import dev.penned.app.domain.RefundMath
 import dev.penned.app.domain.ReimburseState
 import dev.penned.app.domain.TxType
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -184,7 +188,9 @@ fun DetailContent(
                         )
                     }
                     if (d.tx.refundCents > 0) {
-                        RefundBadge(fullRefund = d.tx.amountCents == 0L)
+                        RefundBadge(
+                            fullRefund = RefundMath.isFullyRefunded(d.tx.amountCents, d.tx.refundCents),
+                        )
                     }
                 }
                 Spacer(Modifier.height(PennedSpacing.md))
@@ -209,11 +215,12 @@ fun DetailContent(
                     }
                 }
                 if (d.tx.refundCents > 0) {
-                    DetailRow("退款", Money.format(d.tx.refundCents))
+                    // M3-2：点这行直接进编辑页改退款（原本只能从底部「编辑」进去）
+                    DetailRow("退款", Money.format(d.tx.refundCents), onClick = onEdit)
                     PennedDivider()
                 }
                 if (d.tx.discountCents > 0) {
-                    DetailRow("优惠", Money.format(d.tx.discountCents))
+                    DetailRow("优惠", Money.format(d.tx.discountCents), onClick = onEdit)
                     PennedDivider()
                 }
                 DetailRow("账单日期", formatMinute(d.tx.dateEpochMinute))
@@ -273,7 +280,7 @@ private fun avatarName(d: DetailUi): String = when (d.tx.type) {
     else -> d.categoryName ?: PennedPigment.UNKNOWN
 }
 
-/** 退款标记（M1 只读展示；退款交互留 M3）。 */
+/** 退款标记：全额（金额 0 + 退过款）或部分。M3-2 起两行金额本身也可点进编辑页。 */
 @Composable
 private fun RefundBadge(fullRefund: Boolean) {
     PennedBadge(
@@ -303,16 +310,28 @@ private fun formatMinute(epochMinute: Long): String =
     Instant.ofEpochSecond(epochMinute * 60).atZone(ZoneId.systemDefault())
         .let { "%d年%02d月%02d日 %02d:%02d".format(it.year, it.monthValue, it.dayOfMonth, it.hour, it.minute) }
 
+/** 明细行。给了 [onClick] 就是可点的：整行可点 + 尾部一枚箭头（与 `PennedListRow` 同语义）。 */
 @Composable
-private fun DetailRow(label: String, value: String) {
+private fun DetailRow(label: String, value: String, onClick: (() -> Unit)? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.weight(1f))
         Text(value, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.End)
+        if (onClick != null) {
+            Spacer(Modifier.width(PennedSpacing.sm))
+            Icon(
+                PennedIcons.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.size(PennedDimens.iconChevron),
+            )
+        }
     }
 }
 

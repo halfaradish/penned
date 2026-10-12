@@ -28,6 +28,7 @@ class HomeGroupsTest {
         id = id, type = type, amountCents = cents, accountId = null, categoryId = null,
         dateEpochMinute = minute, note = null, categoryName = "x", categoryParentName = null,
         categoryIconKey = null, targetAccountName = null, excludeFromStats = false,
+        refundCents = 0, discountCents = 0,
     )
 
     @Test

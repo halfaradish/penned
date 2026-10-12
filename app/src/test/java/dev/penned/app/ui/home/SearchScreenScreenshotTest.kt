@@ -41,6 +41,7 @@ class SearchScreenScreenshotTest {
             dateEpochMinute = LocalDate.of(2024, 9, day).atTime(12, 30).atZone(zone).toEpochSecond() / 60,
             note = note, categoryName = category, categoryParentName = null, categoryIconKey = null,
             targetAccountName = null, excludeFromStats = false,
+            refundCents = 0, discountCents = 0,
         )
 
     private val all = listOf(

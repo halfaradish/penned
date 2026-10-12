@@ -44,6 +44,7 @@ class HomeMonthToggleTest {
         dateEpochMinute = date.atTime(12, 0).atZone(zone).toEpochSecond() / 60, note = null,
         categoryName = name, categoryParentName = "食品餐饮", categoryIconKey = null,
         targetAccountName = null, excludeFromStats = false,
+        refundCents = 0, discountCents = 0,
     )
 
     @Test

@@ -13,9 +13,11 @@ import androidx.test.core.app.ApplicationProvider
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.penned.app.PennedApplication
 import dev.penned.app.data.db.dao.TxWithCategory
+import dev.penned.app.domain.RefundMath
 import dev.penned.app.domain.StatsMath
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.add.AddTransactionContent
+import dev.penned.app.ui.add.AmountField
 import dev.penned.app.ui.add.CategoryUi
 import dev.penned.app.ui.budgets.BudgetsViewModel
 import dev.penned.app.ui.budgets.BudgetScreen
@@ -185,6 +187,40 @@ class DarkThemeScreensTest {
         dark { BudgetScreen(viewModel, onBack = {}) }
         composeRule.onNodeWithText("设置本月总预算").assertIsDisplayed()
         capture("budget")
+    }
+
+    @Test
+    fun darkAddRefund() {
+        // 退款态（M3-2）：两个 chip 回显、实付行、键盘提示条在深色下同样成立
+        dark {
+            AddTransactionContent(
+                type = TxType.EXPENSE,
+                amountText = "20.00",
+                note = "",
+                selectedId = "p0",
+                expandedId = null,
+                canSave = true,
+                showEquals = false,
+                accountId = null,
+                fromId = null,
+                toId = null,
+                feeText = "",
+                refundText = "3.00",
+                discountText = "5.00",
+                amountField = AmountField.REFUND,
+                paySummary = RefundMath.summaryText(2000L, 300L, 500L),
+                accounts = emptyList(),
+                parents = listOf(CategoryUi("p0", "其他", hasSubs = false)),
+                expandedSubs = emptyList(),
+                onSelectType = {}, onKey = {}, onSelectParent = {}, onSelectSub = {},
+                onNoteChange = {}, onPickAccount = {}, onPickFrom = {}, onPickTo = {},
+                onSwap = {}, onFeeChange = {}, onEvaluate = {},
+                onSave = {}, onSaveAgain = {}, onBack = {}, onEdit = {},
+            )
+        }
+        composeRule.onNodeWithText("正在输入：退款").assertIsDisplayed()
+        composeRule.onNodeWithText("实付 12.00（20.00 − 退款 3.00 − 优惠 5.00）").assertIsDisplayed()
+        capture("add_refund")
     }
 
     @Test
@@ -420,5 +456,6 @@ class DarkThemeScreensTest {
         categoryIconKey = null,
         targetAccountName = null,
         excludeFromStats = false,
+        refundCents = 0, discountCents = 0,
     )
 }

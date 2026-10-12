@@ -12,6 +12,7 @@ import dev.penned.app.domain.AddDate
 import dev.penned.app.domain.CategoryType
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.MoneyExpression
+import dev.penned.app.domain.RefundMath
 import dev.penned.app.domain.TxType
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,6 +35,15 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
     var type = MutableStateFlow(TxType.EXPENSE)
         private set
     var amountText = MutableStateFlow("")
+        private set
+    /** 退款额（M3-2）：键盘输入的**原价**不动，落库的金额是净额（D069）。 */
+    var refundText = MutableStateFlow("")
+        private set
+    /** 优惠额（M3-2），同退款。 */
+    var discountText = MutableStateFlow("")
+        private set
+    /** 金额键盘当前在编辑哪一格——退款/优惠复用同一个键盘，不另做输入控件（M3 §二·3 交互）。 */
+    var amountField = MutableStateFlow(AmountField.AMOUNT)
         private set
     var selectedCategoryId = MutableStateFlow<String?>(null)
         private set
@@ -126,6 +136,10 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /**
+     * 能不能保存：看的是**输入框里的原价**（退款/优惠只把落库金额压小，不拦保存——
+     * 全额退款要能存成净额 0 的流水）。
+     */
     val canSave: StateFlow<Boolean> = combine(
         amountText, selectedCategoryId, type, transferFromId, transferToId,
     ) { amount, categoryId, txType, from, to ->
@@ -136,10 +150,22 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
-    /** 表达式待求值时，完成键显示为 "=" */
-    val showEquals: StateFlow<Boolean> = amountText
-        .map { MoneyExpression.hasPendingOperator(it) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+    /**
+     * 信息条的「实付」行（M3-2）：把输入的三个数交给 [RefundMath.summaryText] 写成算式。
+     * 金额还没输（或输的是半截算式）时不显示——算式缺项会比不显示更让人看不懂。
+     */
+    val paySummary: StateFlow<String?> = combine(
+        amountText, refundText, discountText,
+    ) { amount, refund, discount ->
+        val original = parseCents(amount) ?: return@combine null
+        if (original <= 0L) return@combine null
+        RefundMath.summaryText(original, centsOrZero(refund), centsOrZero(discount))
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** 表达式待求值时，完成键显示为 "="（只在编辑主金额时；退款/优惠的算式按保存键时结算） */
+    val showEquals: StateFlow<Boolean> = combine(amountText, amountField) { text, field ->
+        field == AmountField.AMOUNT && MoneyExpression.hasPendingOperator(text)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     init {
         if (editId != null) loadForEdit(editId)
@@ -149,7 +175,13 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
         viewModelScope.launch {
             val tx = db.transactionDao().get(id) ?: return@launch
             type.value = tx.type
-            amountText.value = Money.format(tx.amountCents, grouped = false)
+            // 金额框回填的是**原价**：落库金额是净额，反推回用户当初输入的形态（D069）
+            amountText.value = Money.format(
+                RefundMath.originalCents(tx.amountCents, tx.refundCents, tx.discountCents),
+                grouped = false,
+            )
+            refundText.value = if (tx.refundCents > 0L) Money.format(tx.refundCents, grouped = false) else ""
+            discountText.value = if (tx.discountCents > 0L) Money.format(tx.discountCents, grouped = false) else ""
             selectedCategoryId.value = tx.categoryId
             // 父分类要**到库里查**：`categories` 是 WhileSubscribed 的 stateIn(…, emptyList())，
             // 编辑页刚开时它还没被订阅、读到的必然是空表，`?: cid` 回落成子分类 id——
@@ -172,6 +204,12 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
         type.value = t
         if (t != TxType.TRANSFER) selectedCategoryId.value = null
         expandedParentId.value = null
+        // 转账没有退款/优惠，键盘也就没有另外两格可指
+        amountField.value = AmountField.AMOUNT
+        if (t == TxType.TRANSFER) {
+            refundText.value = ""
+            discountText.value = ""
+        }
     }
 
     fun selectParent(id: String, hasSubs: Boolean) {
@@ -235,19 +273,45 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
         }
     }
 
+    /** 键盘切格（M3-2）：点信息条上的「退款」「优惠」chip 时把键盘指过去；[AmountField.AMOUNT] 指回主金额。 */
+    fun focusAmountField(field: AmountField) {
+        amountField.value = field
+    }
+
+    /** 键位落到当前格：主金额 / 退款 / 优惠共用一个键盘（M3-2）。 */
     fun pressKey(key: String) {
-        amountText.value = when (key) {
-            KEY_BACKSPACE -> amountText.value.dropLast(1)
+        val current = when (amountField.value) {
+            AmountField.AMOUNT -> amountText.value
+            AmountField.REFUND -> refundText.value
+            AmountField.DISCOUNT -> discountText.value
+        }
+        val next = when (key) {
+            KEY_BACKSPACE -> current.dropLast(1)
             KEY_CLEAR -> ""
-            else -> MoneyExpression.append(amountText.value, key)
+            else -> MoneyExpression.append(current, key)
+        }
+        when (amountField.value) {
+            AmountField.AMOUNT -> amountText.value = next
+            AmountField.REFUND -> refundText.value = next
+            AmountField.DISCOUNT -> discountText.value = next
         }
     }
 
     fun evaluate() {
-        val expr = amountText.value
+        val field = amountField.value
+        val expr = when (field) {
+            AmountField.AMOUNT -> amountText.value
+            AmountField.REFUND -> refundText.value
+            AmountField.DISCOUNT -> discountText.value
+        }
         if (!MoneyExpression.hasPendingOperator(expr)) return
         val cents = MoneyExpression.evaluate(expr) ?: return
-        amountText.value = Money.format(cents, grouped = false)
+        val text = Money.format(cents, grouped = false)
+        when (field) {
+            AmountField.AMOUNT -> amountText.value = text
+            AmountField.REFUND -> refundText.value = text
+            AmountField.DISCOUNT -> discountText.value = text
+        }
     }
 
     fun setNote(text: String) {
@@ -283,14 +347,14 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
         }
     }
 
-    private fun effectiveCents(expr: String): Long? {
-        val cents = if (MoneyExpression.hasPendingOperator(expr)) {
-            MoneyExpression.evaluate(expr)
-        } else {
-            Money.parseToCents(expr)
-        }
-        return cents?.takeIf { it > 0 }
-    }
+    /** 输入框文本 → 分；待求值的算式先求值。空/非法 → null。 */
+    private fun parseCents(text: String): Long? =
+        if (MoneyExpression.hasPendingOperator(text)) MoneyExpression.evaluate(text) else Money.parseToCents(text)
+
+    /** 退款/优惠位的取值：没填就是 0，负数（键盘打不出，防外部来源）夹到 0。 */
+    private fun centsOrZero(text: String): Long = (parseCents(text) ?: 0L).coerceAtLeast(0L)
+
+    private fun effectiveCents(expr: String): Long? = parseCents(expr)?.takeIf { it > 0 }
 
     /** 保存并返回 */
     fun save(onDone: () -> Unit) {
@@ -299,12 +363,15 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
         }
     }
 
-    /** 再记：保存并清空金额/备注，保留分类，继续下一笔 */
+    /** 再记：保存并清空金额/备注/退款/优惠，保留分类，继续下一笔 */
     fun saveAgain() {
         viewModelScope.launch {
             if (saveInternal()) {
                 amountText.value = ""
                 note.value = ""
+                refundText.value = ""
+                discountText.value = ""
+                amountField.value = AmountField.AMOUNT
             }
         }
     }
@@ -315,7 +382,10 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
     private typealias EditableTx = TxEdit.Editable
 
     private suspend fun saveInternal(): Boolean {
-        val cents = effectiveCents(amountText.value) ?: return false
+        // 金额框里是**原价**；落库金额 = 净额（D069——余额与统计只读 amountCents，口径一行不改）
+        val originalCents = effectiveCents(amountText.value) ?: return false
+        val refundCents = centsOrZero(refundText.value)
+        val discountCents = centsOrZero(discountText.value)
         val now = System.currentTimeMillis()
         val book = currentBook.value ?: db.bookDao().observeAll().first().firstOrNull() ?: return false
         val original = editId?.let { db.transactionDao().get(it) }
@@ -327,13 +397,16 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
                 if (from == to) return false
                 EditableTx(
                     type = TxType.TRANSFER,
-                    amountCents = cents,
+                    // 转账面板没有退款/优惠：原价即落库额
+                    amountCents = originalCents,
                     accountId = from,
                     targetAccountId = to,
                     categoryId = null,
                     dateEpochMinute = dateMinuteForSave(original),
                     note = note.value.trim().ifEmpty { null },
                     feeCents = Money.parseToCents(feeText.value) ?: 0L,
+                    refundCents = 0L,
+                    discountCents = 0L,
                 )
             }
             else -> {
@@ -341,18 +414,20 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
                 val category = categories.value.firstOrNull { it.id == categoryId } ?: return false
                 EditableTx(
                     type = if (category.type == CategoryType.INCOME) TxType.INCOME else TxType.EXPENSE,
-                    amountCents = cents,
+                    amountCents = RefundMath.netCents(originalCents, refundCents, discountCents),
                     accountId = accountId.value,
                     targetAccountId = null,
                     categoryId = category.id,
                     dateEpochMinute = dateMinuteForSave(original),
                     note = note.value.trim().ifEmpty { null },
                     feeCents = 0L,
+                    refundCents = refundCents,
+                    discountCents = discountCents,
                 )
             }
         }
 
-        // 编辑走 TxEdit.applyEdit：退款/优惠/不计收支/不计预算/导入批次/报销等
+        // 编辑走 TxEdit.applyEdit：不计收支/不计预算/导入批次/报销等
         // 本页管不着的字段一律原样保留（重建实体曾把它们全部重置——复查 P0 bug）。
         val tx = original?.let { TxEdit.applyEdit(it, editable, now, app.deviceId) }
             ?: TxEdit.newTransaction(book.id, editable, now, app.deviceId)
@@ -381,3 +456,6 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
         const val KEY_CLEAR = "C"
     }
 }
+
+/** 金额键盘当前在编辑的格（M3-2）：退款/优惠与主金额共用一个键盘，只是键位落到不同的文本上。 */
+enum class AmountField { AMOUNT, REFUND, DISCOUNT }

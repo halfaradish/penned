@@ -69,6 +69,7 @@ class HomeScreenScreenshotTest {
                         categoryIconKey = null,
                         targetAccountName = null,
                         excludeFromStats = false,
+                        refundCents = 0, discountCents = 0,
                     )
                 )
             }
@@ -108,6 +109,7 @@ class HomeScreenScreenshotTest {
         categoryIconKey = null,
         targetAccountName = null,
         excludeFromStats = false,
+        refundCents = 0, discountCents = 0,
     )
 
     /** 本月一号 / 今天 / 上月一号 / 去年同一天：一张月卡一个月份，最后一张要带年份。 */

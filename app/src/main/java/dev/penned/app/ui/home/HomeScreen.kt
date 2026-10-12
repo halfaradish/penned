@@ -700,7 +700,9 @@ private fun HomeDataPreview() {
     val rows = listOf(
         tx("1", minuteOf(2026, 10, 4, 19, 30), TxType.EXPENSE, 1600, "晚餐", "食品餐饮", "北苑餐厅"),
         tx("2", minuteOf(2026, 10, 4, 8, 10), TxType.INCOME, 150000, "工资", null, null),
-        tx("3", minuteOf(2026, 10, 3, 12, 0), TxType.EXPENSE, 700, "午餐", "食品餐饮", "西门"),
+        // 全额退款：金额 0 + 退款额，行上是「全额退款」标记（M3-2）
+        tx("3", minuteOf(2026, 10, 3, 12, 0), TxType.EXPENSE, 0, "午餐", "食品餐饮", "西门", refundCents = 700),
+        tx("6", minuteOf(2026, 10, 3, 9, 20), TxType.EXPENSE, 4800, "外套", "购物消费", "退了邮费", refundCents = 1200),
         // 上个月 = 另一张卡；跨年的日头带 yyyy年
         tx("4", minuteOf(2026, 9, 30, 21, 5), TxType.EXPENSE, 3200, "打车", "出行交通", null),
         tx("5", minuteOf(2025, 12, 31, 23, 50), TxType.EXPENSE, 1200, "夜宵", "食品餐饮", "夜市"),
@@ -723,10 +725,13 @@ private fun tx(
     name: String?,
     parent: String?,
     note: String?,
+    refundCents: Long = 0,
+    discountCents: Long = 0,
 ) = TxWithCategory(
     id = id, type = type, amountCents = cents, accountId = null, categoryId = null,
     dateEpochMinute = minute, note = note, categoryName = name, categoryParentName = parent,
     categoryIconKey = null, targetAccountName = null, excludeFromStats = false,
+    refundCents = refundCents, discountCents = discountCents,
 )
 
 private fun minuteOf(year: Int, month: Int, day: Int, hour: Int, minute: Int): Long =

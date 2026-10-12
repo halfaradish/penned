@@ -21,7 +21,8 @@ import org.robolectric.annotation.Config
 
 /**
  * 复查 P0 回归（落库）：经 TxEdit 合并后的实体写回 Room 再读出，
- * 退款/优惠/开关/批次等字段必须保真（含 @ColumnInfo(defaultValue) 列）。
+ * 开关/批次等字段必须保真（含 @ColumnInfo(defaultValue) 列）。
+ * 退款/优惠自 M3-2 起可编辑：编辑页把它们按记录现值回传（下面这条就是"只改备注"的真实形态）。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w400dp-h800dp")
@@ -84,6 +85,8 @@ class TxEditPersistenceTest {
                 dateEpochMinute = original.dateEpochMinute,
                 note = "改个备注",
                 feeCents = original.feeCents,
+                refundCents = original.refundCents,
+                discountCents = original.discountCents,
             ),
             now = 5000L,
             deviceId = "device-1",
