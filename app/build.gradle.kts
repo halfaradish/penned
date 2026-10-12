@@ -39,6 +39,12 @@ android {
         versionCode = versionProps.getProperty("versionCode").trim().toInt()
         versionName = versionProps.getProperty("versionName").trim()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // 项目主页（关于页「项目主页」行跳转用；github.com/{user}/{repo} 由 origin 派生，仓库不换就永远是它）
+        buildConfigField(
+            "String",
+            "REPO_URL",
+            "\"https://github.com/halfaradish/penned\"",
+        )
         // 明文策略显式化：release 默认禁（targetSdk 28+ 的默认值，写出来是为了可查）；
         // debug 走 src/debug 的 networkSecurityConfig（只放行 10.0.2.2）
         manifestPlaceholders["pennedCleartext"] = if (testCleartext) "true" else "false"
@@ -99,7 +105,7 @@ android {
 
     buildFeatures {
         compose = true
-        buildConfig = true // M2：UPDATE_MANIFEST_URLS / 版本号进 BuildConfig
+        buildConfig = true // M2：UPDATE_MANIFEST_URLS / 版本号进 BuildConfig；REPO_URL 供关于页跳转
     }
 
     sourceSets {

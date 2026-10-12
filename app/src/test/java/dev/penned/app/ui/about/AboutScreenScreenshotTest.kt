@@ -26,6 +26,8 @@ class AboutScreenScreenshotTest {
     @get:Rule
     val composeRule = createComposeRule()
 
+    private val REPO_URL = "github.com/halfaradish/penned"
+
     private val manifest = UpdateManifest(
         versionCode = 2,
         versionName = "0.2.0",
@@ -43,6 +45,7 @@ class AboutScreenScreenshotTest {
         onDownload: () -> Unit = {},
         onRetry: () -> Unit = {},
         onInstall: () -> Unit = {},
+        onOpenRepo: () -> Unit = {},
     ) {
         composeRule.setContent {
             PennedTheme {
@@ -50,6 +53,7 @@ class AboutScreenScreenshotTest {
                     state = state,
                     versionName = "0.1.0",
                     versionCode = 1,
+                    repoUrl = REPO_URL,
                     needsUnknownSources = needsUnknownSources,
                     onBack = {},
                     onCheck = onCheck,
@@ -57,6 +61,7 @@ class AboutScreenScreenshotTest {
                     onCancelDownload = {},
                     onRetry = onRetry,
                     onInstall = onInstall,
+                    onOpenRepo = onOpenRepo,
                     onOpenUnknownSourcesSettings = {},
                     onDismissUnknownSources = {},
                 )
@@ -71,7 +76,8 @@ class AboutScreenScreenshotTest {
     @Test
     fun captureIdleAndAssertCheckWiring() {
         var checks = 0
-        content(UpdateUiState.Idle, onCheck = { checks++ })
+        var repoOpens = 0
+        content(UpdateUiState.Idle, onCheck = { checks++ }, onOpenRepo = { repoOpens++ })
         composeRule.onNodeWithText("一笔一记").assertIsDisplayed()
         composeRule.onNodeWithText("本地优先 · 无服务器").assertIsDisplayed()
         composeRule.onNodeWithText("当前版本").assertIsDisplayed()
@@ -82,6 +88,11 @@ class AboutScreenScreenshotTest {
         // 整行就是「检查更新」的入口（不再是一个铺满的大按钮）
         composeRule.onNodeWithText("检查更新").performClick()
         assertEquals(1, checks)
+        // 「项目主页」行：副标题显示去掉 https:// 前缀的仓库地址
+        composeRule.onNodeWithText("项目主页").assertIsDisplayed()
+        composeRule.onNodeWithText(REPO_URL.removePrefix("https://")).assertIsDisplayed()
+        composeRule.onNodeWithText("项目主页").performClick()
+        assertEquals(1, repoOpens)
         capture("ui16_about_idle")
     }
 
@@ -178,7 +189,9 @@ class AboutScreenScreenshotTest {
                     state = UpdateUiState.Idle,
                     versionName = "0.1.0",
                     versionCode = 1,
+                    repoUrl = REPO_URL,
                     needsUnknownSources = false,
+                    onOpenRepo = {},
                     onBack = {},
                     onCheck = {},
                     onDownload = {},
@@ -201,7 +214,9 @@ class AboutScreenScreenshotTest {
                     state = UpdateUiState.Available(manifest, stronglyRecommended = true),
                     versionName = "0.1.0",
                     versionCode = 1,
+                    repoUrl = REPO_URL,
                     needsUnknownSources = false,
+                    onOpenRepo = {},
                     onBack = {},
                     onCheck = {},
                     onDownload = {},

@@ -22,10 +22,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.penned.app.BuildConfig
 import dev.penned.app.domain.UpdateManifest
 import dev.penned.app.domain.UpdateText
 import dev.penned.app.ui.components.PennedButton
@@ -68,6 +71,7 @@ fun AboutScreen(
         state = state,
         versionName = viewModel.versionName,
         versionCode = viewModel.versionCode,
+        repoUrl = BuildConfig.REPO_URL,
         needsUnknownSources = needsUnknownSources,
         onBack = onBack,
         onCheck = viewModel::checkNow,
@@ -75,6 +79,15 @@ fun AboutScreen(
         onCancelDownload = viewModel::cancelDownload,
         onRetry = viewModel::retry,
         onInstall = { viewModel.install(context) },
+        onOpenRepo = {
+            try {
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.REPO_URL)),
+                )
+            } catch (_: Exception) {
+                // 没有浏览器（罕见）：静默放弃——这是一个纯展示入口，不值得为它报错打扰
+            }
+        },
         onOpenUnknownSourcesSettings = { viewModel.openUnknownSourcesSettings(context) },
         onDismissUnknownSources = viewModel::dismissUnknownSources,
         modifier = modifier,
@@ -87,6 +100,7 @@ fun AboutContent(
     state: UpdateUiState,
     versionName: String,
     versionCode: Int,
+    repoUrl: String,
     needsUnknownSources: Boolean,
     onBack: () -> Unit,
     onCheck: () -> Unit,
@@ -94,6 +108,7 @@ fun AboutContent(
     onCancelDownload: () -> Unit,
     onRetry: () -> Unit,
     onInstall: () -> Unit,
+    onOpenRepo: () -> Unit,
     onOpenUnknownSourcesSettings: () -> Unit,
     onDismissUnknownSources: () -> Unit,
     modifier: Modifier = Modifier,
@@ -146,6 +161,13 @@ fun AboutContent(
                             onInstall = onInstall,
                         )
                     }
+                    PennedDivider(startIndent = ROW_DIVIDER_INDENT)
+                    PennedListRow(
+                        title = "项目主页",
+                        subtitle = repoUrl.removePrefix("https://"),
+                        leadingIcon = PennedIcons.Database,
+                        onClick = onOpenRepo,
+                    )
                 }
             }
 
