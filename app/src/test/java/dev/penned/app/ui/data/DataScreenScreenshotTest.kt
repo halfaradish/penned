@@ -33,6 +33,7 @@ class DataScreenScreenshotTest {
                     onOpenDataManagement = {},
                     onOpenTemplates = {},
                     onOpenRecurring = {},
+                onOpenBillFilters = {},
                     onOpenCategories = {},
                     onOpenTags = {},
                     onOpenPinLock = {},

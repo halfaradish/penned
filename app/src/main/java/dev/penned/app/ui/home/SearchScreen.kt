@@ -58,6 +58,7 @@ import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.data.db.entity.CategoryEntity
 import dev.penned.app.data.db.entity.TagEntity
 import dev.penned.app.data.importer.PennedCsv
+import dev.penned.app.domain.BillFilterCodec
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.SearchQuery
 import dev.penned.app.domain.StatsMath
@@ -99,7 +100,11 @@ data class FilterSummary(val count: Int, val incomeCents: Long, val expenseCents
  * 组合筛选（M3-7）：搜索页升级——关键词之外还有类型/日期/分类（含二级）/账户/标签/金额区间/三个开关。
  * 结果复用首页行渲染 + 顶部汇总；「导出」把**当前结果集**写成 CSV（文件名带筛选摘要与日期）。
  */
-class SearchViewModel(private val app: PennedApplication) : ViewModel() {
+class SearchViewModel(
+    private val app: PennedApplication,
+    /** 从「账单组合」点进来的组合 id（M3-8）：进页就把条件回填、结果即出。 */
+    private val filterId: String? = null,
+) : ViewModel() {
 
     private val db = app.database
 
@@ -179,7 +184,47 @@ class SearchViewModel(private val app: PennedApplication) : ViewModel() {
         filter.value = transform(filter.value)
     }
 
+    init {
+        if (filterId != null) {
+            viewModelScope.launch {
+                db.billFilterDao().get(filterId)?.let { filter.value = BillFilterCodec.toFilter(it) }
+            }
+        }
+    }
+
     fun setKeyword(text: String) = update { it.copy(keyword = text) }
+
+    /** 存为组合（M3-8）：重名/空名回一句提示，成功回 null。 */
+    fun saveAsFilter(name: String, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            val trimmed = name.trim()
+            if (trimmed.isEmpty()) {
+                onResult("名字不能为空")
+                return@launch
+            }
+            val bookId = app.settings.currentBookId.first() ?: run {
+                onResult("还没有账本")
+                return@launch
+            }
+            if (db.billFilterDao().nameTaken(bookId, trimmed, "") > 0) {
+                onResult("已经有一个叫「$trimmed」的组合了")
+                return@launch
+            }
+            val now = System.currentTimeMillis()
+            db.billFilterDao().upsert(
+                BillFilterCodec.toEntity(
+                    id = java.util.UUID.randomUUID().toString(),
+                    bookId = bookId,
+                    name = trimmed,
+                    filter = filter.value,
+                    sortOrder = db.billFilterDao().countInBook(bookId),
+                    now = now,
+                    deviceId = app.deviceId,
+                )
+            )
+            onResult(null)
+        }
+    }
 
     fun clearAll() {
         filter.value = TxFilter()
@@ -240,9 +285,13 @@ class SearchViewModel(private val app: PennedApplication) : ViewModel() {
 fun SearchScreen(
     onOpenDetail: (String) -> Unit,
     onBack: () -> Unit,
+    filterId: String? = null,
 ) {
     val app = dev.penned.app.ui.LocalApp.current
-    val viewModel: SearchViewModel = viewModel(initializer = { SearchViewModel(app) })
+    val viewModel: SearchViewModel = viewModel(
+        key = "search-${filterId.orEmpty()}",
+        initializer = { SearchViewModel(app, filterId) },
+    )
     val filter by viewModel.filter.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
     val summary by viewModel.summary.collectAsStateWithLifecycle()
@@ -273,6 +322,7 @@ fun SearchScreen(
         onClearAll = viewModel::clearAll,
         onExport = { uri, resolver -> viewModel.exportCsv(uri, resolver) },
         resolver = app.contentResolver,
+        onSaveAsFilter = { name, report -> viewModel.saveAsFilter(name) { error -> report(error) } },
         suggestedFileName = { viewModel.fileNameNow() },
         onOpenDetail = onOpenDetail,
         onBack = onBack,
@@ -299,6 +349,8 @@ fun SearchContent(
     onExport: (Uri, ContentResolver) -> Unit = { _, _ -> },
     /** 导出用的 resolver（`SearchScreen` 从 LocalApp 取；截图测试不需要真导出，留空即可）。 */
     resolver: ContentResolver? = null,
+    /** 「存为组合」（M3-8）：给名字，回一句错误（null = 成功）。 */
+    onSaveAsFilter: (String, (String?) -> Unit) -> Unit = { _, _ -> },
     suggestedFileName: () -> String = { "penned.csv" },
     onOpenDetail: (String) -> Unit = {},
     onBack: () -> Unit = {},
@@ -307,6 +359,7 @@ fun SearchContent(
     zone: ZoneId = ZoneId.systemDefault(),
 ) {
     var sheet by remember { mutableStateOf<FilterSheet?>(null) }
+    var naming by remember { mutableStateOf(false) }
     // resolver 由调用方传入（回调里不是 @Composable 上下文，不能读 CompositionLocal）
     val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.CreateDocument("text/csv"),
@@ -317,7 +370,14 @@ fun SearchContent(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { PennedTopBar(title = "筛选", onBack = onBack) },
+        topBar = {
+            PennedTopBar(title = "筛选", onBack = onBack) {
+                // 有条件才给「存为组合」（空条件存下来没有意义）
+                if (filter.activeCount > 0) {
+                    TextButton(onClick = { naming = true }) { Text("存为组合") }
+                }
+            }
+        },
         snackbarHost = { if (snackbarHostState != null) PennedSnackbarHost(snackbarHostState) },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
@@ -428,6 +488,13 @@ fun SearchContent(
                 }
             }
         }
+    }
+
+    if (naming) {
+        NameFilterSheet(
+            onConfirm = { name, report -> onSaveAsFilter(name) { error -> if (error == null) naming = false else report(error) } },
+            onDismiss = { naming = false },
+        )
     }
 
     when (sheet) {
@@ -824,4 +891,62 @@ private fun SearchHint(text: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.lg),
     )
+}
+
+/**
+ * 「存为组合」命名**抽屉**（规格原文就是"命名抽屉"）：输入名 + 重名/空名提示就地显示。
+ * 用 `PennedSheet` 而不是 `AlertDialog`：AlertDialog 里的输入在 Robolectric 下会卡住 idle（实测），
+ * 抽屉是本项目里已经被大量测试覆盖的形态（标签/报销/账户选择都是它）。
+ */
+@Composable
+private fun NameFilterSheet(
+    onConfirm: (String, (String) -> Unit) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var text by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    PennedSheet(onDismiss = onDismiss, title = "存为组合") {
+        BasicTextField(
+            value = text,
+            onValueChange = {
+                text = it
+                error = null
+            },
+            singleLine = true,
+            textStyle = TextStyle(
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = MaterialTheme.typography.bodyLarge.fontSize,
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = PennedSpacing.xl)
+                .background(MaterialTheme.colorScheme.surfaceContainer, MaterialTheme.shapes.small)
+                .padding(PennedSpacing.md),
+            decorationBox = { inner ->
+                Box {
+                    if (text.isEmpty()) {
+                        Text("比如「上月餐饮」", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    inner()
+                }
+            },
+        )
+        error?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = PennedSpacing.xl, vertical = PennedSpacing.xs),
+            )
+        }
+        Spacer(Modifier.height(PennedSpacing.sm))
+        Row(Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.xl)) {
+            TextButton(onClick = onDismiss) { Text("取消") }
+            Spacer(Modifier.weight(1f))
+            TextButton(
+                enabled = text.isNotBlank(),
+                onClick = { onConfirm(text) { message -> error = message } },
+            ) { Text("保存") }
+        }
+    }
 }

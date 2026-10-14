@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import dev.penned.app.data.db.dao.AccountDao
+import dev.penned.app.data.db.dao.BillFilterDao
 import dev.penned.app.data.db.dao.BookDao
 import dev.penned.app.data.db.dao.BudgetDao
 import dev.penned.app.data.db.dao.CategoryDao
@@ -66,6 +67,7 @@ abstract class PennedDatabase : RoomDatabase() {
     abstract fun debtDao(): DebtDao
     abstract fun templateDao(): TemplateDao
     abstract fun recurringDao(): RecurringDao
+    abstract fun billFilterDao(): BillFilterDao
 
     companion object {
         /** 全部迁移。生产构建与 migration 测试共用这一份，测试不会漏掉新迁移。 */

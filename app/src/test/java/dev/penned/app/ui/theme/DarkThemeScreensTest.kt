@@ -156,6 +156,7 @@ class DarkThemeScreensTest {
                 onOpenDataManagement = {},
                 onOpenTemplates = {},
                 onOpenRecurring = {},
+                onOpenBillFilters = {},
                 onOpenCategories = {},
                 onOpenTags = {},
                 onOpenPinLock = {},
@@ -680,6 +681,26 @@ class DarkThemeScreensTest {
         composeRule.onNodeWithText("筛选").assertIsDisplayed()
         composeRule.onNodeWithText("分类 · 1").assertIsDisplayed()
         capture("filter")
+    }
+
+    @Test
+    fun darkBillFilters() {
+        dark {
+            dev.penned.app.ui.filters.BillFiltersContent(
+                rows = listOf(
+                    dev.penned.app.ui.filters.BillFilterRow(
+                        entity = dev.penned.app.data.db.entity.BillFilterEntity(
+                            id = "f1", bookId = "b1", name = "上月餐饮",
+                            type = TxType.EXPENSE, createdAt = 0, updatedAt = 0, deviceId = "d",
+                        ),
+                        summary = "支出 · 食品餐饮 · 近 30 天",
+                    ),
+                ),
+                onBack = {}, onApply = {},
+            )
+        }
+        composeRule.onNodeWithText("账单组合").assertIsDisplayed()
+        capture("bill_filters")
     }
 
     private fun txRow(

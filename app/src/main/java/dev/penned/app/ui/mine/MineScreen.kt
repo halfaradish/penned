@@ -31,6 +31,7 @@ fun MineScreen(
     onOpenDataManagement: () -> Unit,
     onOpenTemplates: () -> Unit,
     onOpenRecurring: () -> Unit,
+    onOpenBillFilters: () -> Unit,
     onOpenCategories: () -> Unit,
     onOpenTags: () -> Unit,
     onOpenPinLock: () -> Unit,
@@ -102,6 +103,14 @@ fun MineScreen(
                 subtitle = "房租话费这类固定支出：打开 App 时自动补记到期的期数",
                 leadingIcon = PennedIcons.Refresh,
                 onClick = onOpenRecurring,
+            )
+            PennedDivider(startIndent = ROW_DIVIDER_INDENT)
+            // M3-8：账单组合（筛选条件的存档，一键应用）
+            PennedListRow(
+                title = "账单组合",
+                subtitle = "把常用筛选条件存下来，下次一键应用",
+                leadingIcon = PennedIcons.Search,
+                onClick = onOpenBillFilters,
             )
         }
 

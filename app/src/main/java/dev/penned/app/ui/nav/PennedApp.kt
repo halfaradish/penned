@@ -66,6 +66,7 @@ import dev.penned.app.ui.debts.DebtDetailScreen
 import dev.penned.app.ui.debts.DebtEditScreen
 import dev.penned.app.ui.debts.DebtListScreen
 import dev.penned.app.ui.detail.DetailScreen
+import dev.penned.app.ui.filters.BillFiltersScreen
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.primaryInkColor
 import dev.penned.app.ui.theme.rememberAnimationsEnabled
@@ -299,10 +300,21 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable("search") {
+            composable(
+                route = "search?filterId={filterId}",
+                arguments = listOf(navArgument("filterId") { type = NavType.StringType; defaultValue = "" }),
+            ) { entry ->
                 SearchScreen(
                     onOpenDetail = { id -> navController.navigate("detail/$id") },
                     onBack = { navController.popBackStack() },
+                    // 从账单组合点进来：条件回填、结果即出（M3-8）
+                    filterId = entry.arguments?.getString("filterId")?.ifEmpty { null },
+                )
+            }
+            composable("filters") {
+                BillFiltersScreen(
+                    onBack = { navController.popBackStack() },
+                    onApply = { id -> navController.navigate("search?filterId=$id") },
                 )
             }
             composable("books") {
@@ -337,6 +349,7 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onOpenDataManagement = { navController.navigate("data") },
                     onOpenTemplates = { navController.navigate("templates") },
                     onOpenRecurring = { navController.navigate("recurring") },
+                    onOpenBillFilters = { navController.navigate("filters") },
                     onOpenCategories = { navController.navigate("categories") },
                     onOpenTags = { navController.navigate("tags") },
                     onOpenPinLock = { navController.navigate("pin") },
