@@ -19,6 +19,7 @@ object TxEdit {
      * 记一笔页能改的字段（[Editable] 之外的一切字段编辑时不可变）。
      * 退款/优惠 M3-2 起可改——注意 `amountCents` 存的是**净额**，退款/优惠是各自原值（D069）。
      * 报销三字段（状态/账户/金额）M3-3 起可改；金额缺省 0 = 按净额全额（`ReimburseMath`）。
+     * 债务归属（`debtId`，M3-4）也在这里：债务 Tab 生成的流水带着它，切回普通 Tab 即置空（脱离债务）。
      * 字段**有意不给默认值**：新增调用点必须显式写出这些数，免得"忘了传"被静默当成"清空"。
      */
     data class Editable(
@@ -35,6 +36,7 @@ object TxEdit {
         val reimburseState: ReimburseState,
         val reimburseAccountId: String?,
         val reimburseCents: Long,
+        val debtId: String?,
     )
 
     /** 编辑：在原记录上覆盖本页字段。 */
@@ -57,6 +59,7 @@ object TxEdit {
         reimburseState = editable.reimburseState,
         reimburseAccountId = editable.reimburseAccountId,
         reimburseCents = editable.reimburseCents,
+        debtId = editable.debtId,
         updatedAt = now,
         deviceId = deviceId,
     )
@@ -83,6 +86,7 @@ object TxEdit {
         reimburseState = editable.reimburseState,
         reimburseAccountId = editable.reimburseAccountId,
         reimburseCents = editable.reimburseCents,
+        debtId = editable.debtId,
         source = TxSource.MANUAL,
         creatorDeviceId = deviceId,
         createdAt = now,

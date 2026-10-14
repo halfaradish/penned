@@ -53,6 +53,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.penned.app.PennedApplication
 import dev.penned.app.data.db.dao.AccountWithBalance
 import dev.penned.app.domain.AccountType
+import dev.penned.app.domain.DebtMath
 import dev.penned.app.domain.Money
 import dev.penned.app.ui.components.CategoryAvatar
 import dev.penned.app.ui.components.AnimatedNumberText
@@ -88,6 +89,9 @@ data class AssetsUiState(
     val liabilityCents: Long = 0,
     val reimbursePendingCents: Long = 0,
     val reimburseDoneCents: Long = 0,
+    /** 债务（M3-4）：应付 = 我欠对方的剩余合计、应收 = 对方欠我的剩余合计。 */
+    val payableCents: Long = 0,
+    val receivableCents: Long = 0,
 )
 
 class AssetsViewModel(private val app: PennedApplication) : ViewModel() {
@@ -101,15 +105,21 @@ class AssetsViewModel(private val app: PennedApplication) : ViewModel() {
             combine(
                 db.accountDao().observeWithBalance(bookId),
                 db.transactionDao().observeReimburseSums(bookId),
-            ) { accounts, reimb ->
-                val net = accounts.sumOf { it.balanceCents }
+                db.debtDao().observeByBook(bookId),
+            ) { accounts, reimb, debts ->
+                // 债务不落库（D004/D068）：净资产 = Σ账户余额 − 应付 + 应收（DebtMath 的口径）
+                val payable = DebtMath.payableCents(debts.map { it.toBalance() })
+                val receivable = DebtMath.receivableCents(debts.map { it.toBalance() })
+                val accountSum = accounts.sumOf { it.balanceCents }
                 AssetsUiState(
                     accounts = accounts,
-                    netCents = net,
+                    netCents = DebtMath.netAssetCents(accountSum, payable, receivable),
                     assetCents = accounts.filter { it.balanceCents > 0 }.sumOf { it.balanceCents },
                     liabilityCents = -accounts.filter { it.balanceCents < 0 }.sumOf { it.balanceCents },
                     reimbursePendingCents = reimb.pendingCents,
                     reimburseDoneCents = reimb.doneCents,
+                    payableCents = payable,
+                    receivableCents = receivable,
                 )
             }
         }
@@ -168,6 +178,7 @@ fun accountTypeLabel(type: AccountType): String = when (type) {
 fun AssetsScreen(
     onAddAccount: (AccountGroup, String?) -> Unit = { _, _ -> },
     onOpenAccount: (String) -> Unit = {},
+    onOpenDebts: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val app = dev.penned.app.ui.LocalApp.current
@@ -202,6 +213,7 @@ fun AssetsScreen(
         state = state,
         onAddAccount = onAddAccount,
         onOpenAccount = onOpenAccount,
+        onOpenDebts = onOpenDebts,
         onDeleteAccount = viewModel::deleteAccount,
         revealedRowId = revealedRowId,
         onRevealedRowChange = { revealedRowId = it },
@@ -217,6 +229,8 @@ fun AssetsContent(
     onAddAccount: (AccountGroup, String?) -> Unit,
     modifier: Modifier = Modifier,
     onOpenAccount: (String) -> Unit = {},
+    /** 点「债务」卡进债务列表（M3-4）；报销/理财两张卡还没有可进的页面。 */
+    onOpenDebts: () -> Unit = {},
     onDeleteAccount: (AccountWithBalance) -> Unit = {},
     /** 当前左滑展开动作区的账户 id（null = 都收起）；只留一行为开。 */
     revealedRowId: String? = null,
@@ -275,7 +289,7 @@ fun AssetsContent(
             item(key = "net") {
                 NetAssetCard(state = state, masked = masked, onToggleMask = { masked = !masked })
             }
-            item(key = "summary") { SummaryCards(state = state, masked = masked) }
+            item(key = "summary") { SummaryCards(state = state, masked = masked, onOpenDebts = onOpenDebts) }
 
             if (state.accounts.isEmpty()) {
                 item(key = "empty") {
@@ -384,9 +398,9 @@ private fun AmountLine(label: String, cents: Long, masked: Boolean) {
 
 private data class SummaryLine(val label: String, val cents: Long, val color: Color)
 
-/** 报销 / 债务 / 理财：三张独立小卡（债务与理财是 M1 静态占位）。 */
+/** 报销 / 债务 / 理财：三张独立小卡（债务 M3-4 起接真数据并可点进列表；理财仍是占位）。 */
 @Composable
-private fun SummaryCards(state: AssetsUiState, masked: Boolean) {
+private fun SummaryCards(state: AssetsUiState, masked: Boolean, onOpenDebts: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
         horizontalArrangement = Arrangement.spacedBy(PennedSpacing.md),
@@ -403,10 +417,11 @@ private fun SummaryCards(state: AssetsUiState, masked: Boolean) {
         SummaryCard(
             title = "债务",
             lines = listOf(
-                SummaryLine("应付", 0L, expenseColor()),
-                SummaryLine("应收", 0L, primaryInkColor()),
+                SummaryLine("应付", state.payableCents, expenseColor()),
+                SummaryLine("应收", state.receivableCents, primaryInkColor()),
             ),
             masked = masked,
+            onClick = onOpenDebts,
             modifier = Modifier.weight(1f),
         )
         SummaryCard(
@@ -427,9 +442,10 @@ private fun SummaryCard(
     lines: List<SummaryLine>,
     masked: Boolean,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
 ) {
     PennedCard(
-        modifier = modifier,
+        modifier = modifier.then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         contentPadding = PaddingValues(horizontal = PennedSpacing.xs, vertical = PennedSpacing.md),
     ) {
         Text(

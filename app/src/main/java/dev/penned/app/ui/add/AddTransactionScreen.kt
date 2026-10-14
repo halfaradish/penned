@@ -35,14 +35,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.penned.app.data.db.dao.DebtWithRepaid
 import dev.penned.app.data.db.entity.AccountEntity
+import dev.penned.app.domain.DebtAction
+import dev.penned.app.domain.DebtDirection
+import dev.penned.app.domain.DebtMath
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.ReimburseState
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.components.CategoryAvatar
+import dev.penned.app.ui.components.EmptyState
+import dev.penned.app.ui.components.PennedButton
 import dev.penned.app.ui.components.PennedCard
 import dev.penned.app.ui.components.PennedChip
 import dev.penned.app.ui.components.PennedDialog
@@ -67,10 +74,14 @@ fun AddTransactionScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     onManageCategories: () -> Unit = {},
+    onNewDebt: () -> Unit = {},
+    /** 「记一笔还款」预填（M3-4）：债务详情页跳进来时带着债务与那一格。 */
+    presetDebtId: String? = null,
+    presetDebtAction: DebtAction? = null,
 ) {
     val viewModel = androidx.lifecycle.viewmodel.compose.viewModel(
-        key = editId ?: "new",
-        initializer = { AddViewModel(app, editId) },
+        key = editId ?: "new-${presetDebtId.orEmpty()}-${presetDebtAction?.name.orEmpty()}",
+        initializer = { AddViewModel(app, editId, presetDebtId, presetDebtAction) },
     )
     val type by viewModel.type.collectAsStateWithLifecycle()
     val amount by viewModel.amountText.collectAsStateWithLifecycle()
@@ -96,6 +107,10 @@ fun AddTransactionScreen(
     val canSave by viewModel.canSave.collectAsStateWithLifecycle()
     val showEquals by viewModel.showEquals.collectAsStateWithLifecycle()
     val dateEpochDay by viewModel.dateEpochDay.collectAsStateWithLifecycle()
+    val debtTab by viewModel.debtTab.collectAsStateWithLifecycle()
+    val debts by viewModel.debts.collectAsStateWithLifecycle()
+    val debtId by viewModel.debtId.collectAsStateWithLifecycle()
+    val debtAction by viewModel.debtAction.collectAsStateWithLifecycle()
 
     val parents = remember(categories, type) {
         val domain = if (type == TxType.INCOME) dev.penned.app.domain.CategoryType.INCOME else dev.penned.app.domain.CategoryType.EXPENSE
@@ -135,7 +150,15 @@ fun AddTransactionScreen(
         reimburseState = reimburseState,
         reimburseAccountId = reimburseAccountId,
         claimLabel = claimLabel,
+        debtTab = debtTab,
+        debts = debts,
+        debtId = debtId,
+        debtAction = debtAction,
         onSelectType = viewModel::selectType,
+        onSelectDebtTab = viewModel::selectDebtTab,
+        onPickDebt = viewModel::pickDebt,
+        onPickDebtAction = viewModel::pickDebtAction,
+        onNewDebt = onNewDebt,
         onKey = viewModel::pressKey,
         onFocusField = viewModel::focusAmountField,
         onPickReimburseState = viewModel::pickReimburseState,
@@ -197,7 +220,17 @@ fun AddTransactionContent(
     reimburseText: String = "",
     /** 报销金额文案（`全额 100.00` / `30.00`）；金额还没输时为 null。 */
     claimLabel: String? = null,
+    /** 第四 Tab「债务」（M3-4）：面板换成 选择债务 + 借入/归还 + 资金账户。 */
+    debtTab: Boolean = false,
+    debts: List<DebtWithRepaid> = emptyList(),
+    debtId: String? = null,
+    debtAction: DebtAction = DebtAction.OPEN,
     onSelectType: (TxType) -> Unit,
+    onSelectDebtTab: () -> Unit = {},
+    onPickDebt: (String?) -> Unit = {},
+    onPickDebtAction: (DebtAction) -> Unit = {},
+    /** 债务选择器里的「新建债务」：跳新建债务页（建完回来就在列表里可选）。 */
+    onNewDebt: () -> Unit = {},
     onKey: (String) -> Unit,
     onSelectParent: (CategoryUi) -> Unit,
     onSelectSub: (CategoryUi) -> Unit,
@@ -233,6 +266,7 @@ fun AddTransactionContent(
     var showTagCreate by remember { mutableStateOf(false) }
     var showReimburse by remember { mutableStateOf(false) }
     var showReimburseAccount by remember { mutableStateOf(false) }
+    var showDebtPicker by remember { mutableStateOf(false) }
     val amountColor = when (type) {
         TxType.EXPENSE -> expenseColor()
         TxType.INCOME -> incomeColor()
@@ -251,10 +285,13 @@ fun AddTransactionContent(
                 Icon(PennedIcons.Back, contentDescription = "返回", tint = MaterialTheme.colorScheme.onSurface)
             }
             PennedSegmentedTabs(
-                options = TYPE_TABS,
-                selected = type,
-                onSelect = onSelectType,
-                label = { typeLabel(it) },
+                options = ADD_TABS,
+                selected = currentTab(type, debtTab),
+                onSelect = { tab ->
+                    // 债务不是一种流水类型（落库的仍是收入/支出），单独一位路由
+                    if (tab == AddTab.DEBT) onSelectDebtTab() else onSelectType(TxType.valueOf(tab.name))
+                },
+                label = { it.label },
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = onEdit, modifier = Modifier.size(PennedDimens.iconButton)) {
@@ -262,7 +299,23 @@ fun AddTransactionContent(
             }
         }
 
-        if (type == TxType.TRANSFER) {
+        if (debtTab) {
+            // 债务面板（M3-4）：选择债务 → 借入/归还 → 资金账户
+            DebtPanel(
+                debts = debts,
+                debtId = debtId,
+                action = debtAction,
+                account = accounts.firstOrNull { it.id == accountId },
+                onPickDebt = { showDebtPicker = true },
+                onPickAction = onPickDebtAction,
+                onPickAccount = { showAccountPicker = true },
+                onNewDebt = onNewDebt,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = PennedSpacing.md),
+            )
+        } else if (type == TxType.TRANSFER) {
             // 转账面板：转出 / 互换 / 转入
             PennedCard(
                 modifier = Modifier
@@ -370,7 +423,9 @@ fun AddTransactionContent(
                         selected = dateEpochDay != null && dateEpochDay != today.toEpochDay(),
                         onClick = { showDatePicker = true },
                     )
-                    if (type == TxType.TRANSFER) {
+                    if (debtTab) {
+                        // 债务 Tab：资金账户在面板上选，备注在左边，没有分类/标签/退优惠/报销
+                    } else if (type == TxType.TRANSFER) {
                         PennedChip(
                             label = if (feeText.isBlank()) "手续费" else "手续费 $feeText",
                             icon = PennedIcons.Tag,
@@ -385,7 +440,7 @@ fun AddTransactionContent(
                             onClick = { showAccountPicker = true },
                         )
                     }
-                    if (type != TxType.TRANSFER) {
+                    if (!debtTab && type != TxType.TRANSFER) {
                         // 标签（M3-1）：多选；信息条只回显数量，明细在抽屉里
                         PennedChip(
                             label = if (selectedTagIds.isEmpty()) "标签" else "标签 · ${selectedTagIds.size}",
@@ -415,14 +470,24 @@ fun AddTransactionContent(
                         )
                     }
                 }
-                // 实付 = 原价 − 退款 − 优惠（只回显，落库在 saveInternal 一次算清）
-                paySummary?.let { summary ->
+                // 实付 = 原价 − 退款 − 优惠（只回显，落库在 saveInternal 一次算清）；
+                // 债务 Tab 换成口径说明：这笔钱不进收支统计（借入不是收入、还款不是支出，D068）
+                if (debtTab) {
                     Spacer(Modifier.height(PennedSpacing.xs))
                     Text(
-                        summary,
+                        "不计入收支与预算：借入不是收入、还款不是支出（详情页可改）",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                } else {
+                    paySummary?.let { summary ->
+                        Spacer(Modifier.height(PennedSpacing.xs))
+                        Text(
+                            summary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         }
@@ -592,6 +657,22 @@ fun AddTransactionContent(
             onDismiss = { showReimburseAccount = false },
         )
     }
+    if (showDebtPicker) {
+        DebtPickerSheet(
+            debts = debts,
+            selectedId = debtId,
+            onPick = {
+                onPickDebt(it)
+                showDebtPicker = false
+            },
+            onNewDebt = {
+                // 先收抽屉再跳（两层浮层不叠，与报销/标签同一做法）；建完回到本页即可选中
+                showDebtPicker = false
+                onNewDebt()
+            },
+            onDismiss = { showDebtPicker = false },
+        )
+    }
 }
 
 
@@ -626,8 +707,7 @@ private fun AmountFocusBar(label: String, value: String, onBackToAmount: () -> U
 }
 
 @Composable
-private fun AccountFieldRow(label: String, account: AccountEntity?, onClick: () -> Unit) {
-    Surface(
+private fun AccountFieldRow(label: String, account: AccountEntity?, onClick: () -> Unit) {    Surface(
         shape = MaterialTheme.shapes.small,
         color = MaterialTheme.colorScheme.surfaceContainer,
         modifier = Modifier
@@ -653,12 +733,179 @@ private fun AccountFieldRow(label: String, account: AccountEntity?, onClick: () 
     }
 }
 
-private val TYPE_TABS = listOf(TxType.EXPENSE, TxType.INCOME, TxType.TRANSFER)
+/**
+ * 记一笔的四个 Tab（M3-4）：前三个是 [TxType]（要落库的流水类型），
+ * 「债务」不是类型而是入口（落库的仍是收入/支出 + `debtId`），所以单独枚举而不是往 [TxType] 里加值。
+ */
+private enum class AddTab(val label: String) {
+    EXPENSE("支出"),
+    INCOME("收入"),
+    TRANSFER("转账"),
+    DEBT("债务"),
+}
 
-private fun typeLabel(type: TxType): String = when (type) {
-    TxType.EXPENSE -> "支出"
-    TxType.INCOME -> "收入"
-    TxType.TRANSFER -> "转账"
+private val ADD_TABS = AddTab.entries
+
+private fun currentTab(type: TxType, debtTab: Boolean): AddTab =
+    if (debtTab) AddTab.DEBT else AddTab.valueOf(type.name)
+
+/**
+ * 债务面板（M3-4）：选择债务 → 借入/归还 → 资金账户。
+ * 一笔债务没有时给空态与出路（D044 六态）：先去建一笔债务，再回来记它的借入/还款。
+ */
+@Composable
+private fun DebtPanel(
+    debts: List<DebtWithRepaid>,
+    debtId: String?,
+    action: DebtAction,
+    account: AccountEntity?,
+    onPickDebt: () -> Unit,
+    onPickAction: (DebtAction) -> Unit,
+    onPickAccount: () -> Unit,
+    onNewDebt: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val selected = debts.firstOrNull { it.id == debtId }
+    // 还没选债务时先按"我欠对方"这一面给词；选了就跟着债务的方向走（两面用词不同）
+    val direction = selected?.direction ?: DebtDirection.BORROW
+    PennedCard(modifier = modifier) {
+        if (debts.isEmpty()) {
+            EmptyState(
+                title = "还没有债务",
+                hint = "债务是独立实体：先建一笔（对方 + 本金），再回来记它的借入与还款",
+                icon = PennedIcons.Receipt,
+                action = { PennedButton(text = "新建债务", onClick = onNewDebt) },
+            )
+        } else {
+            DebtFieldRow(
+                title = selected?.counterparty ?: "选择债务",
+                subtitle = selected?.let {
+                    "${DebtMath.directionLabel(it.direction)} · 剩余 ${Money.format(it.remainingCents)}"
+                },
+                onClick = onPickDebt,
+                placeholder = selected == null,
+            )
+            Column(Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.md, vertical = PennedSpacing.sm)) {
+                PennedSegmentedTabs(
+                    options = DEBT_ACTIONS,
+                    selected = action,
+                    onSelect = onPickAction,
+                    label = { DebtMath.actionLabel(direction, it) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            Text(
+                debtActionHint(direction, action),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = PennedSpacing.lg),
+            )
+            Spacer(Modifier.height(PennedSpacing.sm))
+            DebtFieldRow(
+                title = account?.name ?: "选择账户",
+                subtitle = null,
+                onClick = onPickAccount,
+                placeholder = account == null,
+            )
+        }
+    }
+}
+
+private val DEBT_ACTIONS = DebtAction.entries
+
+/** 债务面板上那一格的说明（钱从哪儿到哪儿 + 这一笔会怎么记）。 */
+private fun debtActionHint(direction: DebtDirection, action: DebtAction): String = when (action) {
+    DebtAction.OPEN -> if (direction == DebtDirection.BORROW) {
+        "钱进资金账户；这笔债务的欠款从这里开始记"
+    } else {
+        "钱从资金账户出去；对方欠你这一笔"
+    }
+    DebtAction.SETTLE -> if (direction == DebtDirection.BORROW) {
+        "钱从资金账户出去；冲减这笔债务的欠款"
+    } else {
+        "钱进资金账户；冲减对方欠你的钱"
+    }
+}
+
+/** 债务面板上的一行：头像 + 值（没选时是灰色占位）+ 副标题 + 箭头。 */
+@Composable
+private fun DebtFieldRow(
+    title: String,
+    subtitle: String?,
+    onClick: () -> Unit,
+    placeholder: Boolean = false,
+) {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = PennedSpacing.md, vertical = PennedSpacing.xs)
+            .clickable(onClick = onClick),
+    ) {
+        Row(Modifier.padding(PennedSpacing.md), verticalAlignment = Alignment.CenterVertically) {
+            CategoryAvatar(title, size = PennedDimens.avatar)
+            Spacer(Modifier.width(PennedSpacing.md))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    // 没选的时候 title 就是提示语，用次级色，别把占位读成已选
+                    color = if (placeholder) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (subtitle != null) {
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Icon(
+                PennedIcons.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.size(PennedDimens.iconChevron),
+            )
+        }
+    }
+}
+
+/** 债务选择抽屉：本账本债务（对方 + 立场 + 剩余）+「新建债务」出口。 */
+@Composable
+internal fun DebtPickerSheet(
+    debts: List<DebtWithRepaid>,
+    selectedId: String?,
+    onPick: (String) -> Unit,
+    onNewDebt: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    PennedSheet(onDismiss = onDismiss, title = "选择债务") {
+        debts.forEach { debt ->
+            PennedListRow(
+                title = debt.counterparty,
+                subtitle = "${DebtMath.directionLabel(debt.direction)} · 剩余 ${Money.format(debt.remainingCents)}",
+                leadingIcon = PennedIcons.Wallet,
+                trailing = if (debt.id == selectedId) "已选" else null,
+                showChevron = false,
+                onClick = { onPick(debt.id) },
+            )
+        }
+        PennedListRow(
+            title = "新建债务",
+            subtitle = "建完回到这里就能选它",
+            leadingIcon = PennedIcons.Plus,
+            onClick = onNewDebt,
+        )
+    }
 }
 
 /** 账户选择：从底部升起的抽屉（D024 交互范式一），选中项打勾。 */

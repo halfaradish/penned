@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.penned.app.data.db.dao.TxWithCategory
+import dev.penned.app.domain.DebtMath
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.components.CategoryAvatar
 import dev.penned.app.ui.components.MoneyText
@@ -35,11 +36,21 @@ import dev.penned.app.ui.theme.PennedPigment
 import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.PennedTextStyles
 
-/** 流水标题：分类路径（父 · 子）或转账行的「转账 · 转入 X」（D007 单表多态）。 */
-internal fun txTitle(row: TxWithCategory): String = when (row.type) {
-    TxType.TRANSFER -> listOfNotNull("转账", row.targetAccountName?.let { "转入 $it" }).joinToString(" · ")
-    else -> listOfNotNull(row.categoryParentName, row.categoryName).joinToString(" · ")
-        .ifEmpty { PennedPigment.UNKNOWN }
+/**
+ * 流水标题：分类路径（父 · 子）、转账行的「转账 · 转入 X」（D007 单表多态），
+ * 以及债务流水的「借入 / 还款 / 借出 / 收到还款 · 对方」（M3-4）——它没有分类，
+ * 不写这一句就只能显示"未分类"，看不出这笔钱是在还债。
+ */
+internal fun txTitle(row: TxWithCategory): String {
+    val debt = row.debtDirection
+    if (debt != null && !row.debtCounterparty.isNullOrBlank()) {
+        return listOfNotNull(DebtMath.flowLabel(debt, row.type), row.debtCounterparty).joinToString(" · ")
+    }
+    return when (row.type) {
+        TxType.TRANSFER -> listOfNotNull("转账", row.targetAccountName?.let { "转入 $it" }).joinToString(" · ")
+        else -> listOfNotNull(row.categoryParentName, row.categoryName).joinToString(" · ")
+            .ifEmpty { PennedPigment.UNKNOWN }
+    }
 }
 
 /**
@@ -64,8 +75,10 @@ internal fun TransactionRow(
     modifier: Modifier = Modifier,
 ) {
     val title = txTitle(row)
-    val avatarName = when (row.type) {
-        TxType.TRANSFER -> PennedPigment.TRANSFER
+    val avatarName = when {
+        row.type == TxType.TRANSFER -> PennedPigment.TRANSFER
+        // 债务流水：头像给对方名（与详情页同口径，同一个人在两处同色）
+        row.debtDirection != null -> row.debtCounterparty ?: PennedPigment.UNKNOWN
         else -> row.categoryName ?: PennedPigment.UNKNOWN
     }
     Row(

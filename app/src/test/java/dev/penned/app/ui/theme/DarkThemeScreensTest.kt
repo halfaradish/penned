@@ -470,6 +470,90 @@ class DarkThemeScreensTest {
         capture("books")
     }
 
+    @Test
+    fun darkDebtList() {
+        dark {
+            dev.penned.app.ui.debts.DebtListContent(
+                debts = listOf(
+                    dev.penned.app.data.db.dao.DebtWithRepaid(
+                        "d1", dev.penned.app.domain.DebtDirection.BORROW, "张三",
+                        100_000L, 20_000L, 20_100L, null, false, 0, 40_000L,
+                    ),
+                    dev.penned.app.data.db.dao.DebtWithRepaid(
+                        "d2", dev.penned.app.domain.DebtDirection.LEND, "李四",
+                        30_000L, 20_000L, null, null, false, 1, 0L,
+                    ),
+                ),
+                onBack = {}, onOpenDebt = {}, onNewDebt = {},
+            )
+        }
+        composeRule.onNodeWithText("应付 · 我欠对方").assertIsDisplayed()
+        composeRule.onNodeWithText("应收 · 对方欠我").assertIsDisplayed()
+        capture("debt_list")
+    }
+
+    @Test
+    fun darkDebtDetail() {
+        dark {
+            dev.penned.app.ui.debts.DebtDetailContent(
+                detail = dev.penned.app.ui.debts.DebtDetailUi(
+                    debt = dev.penned.app.data.db.dao.DebtWithRepaid(
+                        "d1", dev.penned.app.domain.DebtDirection.BORROW, "张三",
+                        100_000L, 20_000L, 20_100L, "周转", false, 0, 40_000L,
+                    ),
+                    flows = listOf(
+                        dev.penned.app.data.db.dao.DebtFlowRow(
+                            "f2", TxType.EXPENSE, 40_000L, "a1", 30_000_000L, null, "现金",
+                        ),
+                    ),
+                ),
+                onBack = {}, onEdit = {}, onSettle = {},
+            )
+        }
+        composeRule.onNodeWithText("还款记录").assertIsDisplayed()
+        composeRule.onNodeWithText("记一笔还款").assertIsDisplayed()
+        capture("debt_detail")
+    }
+
+    @Test
+    fun darkAddDebt() {
+        // 债务 Tab（M3-4）：深色下面板 / 分段 / 口径说明同样成立
+        dark {
+            AddTransactionContent(
+                type = TxType.EXPENSE,
+                amountText = "1000",
+                note = "",
+                selectedId = null,
+                expandedId = null,
+                canSave = true,
+                showEquals = false,
+                accountId = "a1",
+                fromId = null,
+                toId = null,
+                feeText = "",
+                debtTab = true,
+                debts = listOf(
+                    dev.penned.app.data.db.dao.DebtWithRepaid(
+                        "d1", dev.penned.app.domain.DebtDirection.BORROW, "张三",
+                        100_000L, 20_000L, 20_100L, null, false, 0, 40_000L,
+                    ),
+                ),
+                debtId = "d1",
+                debtAction = dev.penned.app.domain.DebtAction.OPEN,
+                accounts = emptyList(),
+                parents = emptyList(),
+                expandedSubs = emptyList(),
+                onSelectType = {}, onKey = {}, onSelectParent = {}, onSelectSub = {},
+                onNoteChange = {}, onPickAccount = {}, onPickFrom = {}, onPickTo = {},
+                onSwap = {}, onFeeChange = {}, onEvaluate = {},
+                onSave = {}, onSaveAgain = {}, onBack = {}, onEdit = {},
+            )
+        }
+        composeRule.onNodeWithText("张三").assertIsDisplayed()
+        composeRule.onNodeWithText("借入").assertIsDisplayed()
+        capture("add_debt")
+    }
+
     private fun txRow(
         id: String,
         type: TxType,

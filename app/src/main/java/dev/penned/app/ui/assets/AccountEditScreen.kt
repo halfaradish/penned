@@ -23,6 +23,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -104,7 +105,16 @@ data class AccountEditUiState(
 
     val canDelete: Boolean get() = isEdit && pendingTxCount == 0
 
-    val balanceCents: Long get() = Money.parseToCents(initialText) ?: 0L
+    /** 允许负初始余额的账户类型（M3-4，D068）：信贷/负债的存量欠款直接从负数填起。 */
+    val allowsNegativeBalance: Boolean
+        get() = type == AccountType.CREDIT || type == AccountType.DEBT
+
+    val balanceCents: Long
+        get() {
+            val negative = initialText.startsWith("-")
+            val cents = Money.parseToCents(initialText.removePrefix("-")) ?: 0L
+            return if (negative) -cents else cents
+        }
 
     /** 生效账本行的摘要：全部账本，或者列出生效的账本名（所属账本恒定在列）。 */
     val bookSummary: String
@@ -186,7 +196,12 @@ class AccountEditViewModel(
     }
 
     fun setInitial(input: String) {
-        update { it.copy(initialText = input.filter { ch -> ch.isDigit() || ch == '.' }) }
+        update { s ->
+            // 负号只对信贷/负债放行（存量欠款），且只能出现在最前面、只留一个
+            val filtered = input.filter { ch -> ch.isDigit() || ch == '.' || (ch == '-' && s.allowsNegativeBalance) }
+            val normalized = if (filtered.startsWith("-")) "-" + filtered.drop(1).replace("-", "") else filtered.replace("-", "")
+            s.copy(initialText = normalized)
+        }
     }
 
     fun setRemark(remark: String) {
@@ -412,7 +427,30 @@ fun AccountEditContent(
                         placeholder = "0.00",
                         money = true,
                         onValueChange = onInitialChange,
+                        trailing = if (state.allowsNegativeBalance) {
+                            // 数字键盘不保证有负号：给一个「±」把正负翻过来（信贷/负债的存量欠款）
+                            {
+                                TextButton(onClick = {
+                                    val v = state.initialText
+                                    onInitialChange(if (v.startsWith("-")) v.drop(1) else "-$v")
+                                }) { Text("±") }
+                            }
+                        } else {
+                            null
+                        },
                     )
+                    if (state.allowsNegativeBalance) {
+                        Text(
+                            "信贷/负债可以填负数：存量欠款直接写进来（如 -1200），或点「±」翻号",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(
+                                start = PennedSpacing.lg,
+                                end = PennedSpacing.lg,
+                                bottom = PennedSpacing.sm,
+                            ),
+                        )
+                    }
                     EditFieldRow(
                         label = "备注",
                         value = state.remark,
@@ -643,6 +681,8 @@ private fun EditFieldRow(
     placeholder: String = "",
     money: Boolean = false,
     focusRequester: FocusRequester? = null,
+    /** 行尾的附加动作（余额行给「±」翻号用）。 */
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier
@@ -679,6 +719,10 @@ private fun EditFieldRow(
                 }
             },
         )
+        if (trailing != null) {
+            Spacer(Modifier.width(PennedSpacing.sm))
+            trailing()
+        }
     }
 }
 

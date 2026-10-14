@@ -9,6 +9,7 @@ import dev.penned.app.data.db.dao.AccountDao
 import dev.penned.app.data.db.dao.BookDao
 import dev.penned.app.data.db.dao.BudgetDao
 import dev.penned.app.data.db.dao.CategoryDao
+import dev.penned.app.data.db.dao.DebtDao
 import dev.penned.app.data.db.dao.ImportBatchDao
 import dev.penned.app.data.db.dao.TagDao
 import dev.penned.app.data.db.dao.TransactionDao
@@ -60,6 +61,7 @@ abstract class PennedDatabase : RoomDatabase() {
     abstract fun importBatchDao(): ImportBatchDao
     abstract fun budgetDao(): BudgetDao
     abstract fun tagDao(): TagDao
+    abstract fun debtDao(): DebtDao
 
     companion object {
         /** 全部迁移。生产构建与 migration 测试共用这一份，测试不会漏掉新迁移。 */

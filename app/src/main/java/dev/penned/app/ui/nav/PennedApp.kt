@@ -61,6 +61,9 @@ import dev.penned.app.ui.data.DataManagementScreen
 import dev.penned.app.ui.data.DataViewModel
 import dev.penned.app.ui.data.ImportBatchDetailScreen
 import dev.penned.app.ui.data.ImportBatchesScreen
+import dev.penned.app.ui.debts.DebtDetailScreen
+import dev.penned.app.ui.debts.DebtEditScreen
+import dev.penned.app.ui.debts.DebtListScreen
 import dev.penned.app.ui.detail.DetailScreen
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.primaryInkColor
@@ -223,13 +226,21 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                 )
             }
             composable(
-                route = "add?editId={editId}",
-                arguments = listOf(navArgument("editId") { type = NavType.StringType; defaultValue = "" }),
+                route = "add?editId={editId}&debtId={debtId}&debtAction={debtAction}",
+                arguments = listOf(
+                    navArgument("editId") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("debtId") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("debtAction") { type = NavType.StringType; defaultValue = "" },
+                ),
             ) { entry ->
                 val editId = entry.arguments?.getString("editId")?.ifEmpty { null }
                 AddTransactionScreen(
                     app = app,
                     editId = editId,
+                    // 「记一笔还款」预填（M3-4）：债务详情页带 debtId + SETTLE 进来
+                    presetDebtId = entry.arguments?.getString("debtId")?.ifEmpty { null },
+                    presetDebtAction = entry.arguments?.getString("debtAction")?.ifEmpty { null }
+                        ?.let { name -> dev.penned.app.domain.DebtAction.entries.firstOrNull { it.name == name } },
                     // 保存完成给一次反馈：把消息挂到上一个目的地（首页）的 savedStateHandle 上，
                     // 由首页的提示条读出来（此前保存完静默返回，用户不知道成没成）
                     onDone = {
@@ -242,6 +253,8 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     // 此前 onBack 错接成 onDone（返回也写"已记账"）——UI-11 与闪退一并修掉
                     onBack = { navController.popBackStack() },
                     onManageCategories = { navController.navigate("categories") },
+                    // 债务选择器里的「新建债务」：推一层新建页，建完回到本页即可选中
+                    onNewDebt = { navController.navigate("debt") },
                 )
             }
             composable(
@@ -343,6 +356,36 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                         )
                     },
                     onOpenAccount = { id -> navController.navigate("account?editId=$id") },
+                    // 债务卡点进债务列表（M3-4）
+                    onOpenDebts = { navController.navigate("debts") },
+                )
+            }
+            composable("debts") {
+                DebtListScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenDebt = { id -> navController.navigate("debt/$id") },
+                    onNewDebt = { navController.navigate("debt") },
+                )
+            }
+            composable(
+                route = "debt?editId={editId}",
+                arguments = listOf(navArgument("editId") { type = NavType.StringType; defaultValue = "" }),
+            ) { entry ->
+                DebtEditScreen(
+                    editId = entry.arguments?.getString("editId")?.ifEmpty { null },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(
+                route = "debt/{debtId}",
+                arguments = listOf(navArgument("debtId") { type = NavType.StringType }),
+            ) { entry ->
+                DebtDetailScreen(
+                    debtId = entry.arguments?.getString("debtId").orEmpty(),
+                    onBack = { navController.popBackStack() },
+                    onEdit = { id -> navController.navigate("debt?editId=$id") },
+                    // 「记一笔还款」= 记一笔页预填这笔债务与清偿那一格
+                    onSettle = { id -> navController.navigate("add?debtId=$id&debtAction=SETTLE") },
                 )
             }
             composable(

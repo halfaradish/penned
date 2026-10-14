@@ -91,6 +91,7 @@ class TxEditPersistenceTest {
                 reimburseState = original.reimburseState,
                 reimburseAccountId = original.reimburseAccountId,
                 reimburseCents = original.reimburseCents,
+                debtId = original.debtId,
             ),
             now = 5000L,
             deviceId = "device-1",

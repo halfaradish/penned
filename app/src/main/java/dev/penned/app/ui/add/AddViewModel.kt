@@ -4,12 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.withTransaction
 import dev.penned.app.PennedApplication
+import dev.penned.app.data.db.dao.DebtWithRepaid
 import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.data.db.entity.CategoryEntity
 import dev.penned.app.data.db.entity.TagEntity
 import dev.penned.app.data.db.entity.TransactionEntity
 import dev.penned.app.domain.AddDate
 import dev.penned.app.domain.CategoryType
+import dev.penned.app.domain.DebtAction
+import dev.penned.app.domain.DebtMath
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.MoneyExpression
 import dev.penned.app.domain.RefundMath
@@ -30,11 +33,29 @@ import kotlinx.coroutines.launch
 import java.time.ZonedDateTime
 import java.util.UUID
 
-class AddViewModel(private val app: PennedApplication, private val editId: String? = null) : ViewModel() {
+class AddViewModel(
+    private val app: PennedApplication,
+    private val editId: String? = null,
+    /** 「记一笔还款」预填（M3-4）：从债务详情页跳进来时带着债务与那一格（缺省 = 债务发生）。 */
+    private val presetDebtId: String? = null,
+    private val presetDebtAction: DebtAction? = null,
+) : ViewModel() {
 
     private val db = app.database
 
     var type = MutableStateFlow(TxType.EXPENSE)
+        private set
+    /**
+     * 第四 Tab（债务，M3-4）：它不是一种流水类型（落库的仍是收入/支出），所以单独一位而不是加进 [TxType]
+     * ——`TxType` 是要落库的，加值会污染 `type = 'EXPENSE'` 一类的 SQL 与所有 `when`。
+     */
+    var debtTab = MutableStateFlow(false)
+        private set
+    /** 债务 Tab 选中的债务（D068：债务是实体，流水只是它名下的资金侧）。 */
+    var debtId = MutableStateFlow<String?>(null)
+        private set
+    /** 债务 Tab 的两格：OPEN 债务发生（借入/借出）、SETTLE 债务清偿（还款/收到还款）。 */
+    var debtAction = MutableStateFlow(DebtAction.OPEN)
         private set
     var amountText = MutableStateFlow("")
         private set
@@ -105,6 +126,14 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** 债务 Tab 的选择器（本账本债务，含已归还——剩余在行上显示）。 */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val debts: StateFlow<List<DebtWithRepaid>> = currentBook
+        .flatMapLatest { book ->
+            if (book == null) flowOf(emptyList()) else db.debtDao().observeByBook(book.id)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     /**
      * 记账宫格可见的分类（M3-1 分类隐藏）：隐藏的分类不进选择器，**隐藏的一级分类连它的子树一起收起来**
      * （父格都不画了，二级没有入口）；但**本笔已选中的那一个（及其父级）要留着**——否则编辑一条用隐藏分类
@@ -151,7 +180,7 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
      * 能不能保存：看的是**输入框里的原价**（退款/优惠只把落库金额压小，不拦保存——
      * 全额退款要能存成净额 0 的流水）。
      */
-    val canSave: StateFlow<Boolean> = combine(
+    private val canSaveExpenseLike: StateFlow<Boolean> = combine(
         amountText, selectedCategoryId, type, transferFromId, transferToId,
     ) { amount, categoryId, txType, from, to ->
         val cents = effectiveCents(amount) ?: 0L
@@ -160,6 +189,18 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
             else -> cents > 0 && categoryId != null
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    /** 债务 Tab：金额 + 债务 + 资金账户三者齐了才能存（钱往哪边流由方向与那一格决定）。 */
+    private val canSaveDebt: StateFlow<Boolean> = combine(
+        amountText, debtId, accountId,
+    ) { amount, debt, account ->
+        (effectiveCents(amount) ?: 0L) > 0 && debt != null && account != null
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val canSave: StateFlow<Boolean> =
+        combine(canSaveExpenseLike, canSaveDebt, debtTab) { normal, debt, isDebtTab ->
+            if (isDebtTab) debt else normal
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     /**
      * 信息条的「实付」行（M3-2）：把输入的三个数交给 [RefundMath.summaryText] 写成算式。
@@ -192,7 +233,26 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     init {
-        if (editId != null) loadForEdit(editId)
+        if (editId != null) loadForEdit(editId) else if (presetDebtId != null) prefillDebt(presetDebtId, presetDebtAction ?: DebtAction.OPEN)
+    }
+
+    /**
+     * 「记一笔还款」预填（M3-4）：债务详情页跳进来时带着债务与那一格——顺带预填**剩余额**
+     * （全额还清是最常见形态）与这笔债务上次用过的资金账户（还款一般走同一个账户）。
+     */
+    private fun prefillDebt(id: String, action: DebtAction) {
+        viewModelScope.launch {
+            val debt = db.debtDao().get(id) ?: return@launch
+            debtTab.value = true
+            debtId.value = debt.id
+            debtAction.value = action
+            if (action == DebtAction.SETTLE) {
+                val remaining = db.debtDao().observeById(debt.id).first()?.remainingCents
+                    ?: DebtMath.remainingCents(debt.principalCents, 0L)
+                if (remaining > 0L) amountText.value = Money.format(remaining, grouped = false)
+            }
+            db.transactionDao().observeByDebt(debt.id).first().firstOrNull()?.accountId?.let { accountId.value = it }
+        }
     }
 
     private fun loadForEdit(id: String) {
@@ -225,10 +285,22 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
             reimburseState.value = tx.reimburseState
             reimburseAccountId.value = tx.reimburseAccountId
             reimburseText.value = if (tx.reimburseCents > 0L) Money.format(tx.reimburseCents, grouped = false) else ""
+            // 债务流水（M3-4）：带着 debtId 的流水在「债务」Tab 上编辑——哪一格由债务方向 + 流水类型反推
+            val debtRef = tx.debtId
+            if (debtRef != null) {
+                db.debtDao().get(debtRef)?.let { debt ->
+                    debtTab.value = true
+                    debtId.value = debt.id
+                    debtAction.value = DebtMath.actionOf(debt.direction, tx.type)
+                }
+            }
         }
     }
 
     fun selectType(t: TxType) {
+        debtTab.value = false
+        debtId.value = null
+        debtAction.value = DebtAction.OPEN
         type.value = t
         if (t != TxType.TRANSFER) selectedCategoryId.value = null
         expandedParentId.value = null
@@ -241,6 +313,31 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
             reimburseAccountId.value = null
             reimburseText.value = ""
         }
+    }
+
+    /**
+     * 切到「债务」Tab（M3-4）：清掉债务面板没有的字段（分类/退款/优惠/报销/标签）——
+     * 留着看不见却会被保存的残留最坑人；债务与那一格**保留**（切走再切回来不丢选择）。
+     */
+    fun selectDebtTab() {
+        debtTab.value = true
+        selectedCategoryId.value = null
+        expandedParentId.value = null
+        amountField.value = AmountField.AMOUNT
+        refundText.value = ""
+        discountText.value = ""
+        reimburseState.value = ReimburseState.NONE
+        reimburseAccountId.value = null
+        reimburseText.value = ""
+        selectedTagIds.value = emptySet()
+    }
+
+    fun pickDebt(id: String?) {
+        debtId.value = id
+    }
+
+    fun pickDebtAction(action: DebtAction) {
+        debtAction.value = action
     }
 
     /** 报销状态三选（M3-3）：改状态时顺手清掉不适用的附带项（不报销 = 没有账户/金额可言）。 */
@@ -442,8 +539,30 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
         val book = currentBook.value ?: db.bookDao().observeAll().first().firstOrNull() ?: return false
         val original = editId?.let { db.transactionDao().get(it) }
 
-        val editable = when (type.value) {
-            TxType.TRANSFER -> {
+        val editable = when {
+            // 债务 Tab（M3-4）：落库的仍是普通收入/支出流水，只是带着 debtId——
+            // 钱往哪边走由「债务方向 × 那一格」决定（DebtMath.flowType）；没有分类、没有退款/报销
+            debtTab.value -> {
+                val debt = debtId.value?.let { db.debtDao().get(it) } ?: return false
+                val account = accountId.value ?: return false
+                EditableTx(
+                    type = DebtMath.flowType(debt.direction, debtAction.value),
+                    amountCents = originalCents,
+                    accountId = account,
+                    targetAccountId = null,
+                    categoryId = null,
+                    dateEpochMinute = dateMinuteForSave(original),
+                    note = note.value.trim().ifEmpty { null },
+                    feeCents = 0L,
+                    refundCents = 0L,
+                    discountCents = 0L,
+                    reimburseState = ReimburseState.NONE,
+                    reimburseAccountId = null,
+                    reimburseCents = 0L,
+                    debtId = debt.id,
+                )
+            }
+            type.value == TxType.TRANSFER -> {
                 val from = transferFromId.value ?: return false
                 val to = transferToId.value ?: return false
                 if (from == to) return false
@@ -462,6 +581,7 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
                     reimburseState = ReimburseState.NONE,
                     reimburseAccountId = null,
                     reimburseCents = 0L,
+                    debtId = null,
                 )
             }
             else -> {
@@ -481,21 +601,29 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
                     reimburseState = claimState,
                     reimburseAccountId = claimAccountId,
                     reimburseCents = claimCents,
+                    debtId = null,
                 )
             }
         }
 
         // 编辑走 TxEdit.applyEdit：不计收支/不计预算/导入批次/报销等
         // 本页管不着的字段一律原样保留（重建实体曾把它们全部重置——复查 P0 bug）。
-        val tx = original?.let { TxEdit.applyEdit(it, editable, now, app.deviceId) }
+        var tx = original?.let { TxEdit.applyEdit(it, editable, now, app.deviceId) }
             ?: TxEdit.newTransaction(book.id, editable, now, app.deviceId)
+        // 借入不是收入、还款不是支出：**新建**的债务流水默认两个口径都不计
+        // （D068；模拟机走查抓到只关"收支"时还款仍会算进预算已用——两个开关是两回事）；
+        // 编辑时不动这两位——用户可能在详情页手动改过，不该被保存动作悄悄重置。
+        if (original == null && debtTab.value) {
+            tx = tx.copy(excludeFromStats = true, excludeFromBudget = true)
+        }
         // 流水与标签关系一次提交（单事务）：否则"保存了流水、标签还没写"之间有半成品窗口，
         // 首页列表会先冒出一条没有标签的行（测试也抓到过这个竞态）
         db.withTransaction {
             db.transactionDao().upsert(tx)
             // 转账信息条没有标签 chip，所以保存转账时不动已有关系——
             // 外部来源（将来的导入/同步）若给转账带了标签，不该被本页静默清掉。
-            if (tx.type != TxType.TRANSFER) {
+            // 债务流水同理（债务 Tab 上根本没有标签入口，更不该顺手清掉外部来源的关系）。
+            if (tx.type != TxType.TRANSFER && !debtTab.value) {
                 db.tagDao().setTagsForTx(tx.id, selectedTagIds.value.toList())
             }
         }

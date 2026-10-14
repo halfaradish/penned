@@ -63,6 +63,7 @@ class TxEditTest {
         reimburseState = ReimburseState.DONE,
         reimburseAccountId = "acc-5",
         reimburseCents = 800,
+        debtId = "debt-1",
     )
 
     @Test
@@ -84,6 +85,7 @@ class TxEditTest {
         assertEquals(ReimburseState.DONE, edited.reimburseState)
         assertEquals("acc-5", edited.reimburseAccountId)
         assertEquals(800L, edited.reimburseCents)
+        assertEquals("debt-1", edited.debtId)
         assertEquals(5000L, edited.updatedAt)
         assertEquals("device-1", edited.deviceId)
 
@@ -122,7 +124,7 @@ class TxEditTest {
             setOf(
                 "type", "amountCents", "accountId", "targetAccountId", "categoryId",
                 "dateEpochMinute", "note", "feeCents", "refundCents", "discountCents",
-                "reimburseState", "reimburseAccountId", "reimburseCents",
+                "reimburseState", "reimburseAccountId", "reimburseCents", "debtId",
                 "updatedAt", "deviceId",
             ),
             changed,
@@ -144,6 +146,7 @@ class TxEditTest {
         assertEquals(ReimburseState.DONE, tx.reimburseState)
         assertEquals("acc-5", tx.reimburseAccountId)
         assertEquals(800L, tx.reimburseCents)
+        assertEquals("debt-1", tx.debtId)
         assertEquals(null, tx.importBatchId)
         assertFalse(tx.excludeFromStats)
         assertFalse(tx.excludeFromBudget)

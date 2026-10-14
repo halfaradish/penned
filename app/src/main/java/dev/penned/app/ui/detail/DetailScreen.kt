@@ -29,6 +29,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.penned.app.PennedApplication
 import dev.penned.app.data.db.entity.TransactionEntity
+import dev.penned.app.domain.DebtDirection
+import dev.penned.app.domain.DebtMath
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.RefundMath
 import dev.penned.app.domain.ReimburseMath
@@ -72,6 +74,9 @@ data class DetailUi(
     val tagNames: List<String> = emptyList(),
     /** 收到报销款的账户名（M3-3），「报销」行展示。 */
     val reimburseAccountName: String? = null,
+    /** 债务资金流水（M3-4）：对方名与立场，「债务」行展示、标题也写「还款 · 张三」。 */
+    val debtName: String? = null,
+    val debtDirection: DebtDirection? = null,
 )
 
 class DetailViewModel(app: PennedApplication, txId: String) : ViewModel() {
@@ -87,6 +92,7 @@ class DetailViewModel(app: PennedApplication, txId: String) : ViewModel() {
         val account = tx.accountId?.let { db.accountDao().get(it) }
         val target = tx.targetAccountId?.let { db.accountDao().get(it) }
         val reimburseAccount = tx.reimburseAccountId?.let { db.accountDao().get(it) }
+        val debt = tx.debtId?.let { db.debtDao().get(it) }
         val book = db.bookDao().get(tx.bookId)
         DetailUi(
             tx = tx,
@@ -97,6 +103,8 @@ class DetailViewModel(app: PennedApplication, txId: String) : ViewModel() {
             bookName = book?.name ?: "",
             tagNames = tags.map { it.name },
             reimburseAccountName = reimburseAccount?.name,
+            debtName = debt?.counterparty,
+            debtDirection = debt?.direction,
         )
     }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -240,6 +248,11 @@ fun DetailContent(
                     PennedDivider()
                     DetailRow("账户", d.accountName ?: "无账户")
                 }
+                // 债务（M3-4）：这笔钱是在还债/借出，标题与头像都跟着债务对方走
+                if (d.debtName != null && d.debtDirection != null) {
+                    PennedDivider()
+                    DetailRow("债务", "${d.debtName} · ${DebtMath.directionLabel(d.debtDirection)}")
+                }
                 if (d.tx.reimburseState != ReimburseState.NONE) {
                     PennedDivider()
                     // 状态 · 报销金额 · 收到款的账户（M3-3）；金额缺省 0 = 按净额全额，走 ReimburseMath 的口径
@@ -284,13 +297,19 @@ fun DetailContent(
     }
 }
 
-private fun categoryLabel(d: DetailUi): String =
-    listOfNotNull(d.categoryParentName, d.categoryName).joinToString(" · ")
+private fun categoryLabel(d: DetailUi): String {
+    val direction = d.debtDirection
+    if (direction != null && !d.debtName.isNullOrBlank()) {
+        return "${DebtMath.flowLabel(direction, d.tx.type)} · ${d.debtName}"
+    }
+    return listOfNotNull(d.categoryParentName, d.categoryName).joinToString(" · ")
         .ifEmpty { if (d.tx.type == TxType.TRANSFER) "转账" else "未分类" }
+}
 
-/** 头像用名：与 `TransactionRow` 同口径（叶子分类 / 转账 / 未分类），保证同一个分类在列表与详情同色。 */
-private fun avatarName(d: DetailUi): String = when (d.tx.type) {
-    TxType.TRANSFER -> PennedPigment.TRANSFER
+/** 头像用名：与 `TransactionRow` 同口径（叶子分类 / 转账 / 债务对方 / 未分类），保证同一个名字在列表与详情同色。 */
+private fun avatarName(d: DetailUi): String = when {
+    d.tx.type == TxType.TRANSFER -> PennedPigment.TRANSFER
+    d.debtDirection != null -> d.debtName ?: PennedPigment.UNKNOWN
     else -> d.categoryName ?: PennedPigment.UNKNOWN
 }
 

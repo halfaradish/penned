@@ -39,11 +39,14 @@ class AssetsScreenScreenshotTest {
 
     private fun state() = AssetsUiState(
         accounts = accounts,
-        netCents = accounts.sumOf { it.balanceCents },
+        // 净资产 = Σ账户 − 应付 + 应收（M3-4：债务并入后 727.50 − 500.00 + 300.00）
+        netCents = accounts.sumOf { it.balanceCents } - 50_000L + 30_000L,
         assetCents = accounts.filter { it.balanceCents > 0 }.sumOf { it.balanceCents },
         liabilityCents = -accounts.filter { it.balanceCents < 0 }.sumOf { it.balanceCents },
         reimbursePendingCents = 5_000L,
         reimburseDoneCents = 12_000L,
+        payableCents = 50_000L,
+        receivableCents = 30_000L,
     )
 
     private fun capture(name: String) {
@@ -57,7 +60,8 @@ class AssetsScreenScreenshotTest {
         }
         // 规格断言：净资产/总资产/负资产汇总、分组标题、账户余额（负数为信用卡）
         composeRule.onNodeWithText("净资产(元)").assertIsDisplayed()
-        composeRule.onNodeWithText("727.50").assertIsDisplayed()
+        // 净资产 = Σ账户 − 应付 + 应收（M3-4：727.50 − 500.00 + 300.00）
+        composeRule.onNodeWithText("527.50").assertIsDisplayed()
         // 千分位（AD-1）：总资产 1316.50 → 1,316.50；资金账户组小计同额（1284.50 + 32.00）
         composeRule.onAllNodesWithText("1,316.50").assertCountEquals(2)
         // 分组标题按账户大类推导：现金/支付宝 → 资金账户，信用卡 → 信贷账户
@@ -77,6 +81,11 @@ class AssetsScreenScreenshotTest {
         composeRule.onNodeWithText("50.00").assertIsDisplayed()
         composeRule.onNodeWithText("已报").assertIsDisplayed()
         composeRule.onNodeWithText("120.00").assertIsDisplayed()
+        // 债务卡（M3-4）：应付/应收接真数据
+        composeRule.onNodeWithText("应付").assertIsDisplayed()
+        composeRule.onNodeWithText("500.00").assertIsDisplayed()
+        composeRule.onNodeWithText("应收").assertIsDisplayed()
+        composeRule.onNodeWithText("300.00").assertIsDisplayed()
         // 眼睛（隐藏金额）
         composeRule.onNodeWithContentDescription("隐藏金额").assertIsDisplayed()
         capture("m1_assets_screen")
@@ -124,7 +133,7 @@ class AssetsScreenScreenshotTest {
         // 眼睛：金额全变 ****，净资产数字消失
         composeRule.onNodeWithContentDescription("隐藏金额").performClick()
         assertTrue(composeRule.onAllNodesWithText("****").fetchSemanticsNodes().isNotEmpty())
-        composeRule.onNodeWithText("727.50").assertDoesNotExist()
+        composeRule.onNodeWithText("527.50").assertDoesNotExist()
         composeRule.onNodeWithContentDescription("显示金额").assertIsDisplayed()
         capture("assets_masked")
     }

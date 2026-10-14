@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Upsert
 import dev.penned.app.data.db.entity.TransactionEntity
+import dev.penned.app.domain.DebtDirection
 import dev.penned.app.domain.TxType
 import kotlinx.coroutines.flow.Flow
 
@@ -26,10 +27,29 @@ data class TxWithCategory(
     /** 退款额 / 优惠额（M3-2）：行上给一个「退款」标记，说明金额为什么变小甚至是 0。 */
     val refundCents: Long,
     val discountCents: Long,
+    /**
+     * 债务资金流水（M3-4，D068）：行标题写「借入 · 张三」而不是"未分类"。手记为 null。
+     * 这两个是**展示投影**（Room 一定填上），给默认值只为截图/单测的 fixture 少写两行；
+     * 与上面几个"钱"字段不给默认值的理由不同。
+     */
+    val debtDirection: DebtDirection? = null,
+    val debtCounterparty: String? = null,
+)
+
+/** 债务详情页的还款记录行（M3-4）：一笔资金流水 + 账户名；动作词由 `DebtMath.flowLabel` 推。 */
+data class DebtFlowRow(
+    val id: String,
+    val type: TxType,
+    val amountCents: Long,
+    val accountId: String?,
+    val dateEpochMinute: Long,
+    val note: String?,
+    val accountName: String?,
 )
 
 @Dao
 interface TransactionDao {
+
     @Query(
         """
         SELECT t.id AS id, t.type AS type, t.amountCents AS amountCents,
@@ -38,11 +58,13 @@ interface TransactionDao {
                c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey,
                ta.name AS targetAccountName,
                t.excludeFromStats AS excludeFromStats,
-               t.refundCents AS refundCents, t.discountCents AS discountCents
+               t.refundCents AS refundCents, t.discountCents AS discountCents,
+               dt.direction AS debtDirection, dt.counterparty AS debtCounterparty
         FROM transactions t
         LEFT JOIN categories c ON c.id = t.categoryId
         LEFT JOIN categories p ON p.id = c.parentId
         LEFT JOIN accounts ta ON ta.id = t.targetAccountId
+        LEFT JOIN debts dt ON dt.id = t.debtId
         WHERE t.deleted = 0 AND t.bookId = :bookId
         ORDER BY t.dateEpochMinute DESC
         LIMIT :limit
@@ -52,6 +74,19 @@ interface TransactionDao {
 
     @Query("SELECT * FROM transactions WHERE id = :id")
     fun observeById(id: String): Flow<TransactionEntity?>
+
+    /** 债务名下的资金流水（债务详情页的还款记录）。 */
+    @Query(
+        """
+        SELECT t.id AS id, t.type AS type, t.amountCents AS amountCents, t.accountId AS accountId,
+               t.dateEpochMinute AS dateEpochMinute, t.note AS note, a.name AS accountName
+        FROM transactions t
+        LEFT JOIN accounts a ON a.id = t.accountId
+        WHERE t.deleted = 0 AND t.debtId = :debtId
+        ORDER BY t.dateEpochMinute DESC
+        """
+    )
+    fun observeByDebt(debtId: String): Flow<List<DebtFlowRow>>
 
     /**
      * 首页搜索：备注 / 一级分类名 / 二级分类名 模糊匹配，数字输入额外按金额精确匹配。
@@ -65,11 +100,13 @@ interface TransactionDao {
                c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey,
                ta.name AS targetAccountName,
                t.excludeFromStats AS excludeFromStats,
-               t.refundCents AS refundCents, t.discountCents AS discountCents
+               t.refundCents AS refundCents, t.discountCents AS discountCents,
+               dt.direction AS debtDirection, dt.counterparty AS debtCounterparty
         FROM transactions t
         LEFT JOIN categories c ON c.id = t.categoryId
         LEFT JOIN categories p ON p.id = c.parentId
         LEFT JOIN accounts ta ON ta.id = t.targetAccountId
+        LEFT JOIN debts dt ON dt.id = t.debtId
         WHERE t.deleted = 0 AND t.bookId = :bookId
           AND (
             t.note LIKE :pattern ESCAPE '\'
@@ -92,11 +129,13 @@ interface TransactionDao {
                c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey,
                ta.name AS targetAccountName,
                t.excludeFromStats AS excludeFromStats,
-               t.refundCents AS refundCents, t.discountCents AS discountCents
+               t.refundCents AS refundCents, t.discountCents AS discountCents,
+               dt.direction AS debtDirection, dt.counterparty AS debtCounterparty
         FROM transactions t
         LEFT JOIN categories c ON c.id = t.categoryId
         LEFT JOIN categories p ON p.id = c.parentId
         LEFT JOIN accounts ta ON ta.id = t.targetAccountId
+        LEFT JOIN debts dt ON dt.id = t.debtId
         WHERE t.deleted = 0 AND t.importBatchId = :batchId
         ORDER BY t.dateEpochMinute DESC
         """
@@ -179,11 +218,13 @@ interface TransactionDao {
                c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey,
                ta.name AS targetAccountName,
                t.excludeFromStats AS excludeFromStats,
-               t.refundCents AS refundCents, t.discountCents AS discountCents
+               t.refundCents AS refundCents, t.discountCents AS discountCents,
+               dt.direction AS debtDirection, dt.counterparty AS debtCounterparty
         FROM transactions t
         LEFT JOIN categories c ON c.id = t.categoryId
         LEFT JOIN categories p ON p.id = c.parentId
         LEFT JOIN accounts ta ON ta.id = t.targetAccountId
+        LEFT JOIN debts dt ON dt.id = t.debtId
         WHERE t.deleted = 0 AND t.bookId = :bookId
           AND t.dateEpochMinute BETWEEN :fromMinute AND :toMinute
         ORDER BY t.dateEpochMinute DESC
