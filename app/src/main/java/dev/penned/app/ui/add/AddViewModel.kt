@@ -21,6 +21,7 @@ import dev.penned.app.domain.ReimburseMath
 import dev.penned.app.domain.ReimburseState
 import dev.penned.app.domain.TemplatePrefill
 import dev.penned.app.domain.Templates
+import dev.penned.app.ui.assets.selectableAccounts as visibleAccounts
 import dev.penned.app.domain.TxType
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -128,6 +129,19 @@ class AddViewModel(
             if (book == null) flowOf(emptyList()) else db.tagDao().observeByBook(book.id)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * 账户选择器里可见的账户（M3-9）：**停用的不列**，但本笔已选中的那些（支出/收入账户、转账两端、
+     * 报销账户）一律保留——否则编辑一条用停用账户记的流水时看不到自己（UI-13 同型坑）。
+     */
+    private val selectedAccountIds: StateFlow<Set<String?>> =
+        combine(accountId, transferFromId, transferToId, reimburseAccountId) { a, from, to, reimb ->
+            setOf(a, from, to, reimb)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    val selectableAccounts: StateFlow<List<AccountEntity>> =
+        combine(accounts, selectedAccountIds) { all, keep -> visibleAccounts(all, keep) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** 「模板」抽屉的选择器（M3-5，本账本模板）。 */
     @OptIn(ExperimentalCoroutinesApi::class)

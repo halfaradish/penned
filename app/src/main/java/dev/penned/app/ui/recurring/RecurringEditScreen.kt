@@ -46,6 +46,7 @@ import dev.penned.app.domain.Money
 import dev.penned.app.domain.RecurringMath
 import dev.penned.app.domain.RecurringPeriod
 import dev.penned.app.domain.Templates
+import dev.penned.app.ui.assets.selectableAccounts as visibleAccounts
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.add.AccountPickerSheet
 import dev.penned.app.ui.components.ConfirmDialog
@@ -139,6 +140,11 @@ class RecurringEditViewModel(
     val accounts: StateFlow<List<AccountEntity>> = currentBookId
         .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else db.accountDao().observeByBook(id) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** 选择器可见账户（M3-9：停用的不列；编辑时保留本页已选中的那个）。 */
+    val selectableAccounts: StateFlow<List<AccountEntity>> = combine(accounts, state) { all, s ->
+        visibleAccounts(all, listOf(s.accountId, s.targetAccountId))
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val selectableCategories: StateFlow<List<Pair<CategoryEntity, String>>> = combine(categories, state) { all, s ->
         val hiddenIds = all.filter { it.hidden }.map { it.id }.toSet()
@@ -267,7 +273,8 @@ fun RecurringEditScreen(
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
     val categories by viewModel.selectableCategories.collectAsStateWithLifecycle()
-    val accounts by viewModel.accounts.collectAsStateWithLifecycle()
+    // 停用账户不进选择器（M3-9）
+    val accounts by viewModel.selectableAccounts.collectAsStateWithLifecycle()
     var confirmDelete by remember { mutableStateOf(false) }
 
     RecurringEditContent(

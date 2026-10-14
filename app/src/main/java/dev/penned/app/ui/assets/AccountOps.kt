@@ -2,6 +2,7 @@ package dev.penned.app.ui.assets
 
 import dev.penned.app.data.db.PennedDatabase
 import dev.penned.app.data.db.dao.AccountWithBalance
+import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.domain.AccountType
 
 /**
@@ -63,6 +64,24 @@ internal fun groupAccounts(
     val custom = groups.keys.filterNot { key -> AccountGroup.entries.any { it.title == key } }
     return (known + custom).map { title -> title to groups.getValue(title) }
 }
+
+/** 资产页「已停用」段标题（M3-9）：停用账户收在这里、默认折叠。 */
+const val ARCHIVED_SECTION_TITLE = "已停用"
+
+/** 资产页把账户分成「在用 / 已停用」两拨（净资产两边都算，只是显示分开）。 */
+internal fun partitionArchived(
+    accounts: List<AccountWithBalance>,
+): Pair<List<AccountWithBalance>, List<AccountWithBalance>> =
+    accounts.filterNot { it.archived } to accounts.filter { it.archived }
+
+/**
+ * 选择器里可见的账户（M3-9）：**停用的不列**，但**当前已选中的那个要留着**——
+ * 编辑一条用停用账户记的流水时，选择器里看不到它就只能改成别的账户（UI-13 同型坑）。
+ */
+internal fun selectableAccounts(
+    accounts: List<AccountEntity>,
+    keepIds: Collection<String?>,
+): List<AccountEntity> = accounts.filter { !it.archived || it.id in keepIds }
 
 /**
  * 账户删除的唯一入口（资产页左滑、账户编辑页删除共用）。

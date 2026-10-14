@@ -38,6 +38,34 @@ class AccountEditScreenScreenshotTest {
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/$name.png")
     }
 
+    /** M3-9：编辑页三处新入口（停用开关 / 迁移行 / 自定义分组）。 */
+    @Test
+    fun captureEditAccountWithArchiveTools() {
+        composeRule.setContent {
+            PennedTheme {
+                AccountEditContent(
+                    state = AccountEditUiState(
+                        accountId = "a1",
+                        group = AccountGroup.FUNDS,
+                        type = AccountType.DEBIT,
+                        name = "微信",
+                        initialText = "3000.00",
+                        groupName = "旅行基金",
+                        archived = true,
+                        pendingTxCount = 12,
+                    ),
+                    onBack = {},
+                    onSelectGroup = {}, onNameChange = {}, onInitialChange = {}, onSave = {},
+                    onDelete = {},
+                )
+            }
+        }
+        composeRule.onNodeWithText("停用账户").assertExists()
+        composeRule.onNodeWithText("把名下 12 笔流水转到…").assertExists()
+        composeRule.onNodeWithText("旅行基金").assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m3_account_archive_tools.png")
+    }
+
     @Test
     fun captureAddAccountFromPreset() {
         composeRule.setContent {

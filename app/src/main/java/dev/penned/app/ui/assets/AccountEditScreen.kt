@@ -42,9 +42,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.room.withTransaction
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.penned.app.PennedApplication
+import androidx.room.withTransaction
 import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.data.db.entity.AccountBookRefEntity
 import dev.penned.app.data.db.entity.BookEntity
@@ -56,7 +58,9 @@ import dev.penned.app.ui.components.PennedButton
 import dev.penned.app.ui.components.PennedButtonVariant
 import dev.penned.app.ui.components.PennedCard
 import dev.penned.app.ui.components.PennedDivider
+import dev.penned.app.ui.components.PennedListRow
 import dev.penned.app.ui.components.PennedSheet
+import dev.penned.app.ui.components.PennedSwitchRow
 import dev.penned.app.ui.components.PennedTopBar
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedDimens
@@ -64,8 +68,15 @@ import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.PennedTextStyles
 import dev.penned.app.ui.theme.iconMutedColor
 import dev.penned.app.ui.theme.PennedTheme
+import dev.penned.app.ui.add.TextNameDialog
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
@@ -87,6 +98,10 @@ data class AccountEditUiState(
     val initialText: String = "",
     /** 备注（选填，只作个人备忘）。 */
     val remark: String = "",
+    /** 已停用（M3-9）：不常用但钱还在——净资产仍计入，记账选择器不列。 */
+    val archived: Boolean = false,
+    /** 自定义分组（M3-9）：非空时资产页分组标题用它（优先于账户大类）。 */
+    val groupName: String? = null,
     /** 生效账本：true = 所有账本可见（含以后新建的），false = 所属账本 + [extraBookIds]（D028）。 */
     val scopeAllBooks: Boolean = false,
     /** 可选账本（用于勾选）与所属账本；[extraBookIds] 是额外勾选的账本。 */
@@ -178,6 +193,8 @@ class AccountEditViewModel(
                 Money.format(account.initialBalanceCents, grouped = false)
             },
             remark = account.remark.orEmpty(),
+            archived = account.archived,
+            groupName = account.groupName,
             scopeAllBooks = account.scopeAllBooks,
             books = books,
             ownerBookId = account.bookId,
@@ -206,6 +223,49 @@ class AccountEditViewModel(
 
     fun setRemark(remark: String) {
         update { it.copy(remark = remark) }
+    }
+
+    /** 停用/启用（M3-9）：停用只影响显示与选择器，净资产与历史流水口径不变。 */
+    fun setArchived(archived: Boolean) {
+        update { it.copy(archived = archived) }
+    }
+
+    /** 自定义分组（M3-9）：空串/null = 回到按大类推导。 */
+    fun setGroupName(name: String?) {
+        val trimmed = name?.trim().orEmpty().ifEmpty { null }
+        update { it.copy(groupName = trimmed) }
+    }
+
+    /**
+     * 流水迁移（M3-9，解 D026）：把名下流水整批转到另一个账户（`accountId` 与 `targetAccountId` 两端都搬），
+     * 迁完原账户可删（删除拦截规则不变——那时它的流水数就是 0 了）。
+     */
+    fun migrateTo(targetId: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            val current = _state.value
+            val from = current.accountId ?: return@launch
+            if (targetId == from) return@launch
+            val now = System.currentTimeMillis()
+            db.withTransaction {
+                db.accountDao().migrateOutgoing(from, targetId, now)
+                db.accountDao().migrateIncoming(from, targetId, now)
+                // 初始余额也并到目标：不然"迁完再删原账户"会把这笔钱静默丢掉（净资产凭空少一截）
+                val source = db.accountDao().get(from)
+                val target = db.accountDao().get(targetId)
+                if (source != null && target != null && source.initialBalanceCents != 0L) {
+                    db.accountDao().upsert(
+                        target.copy(
+                            initialBalanceCents = target.initialBalanceCents + source.initialBalanceCents,
+                            updatedAt = now,
+                        )
+                    )
+                    db.accountDao().upsert(source.copy(initialBalanceCents = 0, updatedAt = now))
+                }
+            }
+            val remaining = db.transactionDao().countByAccount(from)
+            update { it.copy(pendingTxCount = remaining) }
+            onDone()
+        }
     }
 
     fun setScopeAllBooks(allBooks: Boolean) {
@@ -238,6 +298,8 @@ class AccountEditViewModel(
                         type = s.type,
                         initialBalanceCents = s.balanceCents,
                         remark = remark,
+                        groupName = s.groupName,
+                        archived = s.archived,
                         scopeAllBooks = s.scopeAllBooks,
                         createdAt = now,
                         updatedAt = now,
@@ -254,6 +316,8 @@ class AccountEditViewModel(
                         type = s.type,
                         initialBalanceCents = s.balanceCents,
                         remark = remark,
+                        groupName = s.groupName,
+                        archived = s.archived,
                         scopeAllBooks = s.scopeAllBooks,
                         updatedAt = now,
                     )
@@ -297,6 +361,19 @@ class AccountEditViewModel(
         }
     }
 
+    /** 迁移目标候选：同账本（按可见性口径）的账户（选择时再排掉自己）。 */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val accountsForMigration: StateFlow<List<AccountEntity>> = app.settings.currentBookId
+        .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else db.accountDao().observeByBook(id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** 已有的自定义分组名（抽屉里列出，去重按名排）。 */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val customGroups: StateFlow<List<String>> = app.settings.currentBookId
+        .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else db.accountDao().observeByBook(id) }
+        .map { list -> list.mapNotNull { it.groupName }.distinct().sorted() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     private fun update(block: (AccountEditUiState) -> AccountEditUiState) {
         _state.value = block(_state.value)
     }
@@ -318,9 +395,17 @@ fun AccountEditScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     var confirmDelete by remember { mutableStateOf(false) }
 
+    val migrateTargets by viewModel.accountsForMigration.collectAsStateWithLifecycle()
+    val customGroups by viewModel.customGroups.collectAsStateWithLifecycle()
+
     AccountEditContent(
         state = state,
         onBack = onBack,
+        migrateTargets = migrateTargets,
+        customGroups = customGroups,
+        onToggleArchived = viewModel::setArchived,
+        onPickGroupName = viewModel::setGroupName,
+        onMigrate = { targetId, done -> viewModel.migrateTo(targetId, done) },
         onSelectGroup = viewModel::selectGroup,
         onNameChange = viewModel::setName,
         onInitialChange = viewModel::setInitial,
@@ -359,11 +444,22 @@ fun AccountEditContent(
     onScopeChange: (Boolean) -> Unit = {},
     onToggleBook: (String) -> Unit = {},
     onDelete: (() -> Unit)? = null,
+    /** M3-9：停用开关 / 自定义分组 / 流水迁移（截图测试与预览可留默认）。 */
+    onToggleArchived: (Boolean) -> Unit = {},
+    onPickGroupName: (String?) -> Unit = {},
+    onMigrate: (String, () -> Unit) -> Unit = { _, _ -> },
+    /** 迁移目标候选（同账本其它账户；由 Screen 传进来）。 */
+    migrateTargets: List<AccountEntity> = emptyList(),
+    /** 已有的自定义分组名（抽屉里列出）。 */
+    customGroups: List<String> = emptyList(),
 ) {
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     var showGroupPicker by remember { mutableStateOf(false) }
     var showScopePicker by remember { mutableStateOf(false) }
+    var showNewGroup by remember { mutableStateOf(false) }
+    var showMigratePicker by remember { mutableStateOf(false) }
+    var migrateTarget by remember { mutableStateOf<AccountEntity?>(null) }
 
     // 从「自定义」格进来时名称没有预设兜底，直接把光标送进名称输入
     LaunchedEffect(Unit) {
@@ -378,12 +474,75 @@ fun AccountEditContent(
             selected = state.group,
             onPick = {
                 onSelectGroup(it)
+                onPickGroupName(null)   // 选大类 = 回到按大类推导（清掉自定义分组名）
                 showGroupPicker = false
             },
             onDismiss = { showGroupPicker = false },
+            customGroups = customGroups,
+            currentGroupName = state.groupName,
+            onPickCustom = { name ->
+                onPickGroupName(name)
+                showGroupPicker = false
+            },
+            onCreateRequest = {
+                showGroupPicker = false
+                showNewGroup = true
+            },
         )
     }
 
+    if (showNewGroup) {
+        TextNameDialog(
+            title = "新建分组",
+            placeholder = "分组名称（比如「旅行基金」）",
+            onConfirm = { name ->
+                onPickGroupName(name)
+                showNewGroup = false
+            },
+            onDismiss = { showNewGroup = false },
+        )
+    }
+    if (showMigratePicker) {
+        PennedSheet(
+            onDismiss = { showMigratePicker = false },
+            title = "转到哪个账户",
+        ) {
+            val others = migrateTargets.filter { it.id != state.accountId }
+            if (others.isEmpty()) {
+                Text(
+                    "本账本还没有别的账户可以接",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = PennedSpacing.xl, vertical = PennedSpacing.sm),
+                )
+            }
+            others.forEach { target ->
+                PennedListRow(
+                    title = target.name,
+                    subtitle = accountTypeLabel(target.type),
+                    showChevron = false,
+                    onClick = {
+                        migrateTarget = target
+                        showMigratePicker = false
+                    },
+                )
+            }
+        }
+    }
+    migrateTarget?.let { target ->
+        ConfirmDialog(
+            onDismiss = { migrateTarget = null },
+            title = "迁移流水？",
+            confirmLabel = "迁移",
+            text = "把「${state.resolvedName()}」名下 ${state.pendingTxCount} 笔流水转到「${target.name}」" +
+                "（该账户的初始余额也一并并过去），不可撤销。",
+            onConfirm = {
+                val t = target
+                migrateTarget = null
+                onMigrate(t.id) { }
+            },
+        )
+    }
     if (showScopePicker) {
         ScopePickerSheet(
             allBooks = state.scopeAllBooks,
@@ -468,10 +627,11 @@ fun AccountEditContent(
                 ) {
                     PickerRow(
                         label = "所属分组",
-                        value = state.group.title,
+                        // groupName 优先（与资产页分组标题同一口径，M3-9）
+                        value = state.groupName ?: state.group.title,
                         onClick = { showGroupPicker = true },
                         leading = {
-                            CategoryAvatar(name = state.group.title, size = PennedDimens.avatar)
+                            CategoryAvatar(name = state.groupName ?: state.group.title, size = PennedDimens.avatar)
                         },
                     )
                     PennedDivider()
@@ -491,6 +651,34 @@ fun AccountEditContent(
                                 bottom = PennedSpacing.md,
                             ),
                         )
+                    }
+                }
+                // 卡片三（仅编辑）：停用 + 流水迁移（M3-9）
+                if (state.isEdit) {
+                    PennedCard(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
+                        contentPadding = PaddingValues(0.dp),
+                    ) {
+                        PennedSwitchRow("停用账户", state.archived, onToggleArchived)
+                        Text(
+                            "停用后收进资产页「已停用」段、记账选择器不再列它；钱还在，净资产照算",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(
+                                start = PennedSpacing.lg,
+                                end = PennedSpacing.lg,
+                                bottom = PennedSpacing.md,
+                            ),
+                        )
+                        if (state.pendingTxCount > 0) {
+                            PennedDivider()
+                            PennedListRow(
+                                title = "把名下 ${state.pendingTxCount} 笔流水转到…",
+                                subtitle = "迁完这个账户就能删了（原账户余额归零）",
+                                leadingIcon = PennedIcons.Transfer,
+                                onClick = { showMigratePicker = true },
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(PennedSpacing.xxl))
@@ -645,8 +833,40 @@ private fun GroupPickerSheet(
     selected: AccountGroup,
     onPick: (AccountGroup) -> Unit,
     onDismiss: () -> Unit,
+    /** 已有的自定义分组名（M3-9）：抽屉里一并列出。 */
+    customGroups: List<String> = emptyList(),
+    currentGroupName: String? = null,
+    onPickCustom: (String) -> Unit = {},
+    onCreateRequest: () -> Unit = {},
 ) {
     PennedSheet(onDismiss = onDismiss, title = "所属分组") {
+        customGroups.forEach { name ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = PennedDimens.rowMinHeight)
+                    .clickable { onPickCustom(name) }
+                    .padding(horizontal = PennedSpacing.xl),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CategoryAvatar(name = name, size = PennedDimens.avatar)
+                Spacer(Modifier.width(PennedSpacing.md))
+                Text(name, style = PennedTextStyles.rowTitle, modifier = Modifier.weight(1f))
+                if (name == currentGroupName) {
+                    Text(
+                        "已选",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        PennedListRow(
+            title = "新建分组",
+            subtitle = "自定义一个分组名（自由文本）",
+            leadingIcon = PennedIcons.Plus,
+            onClick = onCreateRequest,
+        )
         AccountGroup.entries.forEach { group ->
             Row(
                 Modifier

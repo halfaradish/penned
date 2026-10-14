@@ -100,6 +100,36 @@ class AssetsScreenScreenshotTest {
         capture("m1_assets_empty")
     }
 
+    /** 已停用段（M3-9）：单独一段、默认折叠、展开后行尾「已停用」；净资产仍把停用账户算进去。 */
+    @Test
+    fun captureArchivedSection() {
+        val accounts = accounts + AccountWithBalance(
+            "a9", "旧校园卡", AccountType.DEBIT, null, 15_000L, archived = true,
+        )
+        val state = AssetsUiState(
+            accounts = accounts,
+            // 净资产照算：727.50 + 150.00
+            netCents = accounts.sumOf { it.balanceCents },
+            assetCents = accounts.filter { it.balanceCents > 0 }.sumOf { it.balanceCents },
+            liabilityCents = -accounts.filter { it.balanceCents < 0 }.sumOf { it.balanceCents },
+        )
+        composeRule.setContent {
+            PennedTheme { AssetsContent(state = state, onAddAccount = { _, _ -> }) }
+        }
+        // 默认折叠：段标题在、行不在
+        composeRule.onNodeWithText("已停用").assertIsDisplayed()
+        composeRule.onNodeWithText("旧校园卡").assertDoesNotExist()
+        capture("m3_assets_archived_collapsed")
+
+        // 展开后行尾带「已停用」标记
+        composeRule.onNodeWithText("已停用").performClick()
+        composeRule.mainClock.advanceTimeBy(1_500)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("旧校园卡").assertIsDisplayed()
+        composeRule.onAllNodesWithText("已停用").onFirst().assertIsDisplayed()
+        capture("m3_assets_archived_expanded")
+    }
+
     /**
      * 账户行左滑动作区露满（UI-13）：账户行点行进编辑页，所以动作区只放「删除」一个 64dp 块。
      * `revealedRowId` 直接给值，省得在截图用例里挥手势。

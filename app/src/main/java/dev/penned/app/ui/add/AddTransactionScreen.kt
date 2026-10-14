@@ -102,7 +102,8 @@ fun AddTransactionScreen(
     val feeText by viewModel.feeText.collectAsStateWithLifecycle()
     // 记账宫格用"可见分类"（隐藏分类不进选择器；本笔已选中的那个保留，M3-1）
     val categories by viewModel.selectableCategories.collectAsStateWithLifecycle()
-    val accounts by viewModel.accounts.collectAsStateWithLifecycle()
+    // 选择器只列在用的账户（停用的不列；本笔已选中的保留，M3-9）
+    val accounts by viewModel.selectableAccounts.collectAsStateWithLifecycle()
     val tags by viewModel.selectableTags.collectAsStateWithLifecycle()
     val selectedTagIds by viewModel.selectedTagIds.collectAsStateWithLifecycle()
     val reimburseState by viewModel.reimburseState.collectAsStateWithLifecycle()
@@ -985,7 +986,7 @@ fun AccountPickerSheet(
 }
 
 @Composable
-private fun TextNameDialog(
+internal fun TextNameDialog(
     title: String,
     placeholder: String,
     onConfirm: (String) -> Unit,

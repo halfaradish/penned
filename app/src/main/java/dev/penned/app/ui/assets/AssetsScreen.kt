@@ -239,7 +239,8 @@ fun AssetsContent(
 ) {
     // 眼睛藏金额：切 Tab 回来还在（rememberSaveable），重启重置
     var masked by rememberSaveable { mutableStateOf(false) }
-    var collapsedGroups by remember { mutableStateOf(emptySet<String>()) }
+    // 「已停用」段默认折叠（M3-9）：停用账户是"不常用"，不该占着首屏
+    var collapsedGroups by remember { mutableStateOf(setOf(ARCHIVED_SECTION_TITLE)) }
     var showTypeSheet by remember { mutableStateOf(false) }
 
     if (showTypeSheet) {
@@ -301,7 +302,8 @@ fun AssetsContent(
                     )
                 }
             } else {
-                groupAccounts(state.accounts).forEach { (title, accounts) ->
+                val (active, archived) = partitionArchived(state.accounts)
+                groupAccounts(active).forEach { (title, accounts) ->
                     item(key = "g-$title") {
                         AccountGroupCard(
                             title = title,
@@ -320,6 +322,30 @@ fun AssetsContent(
                             onDeleteAccount = onDeleteAccount,
                             revealedRowId = revealedRowId,
                             onRevealedRowChange = onRevealedRowChange,
+                        )
+                    }
+                }
+                // 已停用段（M3-9）：单独一段、默认折叠、行尾「已停用」；净资产仍计入（上面 hero 的算法没动）
+                if (archived.isNotEmpty()) {
+                    item(key = "g-archived") {
+                        AccountGroupCard(
+                            title = ARCHIVED_SECTION_TITLE,
+                            accounts = archived,
+                            masked = masked,
+                            collapsed = ARCHIVED_SECTION_TITLE in collapsedGroups,
+                            onToggle = {
+                                onRevealedRowChange(null)
+                                collapsedGroups = if (ARCHIVED_SECTION_TITLE in collapsedGroups) {
+                                    collapsedGroups - ARCHIVED_SECTION_TITLE
+                                } else {
+                                    collapsedGroups + ARCHIVED_SECTION_TITLE
+                                }
+                            },
+                            onOpenAccount = onOpenAccount,
+                            onDeleteAccount = onDeleteAccount,
+                            revealedRowId = revealedRowId,
+                            onRevealedRowChange = onRevealedRowChange,
+                            rowTag = "已停用",
                         )
                     }
                 }
@@ -492,6 +518,8 @@ private fun AccountGroupCard(
     onDeleteAccount: (AccountWithBalance) -> Unit,
     revealedRowId: String? = null,
     onRevealedRowChange: (String?) -> Unit = {},
+    /** 行尾标记（「已停用」段用，M3-9）。 */
+    rowTag: String? = null,
 ) {
     val rotation by animateFloatAsState(if (collapsed) -90f else 0f, label = "group-chevron")
     PennedCard(
@@ -539,6 +567,7 @@ private fun AccountGroupCard(
                         AccountRow(
                             account = account,
                             masked = masked,
+                            tag = rowTag,
                             // 展开态点行 = 收起动作区，不进编辑页（QQ 口径）
                             onClick = {
                                 if (revealedRowId == account.id) {
@@ -558,7 +587,7 @@ private fun AccountGroupCard(
 
 /** 账户行：头像（统一淡灰绿）+ 名称 + 等宽余额（正=品牌青绿、负=朱砂）。 */
 @Composable
-private fun AccountRow(account: AccountWithBalance, masked: Boolean, onClick: () -> Unit) {
+private fun AccountRow(account: AccountWithBalance, masked: Boolean, tag: String? = null, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -576,6 +605,13 @@ private fun AccountRow(account: AccountWithBalance, masked: Boolean, onClick: ()
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (tag != null) {
+                Text(
+                    tag,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             // 备注只在写了的时候占一行（D027：个人备忘，不参与任何计算）
             if (!account.remark.isNullOrBlank()) {
                 Text(

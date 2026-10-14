@@ -36,6 +36,8 @@ data class AccountWithBalance(
     val groupName: String?,
     val balanceCents: Long,
     val remark: String? = null,
+    /** 已停用（M3-9）：资产页收进「已停用」段，净资产仍计入。 */
+    val archived: Boolean = false,
 )
 
 @Dao
@@ -50,6 +52,7 @@ interface AccountDao {
     @Query(
         """
         SELECT a.id AS id, a.name AS name, a.type AS type, a.groupName AS groupName, a.remark AS remark,
+            a.archived AS archived,
             a.initialBalanceCents
             + IFNULL((SELECT SUM(CASE WHEN t.type = 'INCOME' THEN t.amountCents ELSE -t.amountCents END)
                       FROM transactions t
@@ -100,6 +103,25 @@ interface AccountDao {
 
     @Upsert
     suspend fun upsert(account: AccountEntity)
+
+    /** 停用/启用（M3-9）：停用只是"不常用"，**净资产仍计入**（钱还在）。 */
+    @Query("UPDATE accounts SET archived = :archived, updatedAt = :now WHERE id = :id")
+    suspend fun setArchived(id: String, archived: Boolean, now: Long)
+
+    /** 自定义分组（M3-9）：null = 回到按账户大类推导的默认分组。 */
+    @Query("UPDATE accounts SET groupName = :groupName, updatedAt = :now WHERE id = :id")
+    suspend fun setGroupName(id: String, groupName: String?, now: Long)
+
+    /**
+     * 流水迁移（M3-9，解 D026「有流水账户删不掉」）：把名下流水整批转到另一个账户。
+     * **两端都要搬**——`accountId`（转出/收支）与 `targetAccountId`（转入），
+     * 否则 `countByAccount`（删除拦截的判据）不为 0，原账户还是删不掉。
+     */
+    @Query("UPDATE transactions SET accountId = :toId, updatedAt = :now WHERE deleted = 0 AND accountId = :fromId")
+    suspend fun migrateOutgoing(fromId: String, toId: String, now: Long)
+
+    @Query("UPDATE transactions SET targetAccountId = :toId, updatedAt = :now WHERE deleted = 0 AND targetAccountId = :fromId")
+    suspend fun migrateIncoming(fromId: String, toId: String, now: Long)
 
     /** 单个账户软删（资产页左滑删除）。有流水的账户由 ViewModel 先拦下，不会走到这里。 */
     @Query("UPDATE accounts SET deleted = 1, updatedAt = :now WHERE id = :id")
