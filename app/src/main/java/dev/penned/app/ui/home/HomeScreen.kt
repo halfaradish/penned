@@ -111,6 +111,9 @@ fun HomeScreen(
     flashMessage: String? = null,
     /** 刚保存的流水 id（M3-5）：非空时提示条给「存为模板」动作。 */
     flashTxId: String? = null,
+    /** 周期记账本次打开补记的条数（M3-6）：>0 时给一条可关闭的提示。 */
+    recurringNotice: Int? = null,
+    onRecurringNoticeShown: () -> Unit = {},
     onSaveAsTemplate: (String) -> Unit = {},
     onFlashShown: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -146,6 +149,12 @@ fun HomeScreen(
             if (result == SnackbarResult.ActionPerformed) onSaveAsTemplate(txId)
         }
         onFlashShown()
+    }
+    // 周期记账补记提示（M3-6）：一条短提示，自己会走（也可划掉）——不拦任何操作
+    LaunchedEffect(recurringNotice) {
+        val count = recurringNotice ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar("周期记账已补记 $count 笔")
+        onRecurringNoticeShown()
     }
     var undoJob by remember { mutableStateOf<Job?>(null) }
 

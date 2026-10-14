@@ -30,6 +30,7 @@ private val ROW_DIVIDER_INDENT = 64.dp
 fun MineScreen(
     onOpenDataManagement: () -> Unit,
     onOpenTemplates: () -> Unit,
+    onOpenRecurring: () -> Unit,
     onOpenCategories: () -> Unit,
     onOpenTags: () -> Unit,
     onOpenPinLock: () -> Unit,
@@ -93,6 +94,14 @@ fun MineScreen(
                 subtitle = "把常记的那几笔存成模板，记一笔里一键预填",
                 leadingIcon = PennedIcons.Receipt,
                 onClick = onOpenTemplates,
+            )
+            PennedDivider(startIndent = ROW_DIVIDER_INDENT)
+            // M3-6：周期记账（打开即补 D070，不引后台任务）
+            PennedListRow(
+                title = "周期记账",
+                subtitle = "房租话费这类固定支出：打开 App 时自动补记到期的期数",
+                leadingIcon = PennedIcons.Refresh,
+                onClick = onOpenRecurring,
             )
         }
 

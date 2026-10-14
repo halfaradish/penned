@@ -163,6 +163,10 @@ interface TransactionDao {
     )
     fun observeReimburseSums(bookId: String): Flow<ReimburseSums>
 
+    /** 某周期规则已生成的期次（分钟）——打开即补的幂等判据（同一期只生成一条）。 */
+    @Query("SELECT dateEpochMinute FROM transactions WHERE deleted = 0 AND recurringRuleId = :ruleId")
+    suspend fun minutesForRule(ruleId: String): List<Long>
+
     @Query("SELECT * FROM transactions WHERE deleted = 0")
     suspend fun all(): List<TransactionEntity>
 

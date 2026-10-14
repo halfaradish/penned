@@ -155,6 +155,7 @@ class DarkThemeScreensTest {
             MineScreen(
                 onOpenDataManagement = {},
                 onOpenTemplates = {},
+                onOpenRecurring = {},
                 onOpenCategories = {},
                 onOpenTags = {},
                 onOpenPinLock = {},
@@ -607,6 +608,56 @@ class DarkThemeScreensTest {
         }
         composeRule.onNodeWithText("新建模板").assertIsDisplayed()
         capture("template_edit")
+    }
+
+    @Test
+    fun darkRecurring() {
+        dark {
+            dev.penned.app.ui.recurring.RecurringContent(
+                rules = listOf(
+                    dev.penned.app.data.db.dao.RuleWithSummary(
+                        "r1", "房租", TxType.EXPENSE, 200_000, null, null, null, null, 0,
+                        dev.penned.app.domain.RecurringPeriod.MONTHLY, 1, 20_000L, 20_100L, null, true,
+                        "居家生活", "储蓄卡TestCard", null,
+                    ),
+                ),
+                onBack = {}, onOpenRule = {}, onNewRule = {},
+            )
+        }
+        composeRule.onNodeWithText("房租").assertIsDisplayed()
+        capture("recurring")
+    }
+
+    @Test
+    fun darkRecurringEdit() {
+        dark {
+            dev.penned.app.ui.recurring.RecurringEditContent(
+                state = dev.penned.app.ui.recurring.RecurringEditUiState(
+                    name = "房租", amountText = "2000.00", categoryId = "c1", accountId = "a1", loaded = true,
+                ),
+                categories = listOf(
+                    dev.penned.app.data.db.entity.CategoryEntity(
+                        id = "c1", bookId = "b1", name = "居家生活",
+                        type = dev.penned.app.domain.CategoryType.EXPENSE,
+                        createdAt = 0, updatedAt = 0, deviceId = "d",
+                    ) to "",
+                ),
+                accounts = listOf(
+                    dev.penned.app.data.db.entity.AccountEntity(
+                        id = "a1", bookId = "b1", name = "储蓄卡TestCard",
+                        type = dev.penned.app.domain.AccountType.DEBIT,
+                        createdAt = 0, updatedAt = 0, deviceId = "d",
+                    ),
+                ),
+                onBack = {},
+                onNameChange = {}, onPickType = {}, onAmountChange = {}, onPickCategory = {},
+                onPickAccount = {}, onPickTargetAccount = {}, onNoteChange = {}, onFeeChange = {},
+                onPickPeriod = {}, onIntervalChange = {}, onPickStartDay = {}, onPickEndDay = {},
+                onToggleEnabled = {}, onSave = {},
+            )
+        }
+        composeRule.onNodeWithText("新建规则").assertIsDisplayed()
+        capture("recurring_edit")
     }
 
     private fun txRow(

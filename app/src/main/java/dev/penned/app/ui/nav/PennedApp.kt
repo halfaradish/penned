@@ -44,6 +44,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import dev.penned.app.data.RecurringGenerator
 import dev.penned.app.ui.add.AddTransactionScreen
 import dev.penned.app.ui.about.AboutScreen
 import dev.penned.app.ui.about.AboutViewModel
@@ -79,6 +80,8 @@ import dev.penned.app.ui.stats.StatsScreen
 import dev.penned.app.ui.stats.categoryDetailRoute
 import dev.penned.app.ui.stats.StatsViewModel
 import dev.penned.app.ui.stub.StubScreen
+import dev.penned.app.ui.recurring.RecurringEditScreen
+import dev.penned.app.ui.recurring.RecurringScreen
 import dev.penned.app.ui.tags.TagsScreen
 import dev.penned.app.ui.templates.TemplateEditScreen
 import dev.penned.app.ui.templates.TemplatesScreen
@@ -117,6 +120,14 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
     var updateNotice by remember { mutableStateOf<UpdateUiState.Available?>(null) }
     LaunchedEffect(Unit) {
         updateNotice = updateVm.autoCheckOnLaunch()
+    }
+
+    // 周期记账「打开即补」（M3-6，D070）：**独立协程**，不与上面的更新检查互相阻塞；
+    // 补出来的条数交给首页给一条可关闭的提示（不引后台任务、不预生成未来流水）。
+    var recurringNotice by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(Unit) {
+        val generated = RecurringGenerator(app.database, app.deviceId).catchUp()
+        if (generated > 0) recurringNotice = generated
     }
 
     Scaffold(
@@ -224,6 +235,8 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     viewModel = vm,
                     flashMessage = flash,
                     flashTxId = flashTxId,
+                    recurringNotice = recurringNotice,
+                    onRecurringNoticeShown = { recurringNotice = null },
                     // 「存为模板」（M3-5）：带着刚保存的流水去模板新建页预填
                     onSaveAsTemplate = { id -> navController.navigate("template?fromTx=$id") },
                     onFlashShown = {
@@ -323,6 +336,7 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                 MineScreen(
                     onOpenDataManagement = { navController.navigate("data") },
                     onOpenTemplates = { navController.navigate("templates") },
+                    onOpenRecurring = { navController.navigate("recurring") },
                     onOpenCategories = { navController.navigate("categories") },
                     onOpenTags = { navController.navigate("tags") },
                     onOpenPinLock = { navController.navigate("pin") },
@@ -376,6 +390,24 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onOpenAccount = { id -> navController.navigate("account?editId=$id") },
                     // 债务卡点进债务列表（M3-4）
                     onOpenDebts = { navController.navigate("debts") },
+                )
+            }
+            composable("recurring") {
+                RecurringScreen(
+                    onBack = { navController.popBackStack() },
+                    // 编辑页走独立路径（`recurring/edit`）：同一个 path 上挂"列表 + 带 query 的编辑页"
+                    // 会撞（navigate("recurring") 直接落到编辑页——M3-6 踩到过）
+                    onOpenRule = { id -> navController.navigate("recurring/edit?editId=$id") },
+                    onNewRule = { navController.navigate("recurring/edit") },
+                )
+            }
+            composable(
+                route = "recurring/edit?editId={editId}",
+                arguments = listOf(navArgument("editId") { type = NavType.StringType; defaultValue = "" }),
+            ) { entry ->
+                RecurringEditScreen(
+                    editId = entry.arguments?.getString("editId")?.ifEmpty { null },
+                    onBack = { navController.popBackStack() },
                 )
             }
             composable("templates") {
