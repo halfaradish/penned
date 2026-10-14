@@ -80,10 +80,15 @@ import dev.penned.app.ui.stats.categoryDetailRoute
 import dev.penned.app.ui.stats.StatsViewModel
 import dev.penned.app.ui.stub.StubScreen
 import dev.penned.app.ui.tags.TagsScreen
+import dev.penned.app.ui.templates.TemplateEditScreen
+import dev.penned.app.ui.templates.TemplatesScreen
 import dev.penned.app.ui.tags.TagsViewModel
 
 /** 首页提示条的一次性消息键（保存完成后由记一笔页写进首页的 savedStateHandle）。 */
 private const val HOME_FLASH_KEY = "home-flash"
+
+/** 刚保存的流水 id（M3-5）：首页提示条上的「存为模板」用它跳到模板新建页。 */
+private const val HOME_FLASH_TX_KEY = "home-flash-tx"
 
 private data class TabSpec(val route: String, val label: String, val icon: ImageVector)
 
@@ -212,10 +217,19 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                 val flash: String? by entry?.savedStateHandle
                     ?.getStateFlow<String?>(HOME_FLASH_KEY, null)
                     ?.collectAsStateWithLifecycle() ?: remember { mutableStateOf<String?>(null) }
+                val flashTxId: String? by entry?.savedStateHandle
+                    ?.getStateFlow<String?>(HOME_FLASH_TX_KEY, null)
+                    ?.collectAsStateWithLifecycle() ?: remember { mutableStateOf<String?>(null) }
                 HomeScreen(
                     viewModel = vm,
                     flashMessage = flash,
-                    onFlashShown = { entry?.savedStateHandle?.set<String?>(HOME_FLASH_KEY, null) },
+                    flashTxId = flashTxId,
+                    // 「存为模板」（M3-5）：带着刚保存的流水去模板新建页预填
+                    onSaveAsTemplate = { id -> navController.navigate("template?fromTx=$id") },
+                    onFlashShown = {
+                        entry?.savedStateHandle?.set<String?>(HOME_FLASH_KEY, null)
+                        entry?.savedStateHandle?.set<String?>(HOME_FLASH_TX_KEY, null)
+                    },
                     onAdd = { navController.navigate("add") },
                     onOpenDetail = { id -> navController.navigate("detail/$id") },
                     onManageBooks = { navController.navigate("books") },
@@ -243,10 +257,11 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                         ?.let { name -> dev.penned.app.domain.DebtAction.entries.firstOrNull { it.name == name } },
                     // 保存完成给一次反馈：把消息挂到上一个目的地（首页）的 savedStateHandle 上，
                     // 由首页的提示条读出来（此前保存完静默返回，用户不知道成没成）
-                    onDone = {
-                        navController.previousBackStackEntry
-                            ?.savedStateHandle
-                            ?.set(HOME_FLASH_KEY, if (editId == null) "已记账" else "已保存")
+                    onDone = { savedId ->
+                        val prev = navController.previousBackStackEntry?.savedStateHandle
+                        prev?.set(HOME_FLASH_KEY, if (editId == null) "已记账" else "已保存")
+                        // 只有新建才给「存为模板」动作（编辑时模板已存过，不该再提示）
+                        prev?.set(HOME_FLASH_TX_KEY, if (editId == null) savedId else null)
                         navController.popBackStack()
                     },
                     // 顶栏返回 = 放弃这次记账：只回退、不写提示。
@@ -255,6 +270,8 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onManageCategories = { navController.navigate("categories") },
                     // 债务选择器里的「新建债务」：推一层新建页，建完回到本页即可选中
                     onNewDebt = { navController.navigate("debt") },
+                    // 模板抽屉里的「管理模板」
+                    onManageTemplates = { navController.navigate("templates") },
                 )
             }
             composable(
@@ -305,6 +322,7 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
             composable("mine") {
                 MineScreen(
                     onOpenDataManagement = { navController.navigate("data") },
+                    onOpenTemplates = { navController.navigate("templates") },
                     onOpenCategories = { navController.navigate("categories") },
                     onOpenTags = { navController.navigate("tags") },
                     onOpenPinLock = { navController.navigate("pin") },
@@ -358,6 +376,26 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onOpenAccount = { id -> navController.navigate("account?editId=$id") },
                     // 债务卡点进债务列表（M3-4）
                     onOpenDebts = { navController.navigate("debts") },
+                )
+            }
+            composable("templates") {
+                TemplatesScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenTemplate = { id -> navController.navigate("template?editId=$id") },
+                    onNewTemplate = { navController.navigate("template") },
+                )
+            }
+            composable(
+                route = "template?editId={editId}&fromTx={fromTx}",
+                arguments = listOf(
+                    navArgument("editId") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("fromTx") { type = NavType.StringType; defaultValue = "" },
+                ),
+            ) { entry ->
+                TemplateEditScreen(
+                    editId = entry.arguments?.getString("editId")?.ifEmpty { null },
+                    fromTxId = entry.arguments?.getString("fromTx")?.ifEmpty { null },
+                    onBack = { navController.popBackStack() },
                 )
             }
             composable("debts") {

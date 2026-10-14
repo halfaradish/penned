@@ -40,6 +40,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.penned.app.data.db.dao.DebtWithRepaid
+import dev.penned.app.data.db.dao.TemplateWithTags
 import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.domain.DebtAction
 import dev.penned.app.domain.DebtDirection
@@ -59,6 +60,7 @@ import dev.penned.app.ui.components.PennedSheet
 import dev.penned.app.ui.components.TagCreateDialog
 import dev.penned.app.ui.components.reimburseStateLabel
 import dev.penned.app.ui.icons.PennedIcons
+import dev.penned.app.ui.templates.TemplatePickerSheet
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.PennedTheme
@@ -70,11 +72,13 @@ import dev.penned.app.ui.theme.incomeColor
 fun AddTransactionScreen(
     editId: String?,
     app: dev.penned.app.PennedApplication,
-    onDone: () -> Unit,
+    /** 保存成功回调：参数是落库的流水 id（首页提示条的「存为模板」要用，M3-5）。 */
+    onDone: (String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     onManageCategories: () -> Unit = {},
     onNewDebt: () -> Unit = {},
+    onManageTemplates: () -> Unit = {},
     /** 「记一笔还款」预填（M3-4）：债务详情页跳进来时带着债务与那一格。 */
     presetDebtId: String? = null,
     presetDebtAction: DebtAction? = null,
@@ -107,6 +111,7 @@ fun AddTransactionScreen(
     val canSave by viewModel.canSave.collectAsStateWithLifecycle()
     val showEquals by viewModel.showEquals.collectAsStateWithLifecycle()
     val dateEpochDay by viewModel.dateEpochDay.collectAsStateWithLifecycle()
+    val templates by viewModel.templates.collectAsStateWithLifecycle()
     val debtTab by viewModel.debtTab.collectAsStateWithLifecycle()
     val debts by viewModel.debts.collectAsStateWithLifecycle()
     val debtId by viewModel.debtId.collectAsStateWithLifecycle()
@@ -151,6 +156,9 @@ fun AddTransactionScreen(
         reimburseAccountId = reimburseAccountId,
         claimLabel = claimLabel,
         debtTab = debtTab,
+        templates = templates,
+        onPickTemplate = viewModel::applyTemplateById,
+        onManageTemplates = onManageTemplates,
         debts = debts,
         debtId = debtId,
         debtAction = debtAction,
@@ -220,6 +228,10 @@ fun AddTransactionContent(
     reimburseText: String = "",
     /** 报销金额文案（`全额 100.00` / `30.00`）；金额还没输时为 null。 */
     claimLabel: String? = null,
+    /** 模板抽屉（M3-5）：点一行把字段预填进本页（不直接入库）。 */
+    templates: List<TemplateWithTags> = emptyList(),
+    onPickTemplate: (String) -> Unit = {},
+    onManageTemplates: () -> Unit = {},
     /** 第四 Tab「债务」（M3-4）：面板换成 选择债务 + 借入/归还 + 资金账户。 */
     debtTab: Boolean = false,
     debts: List<DebtWithRepaid> = emptyList(),
@@ -267,6 +279,7 @@ fun AddTransactionContent(
     var showReimburse by remember { mutableStateOf(false) }
     var showReimburseAccount by remember { mutableStateOf(false) }
     var showDebtPicker by remember { mutableStateOf(false) }
+    var showTemplatePicker by remember { mutableStateOf(false) }
     val amountColor = when (type) {
         TxType.EXPENSE -> expenseColor()
         TxType.INCOME -> incomeColor()
@@ -425,6 +438,16 @@ fun AddTransactionContent(
                     )
                     if (debtTab) {
                         // 债务 Tab：资金账户在面板上选，备注在左边，没有分类/标签/退优惠/报销
+                    } else {
+                        // 模板（M3-5）：点开抽屉选一个，字段预填进本页（确认后才入库）
+                        PennedChip(
+                            label = "模板",
+                            icon = PennedIcons.Receipt,
+                            selected = false,
+                            onClick = { showTemplatePicker = true },
+                        )
+                    }
+                    if (debtTab) {
                     } else if (type == TxType.TRANSFER) {
                         PennedChip(
                             label = if (feeText.isBlank()) "手续费" else "手续费 $feeText",
@@ -655,6 +678,21 @@ fun AddTransactionContent(
                 showReimburseAccount = false
             },
             onDismiss = { showReimburseAccount = false },
+        )
+    }
+    if (showTemplatePicker) {
+        TemplatePickerSheet(
+            templates = templates,
+            onPick = {
+                showTemplatePicker = false
+                onPickTemplate(it)
+            },
+            onManage = {
+                // 先收抽屉再跳（两层浮层不叠）
+                showTemplatePicker = false
+                onManageTemplates()
+            },
+            onDismiss = { showTemplatePicker = false },
         )
     }
     if (showDebtPicker) {

@@ -29,6 +29,7 @@ private val ROW_DIVIDER_INDENT = 64.dp
 @Composable
 fun MineScreen(
     onOpenDataManagement: () -> Unit,
+    onOpenTemplates: () -> Unit,
     onOpenCategories: () -> Unit,
     onOpenTags: () -> Unit,
     onOpenPinLock: () -> Unit,
@@ -84,6 +85,14 @@ fun MineScreen(
                 subtitle = "两级标签 · 隐藏不用的标签",
                 leadingIcon = PennedIcons.Tag,
                 onClick = onOpenTags,
+            )
+            PennedDivider(startIndent = ROW_DIVIDER_INDENT)
+            // M3-5：模板记账（列表 + 新建/编辑 + 上移排序；用模板 = 记一笔预填）
+            PennedListRow(
+                title = "模板记账",
+                subtitle = "把常记的那几笔存成模板，记一笔里一键预填",
+                leadingIcon = PennedIcons.Receipt,
+                onClick = onOpenTemplates,
             )
         }
 

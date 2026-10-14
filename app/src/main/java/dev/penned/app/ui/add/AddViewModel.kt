@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.room.withTransaction
 import dev.penned.app.PennedApplication
 import dev.penned.app.data.db.dao.DebtWithRepaid
+import dev.penned.app.data.db.dao.TemplateWithTags
 import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.data.db.entity.CategoryEntity
 import dev.penned.app.data.db.entity.TagEntity
@@ -18,6 +19,8 @@ import dev.penned.app.domain.MoneyExpression
 import dev.penned.app.domain.RefundMath
 import dev.penned.app.domain.ReimburseMath
 import dev.penned.app.domain.ReimburseState
+import dev.penned.app.domain.TemplatePrefill
+import dev.penned.app.domain.Templates
 import dev.penned.app.domain.TxType
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -123,6 +126,14 @@ class AddViewModel(
     val allTags: StateFlow<List<TagEntity>> = currentBook
         .flatMapLatest { book ->
             if (book == null) flowOf(emptyList()) else db.tagDao().observeByBook(book.id)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** 「模板」抽屉的选择器（M3-5，本账本模板）。 */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val templates: StateFlow<List<TemplateWithTags>> = currentBook
+        .flatMapLatest { book ->
+            if (book == null) flowOf(emptyList()) else db.templateDao().observeByBook(book.id)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -336,6 +347,35 @@ class AddViewModel(
         debtId.value = id
     }
 
+    /** 用模板（按 id，抽屉里点一行走这条）：读实体 + 标签引用再预填。 */
+    fun applyTemplateById(id: String) {
+        viewModelScope.launch {
+            val template = db.templateDao().get(id) ?: return@launch
+            applyTemplate(Templates.of(template, db.templateDao().tagsForTemplate(id).map { it.id }))
+        }
+    }
+
+    /**
+     * 用模板（M3-5）：把模板字段填进表单——**不直接入库**，用户在记账页确认后再保存。
+     * 与编辑回填同一套字段（金额文本不带千分位）；父分类到库里查（`categories` 是 WhileSubscribed 的
+     * stateIn，刚开页时读到的必然是空表——M3-2/M3-3 的老坑）。
+     */
+    fun applyTemplate(prefill: TemplatePrefill) {
+        selectType(prefill.type)
+        amountText.value = prefill.amountText
+        selectedCategoryId.value = prefill.categoryId
+        accountId.value = prefill.accountId
+        transferFromId.value = prefill.accountId
+        transferToId.value = prefill.targetAccountId
+        feeText.value = if (prefill.feeCents > 0L) Money.format(prefill.feeCents, grouped = false) else ""
+        note.value = prefill.note.orEmpty()
+        selectedTagIds.value = prefill.tagIds.toSet()
+        amountField.value = AmountField.AMOUNT
+        viewModelScope.launch {
+            expandedParentId.value = prefill.categoryId?.let { cid -> db.categoryDao().get(cid)?.parentId }
+        }
+    }
+
     fun pickDebtAction(action: DebtAction) {
         debtAction.value = action
     }
@@ -498,17 +538,17 @@ class AddViewModel(
 
     private fun effectiveCents(expr: String): Long? = parseCents(expr)?.takeIf { it > 0 }
 
-    /** 保存并返回 */
-    fun save(onDone: () -> Unit) {
+    /** 保存并返回（把落库的流水 id 交出去：首页提示条上的「存为模板」要用它，M3-5）。 */
+    fun save(onSaved: (String) -> Unit) {
         viewModelScope.launch {
-            if (saveInternal()) onDone()
+            saveInternal()?.let(onSaved)
         }
     }
 
     /** 再记：保存并清空金额/备注/退款/优惠，保留分类，继续下一笔 */
     fun saveAgain() {
         viewModelScope.launch {
-            if (saveInternal()) {
+            if (saveInternal() != null) {
                 amountText.value = ""
                 note.value = ""
                 refundText.value = ""
@@ -526,9 +566,9 @@ class AddViewModel(
      */
     private typealias EditableTx = TxEdit.Editable
 
-    private suspend fun saveInternal(): Boolean {
+    private suspend fun saveInternal(): String? {
         // 金额框里是**原价**；落库金额 = 净额（D069——余额与统计只读 amountCents，口径一行不改）
-        val originalCents = effectiveCents(amountText.value) ?: return false
+        val originalCents = effectiveCents(amountText.value) ?: return null
         val refundCents = centsOrZero(refundText.value)
         val discountCents = centsOrZero(discountText.value)
         // 报销（M3-3）：状态/账户照选；金额空 = 0 = 按流水净额全额（ReimburseMath 的口径）
@@ -536,15 +576,15 @@ class AddViewModel(
         val claimAccountId = reimburseAccountId.value
         val claimCents = centsOrZero(reimburseText.value)
         val now = System.currentTimeMillis()
-        val book = currentBook.value ?: db.bookDao().observeAll().first().firstOrNull() ?: return false
+        val book = currentBook.value ?: db.bookDao().observeAll().first().firstOrNull() ?: return null
         val original = editId?.let { db.transactionDao().get(it) }
 
         val editable = when {
             // 债务 Tab（M3-4）：落库的仍是普通收入/支出流水，只是带着 debtId——
             // 钱往哪边走由「债务方向 × 那一格」决定（DebtMath.flowType）；没有分类、没有退款/报销
             debtTab.value -> {
-                val debt = debtId.value?.let { db.debtDao().get(it) } ?: return false
-                val account = accountId.value ?: return false
+                val debt = debtId.value?.let { db.debtDao().get(it) } ?: return null
+                val account = accountId.value ?: return null
                 EditableTx(
                     type = DebtMath.flowType(debt.direction, debtAction.value),
                     amountCents = originalCents,
@@ -563,9 +603,9 @@ class AddViewModel(
                 )
             }
             type.value == TxType.TRANSFER -> {
-                val from = transferFromId.value ?: return false
-                val to = transferToId.value ?: return false
-                if (from == to) return false
+                val from = transferFromId.value ?: return null
+                val to = transferToId.value ?: return null
+                if (from == to) return null
                 EditableTx(
                     type = TxType.TRANSFER,
                     // 转账面板没有退款/优惠/报销：原价即落库额
@@ -585,8 +625,8 @@ class AddViewModel(
                 )
             }
             else -> {
-                val categoryId = selectedCategoryId.value ?: return false
-                val category = categories.value.firstOrNull { it.id == categoryId } ?: return false
+                val categoryId = selectedCategoryId.value ?: return null
+                val category = categories.value.firstOrNull { it.id == categoryId } ?: return null
                 EditableTx(
                     type = if (category.type == CategoryType.INCOME) TxType.INCOME else TxType.EXPENSE,
                     amountCents = RefundMath.netCents(originalCents, refundCents, discountCents),
@@ -627,7 +667,7 @@ class AddViewModel(
                 db.tagDao().setTagsForTx(tx.id, selectedTagIds.value.toList())
             }
         }
-        return true
+        return tx.id
     }
 
     /** 保存用时间：新建 = 今天/所选日 + 当前时分；编辑 = 原时间点（换日期则只挪天）。 */

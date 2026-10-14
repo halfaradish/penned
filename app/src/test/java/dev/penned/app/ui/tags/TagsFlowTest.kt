@@ -110,9 +110,10 @@ class TagsFlowTest {
         composeRule.onNodeWithText("选好了").performClick()
         composeRule.waitUntil(5_000) { count("标签 · 2") == 1 }
 
-        // 保存 → 回首页（判据用首页的悬浮入口；备注文本此刻还在记账表单里，不能当"已保存"的信号）
+        // 保存 → 回首页（判据用首页提示条「已记账」：M3-5 起保存后提示条带「存为模板」动作、
+        // 10s 内挡着浮动记账入口；备注文本此刻还在记账表单里，也不能当"已保存"的信号）
         composeRule.onNodeWithText("完成").performClick()
-        composeRule.waitUntil(5_000) { count("添加一条新记账") == 1 }
+        composeRule.waitUntil(5_000) { count("已记账") == 1 || count("已保存") == 1 }
 
         // 落库：这条流水挂了两个标签（按 sortOrder 排序）——保存是单事务，流水在则关系在
         val saved = awaitDb {

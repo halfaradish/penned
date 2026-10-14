@@ -150,7 +150,8 @@ class AddDebtFlowTest {
         renderApp(app)
 
         borrowThousand()
-        composeRule.waitUntil(5_000) { count("添加一条新记账") == 1 }
+        // 保存后首页提示条在（10s）：浮动记账入口会被提示条挡着，等提示条本身（M3-5 起）
+        composeRule.waitUntil(5_000) { count("已记账") == 1 || count("已保存") == 1 }
 
         // 落库：收入型流水（钱进账户）+ debtId + 默认不计收支 + 没有分类
         val saved = awaitDb { flows(app).firstOrNull { it.debtId == "debt-1" } }

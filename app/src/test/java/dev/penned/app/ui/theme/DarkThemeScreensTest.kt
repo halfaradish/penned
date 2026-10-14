@@ -154,6 +154,7 @@ class DarkThemeScreensTest {
         dark {
             MineScreen(
                 onOpenDataManagement = {},
+                onOpenTemplates = {},
                 onOpenCategories = {},
                 onOpenTags = {},
                 onOpenPinLock = {},
@@ -552,6 +553,60 @@ class DarkThemeScreensTest {
         composeRule.onNodeWithText("张三").assertIsDisplayed()
         composeRule.onNodeWithText("借入").assertIsDisplayed()
         capture("add_debt")
+    }
+
+    @Test
+    fun darkTemplates() {
+        dark {
+            dev.penned.app.ui.templates.TemplatesContent(
+                templates = listOf(
+                    dev.penned.app.data.db.dao.TemplateWithTags(
+                        "t1", "午饭", TxType.EXPENSE, 1650, null, null, null, null, 0, 0,
+                        "食品餐饮", "微信", null, "报销中",
+                    ),
+                    dev.penned.app.data.db.dao.TemplateWithTags(
+                        "t2", "还信用卡", TxType.TRANSFER, 100_000, null, null, null, null, 0, 1,
+                        null, "招行信用卡", "储蓄卡", null,
+                    ),
+                ),
+                onBack = {}, onOpenTemplate = {}, onNewTemplate = {},
+            )
+        }
+        composeRule.onNodeWithText("模板记账").assertIsDisplayed()
+        composeRule.onNodeWithText("支出 · 16.50 · 食品餐饮 · 微信 · 报销中").assertIsDisplayed()
+        capture("templates")
+    }
+
+    @Test
+    fun darkTemplateEdit() {
+        dark {
+            dev.penned.app.ui.templates.TemplateEditContent(
+                state = dev.penned.app.ui.templates.TemplateEditUiState(
+                    name = "午饭", amountText = "16.50", categoryId = "c1", accountId = "a1", loaded = true,
+                ),
+                categories = listOf(
+                    dev.penned.app.data.db.entity.CategoryEntity(
+                        id = "c1", bookId = "b1", name = "食品餐饮",
+                        type = dev.penned.app.domain.CategoryType.EXPENSE,
+                        createdAt = 0, updatedAt = 0, deviceId = "d",
+                    ) to "",
+                ),
+                accounts = listOf(
+                    dev.penned.app.data.db.entity.AccountEntity(
+                        id = "a1", bookId = "b1", name = "微信",
+                        type = dev.penned.app.domain.AccountType.DEBIT,
+                        createdAt = 0, updatedAt = 0, deviceId = "d",
+                    ),
+                ),
+                tags = emptyList(),
+                onBack = {},
+                onNameChange = {}, onPickType = {}, onAmountChange = {}, onPickCategory = {},
+                onPickAccount = {}, onPickTargetAccount = {}, onNoteChange = {}, onFeeChange = {},
+                onToggleTag = {}, onSave = {},
+            )
+        }
+        composeRule.onNodeWithText("新建模板").assertIsDisplayed()
+        capture("template_edit")
     }
 
     private fun txRow(

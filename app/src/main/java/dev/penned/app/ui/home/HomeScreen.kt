@@ -109,6 +109,9 @@ fun HomeScreen(
     onEditRow: (String) -> Unit = {},
     /** 一次性提示（如"已记账"）：由记一笔页写进本页的 savedStateHandle，展示后回调 [onFlashShown]。 */
     flashMessage: String? = null,
+    /** 刚保存的流水 id（M3-5）：非空时提示条给「存为模板」动作。 */
+    flashTxId: String? = null,
+    onSaveAsTemplate: (String) -> Unit = {},
     onFlashShown: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -127,10 +130,21 @@ fun HomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // 保存完成后的反馈（跨页）：此前保存完静默返回，用户不知道成没成
-    LaunchedEffect(flashMessage) {
+    // 保存完成后的反馈（跨页）：此前保存完静默返回，用户不知道成没成。
+    // M3-5 起新建的那一笔还带一个「存为模板」动作（10s，与撤销同范式——D059 一律可取消）
+    LaunchedEffect(flashMessage, flashTxId) {
         val message = flashMessage ?: return@LaunchedEffect
-        snackbarHostState.showSnackbar(message)
+        val txId = flashTxId
+        if (txId == null) {
+            snackbarHostState.showSnackbar(message)
+        } else {
+            val result = snackbarHostState.showSnackbar(
+                message = message,
+                actionLabel = "存为模板",
+                duration = SnackbarDuration.Long,
+            )
+            if (result == SnackbarResult.ActionPerformed) onSaveAsTemplate(txId)
+        }
         onFlashShown()
     }
     var undoJob by remember { mutableStateOf<Job?>(null) }

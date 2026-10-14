@@ -31,6 +31,7 @@ class DataScreenScreenshotTest {
             PennedTheme {
                 MineScreen(
                     onOpenDataManagement = {},
+                    onOpenTemplates = {},
                     onOpenCategories = {},
                     onOpenTags = {},
                     onOpenPinLock = {},
