@@ -71,6 +71,7 @@ import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.primaryInkColor
 import dev.penned.app.ui.theme.rememberAnimationsEnabled
 import dev.penned.app.ui.home.HomeScreen
+import dev.penned.app.ui.invest.InvestDetailScreen
 import dev.penned.app.ui.home.HomeViewModel
 import dev.penned.app.ui.home.SearchScreen
 import dev.penned.app.ui.lock.PinManageScreen
@@ -311,6 +312,15 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     filterId = entry.arguments?.getString("filterId")?.ifEmpty { null },
                 )
             }
+            composable(
+                route = "invest/{accountId}",
+                arguments = listOf(navArgument("accountId") { type = NavType.StringType }),
+            ) { entry ->
+                InvestDetailScreen(
+                    accountId = entry.arguments?.getString("accountId").orEmpty(),
+                    onBack = { navController.popBackStack() },
+                )
+            }
             composable("filters") {
                 BillFiltersScreen(
                     onBack = { navController.popBackStack() },
@@ -403,6 +413,8 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onOpenAccount = { id -> navController.navigate("account?editId=$id") },
                     // 债务卡点进债务列表（M3-4）
                     onOpenDebts = { navController.navigate("debts") },
+                    // 理财卡点进理财详情（M3-10）
+                    onOpenInvest = { id -> navController.navigate("invest/$id") },
                 )
             }
             composable("recurring") {

@@ -703,6 +703,34 @@ class DarkThemeScreensTest {
         capture("bill_filters")
     }
 
+    @Test
+    fun darkInvestDetail() {
+        dark {
+            dev.penned.app.ui.invest.InvestDetailContent(
+                detail = dev.penned.app.ui.invest.InvestUi(
+                    account = dev.penned.app.data.db.dao.AccountWithBalance(
+                        id = "a1", name = "理财账户", type = dev.penned.app.domain.AccountType.INVEST,
+                        groupName = null, balanceCents = 12_500L, netTransferCents = 2_000L, initialBalanceCents = 10_000L,
+                    ),
+                    summary = dev.penned.app.domain.InvestMath.summary(
+                        snapshots = listOf(dev.penned.app.domain.InvestSnapshot(20_000L, 11_000L)),
+                        balanceCents = 12_500L, initialBalanceCents = 10_000L, netTransferCents = 2_000L,
+                    ),
+                    snapshots = listOf(
+                        dev.penned.app.data.db.entity.AssetSnapshotEntity(
+                            id = "s1", accountId = "a1", dateEpochDay = 20_000L, valueCents = 11_000L,
+                            note = "季度更新", createdAt = 0, updatedAt = 0, deviceId = "d",
+                        ),
+                    ),
+                ),
+                onBack = {},
+            )
+        }
+        composeRule.onNodeWithText("理财详情").assertIsDisplayed()
+        composeRule.onNodeWithText("盈亏 -10.00").assertIsDisplayed()
+        capture("invest_detail")
+    }
+
     private fun txRow(
         id: String,
         type: TxType,

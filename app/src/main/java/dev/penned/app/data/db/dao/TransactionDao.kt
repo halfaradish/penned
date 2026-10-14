@@ -238,6 +238,22 @@ interface TransactionDao {
     @Query("SELECT dateEpochMinute FROM transactions WHERE deleted = 0 AND recurringRuleId = :ruleId")
     suspend fun minutesForRule(ruleId: String): List<Long>
 
+    /**
+     * 账户的**净转入**（理财成本口径，M3-10）：转账转入 − 转出（转出含手续费，与余额重算同一口径）。
+     * 收支流水不算成本（那是买卖行为，不是"投进去的钱"）。
+     */
+    @Query(
+        """
+        SELECT IFNULL(SUM(CASE
+                   WHEN t.type = 'TRANSFER' AND t.accountId = :accountId THEN -(t.amountCents + t.feeCents)
+                   WHEN t.type = 'TRANSFER' AND t.targetAccountId = :accountId THEN t.amountCents
+                   ELSE 0 END), 0)
+        FROM transactions t
+        WHERE t.deleted = 0
+        """
+    )
+    fun observeNetTransferCents(accountId: String): Flow<Long>
+
     @Query("SELECT * FROM transactions WHERE deleted = 0")
     suspend fun all(): List<TransactionEntity>
 

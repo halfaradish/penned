@@ -13,6 +13,7 @@ import dev.penned.app.data.db.dao.CategoryDao
 import dev.penned.app.data.db.dao.DebtDao
 import dev.penned.app.data.db.dao.ImportBatchDao
 import dev.penned.app.data.db.dao.RecurringDao
+import dev.penned.app.data.db.dao.SnapshotDao
 import dev.penned.app.data.db.dao.TagDao
 import dev.penned.app.data.db.dao.TemplateDao
 import dev.penned.app.data.db.dao.TransactionDao
@@ -68,6 +69,7 @@ abstract class PennedDatabase : RoomDatabase() {
     abstract fun templateDao(): TemplateDao
     abstract fun recurringDao(): RecurringDao
     abstract fun billFilterDao(): BillFilterDao
+    abstract fun snapshotDao(): SnapshotDao
 
     companion object {
         /** 全部迁移。生产构建与 migration 测试共用这一份，测试不会漏掉新迁移。 */

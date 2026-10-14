@@ -35,6 +35,10 @@ data class AccountWithBalance(
     val type: AccountType,
     val groupName: String?,
     val balanceCents: Long,
+    /** 净转入（转入 − 转出，转出含手续费）：理财「成本 = 初始余额 + 净转入」的原料（M3-10）。 */
+    val netTransferCents: Long = 0,
+    /** 初始余额（理财成本的一部分，M3-10）。 */
+    val initialBalanceCents: Long = 0,
     val remark: String? = null,
     /** 已停用（M3-9）：资产页收进「已停用」段，净资产仍计入。 */
     val archived: Boolean = false,
@@ -52,7 +56,7 @@ interface AccountDao {
     @Query(
         """
         SELECT a.id AS id, a.name AS name, a.type AS type, a.groupName AS groupName, a.remark AS remark,
-            a.archived AS archived,
+            a.archived AS archived, a.initialBalanceCents AS initialBalanceCents,
             a.initialBalanceCents
             + IFNULL((SELECT SUM(CASE WHEN t.type = 'INCOME' THEN t.amountCents ELSE -t.amountCents END)
                       FROM transactions t
@@ -62,7 +66,13 @@ interface AccountDao {
                       WHERE t.deleted = 0 AND t.accountId = a.id AND t.type = 'TRANSFER'), 0)
             + IFNULL((SELECT SUM(t.amountCents) FROM transactions t
                       WHERE t.deleted = 0 AND t.targetAccountId = a.id AND t.type = 'TRANSFER'), 0)
-            AS balanceCents
+            AS balanceCents,
+            -- 净转入（同上两段转账口径，M3-10 成本用）
+            IFNULL((SELECT SUM(-(t.amountCents + t.feeCents)) FROM transactions t
+                    WHERE t.deleted = 0 AND t.accountId = a.id AND t.type = 'TRANSFER'), 0)
+            + IFNULL((SELECT SUM(t.amountCents) FROM transactions t
+                      WHERE t.deleted = 0 AND t.targetAccountId = a.id AND t.type = 'TRANSFER'), 0)
+            AS netTransferCents
         FROM accounts a
         WHERE a.deleted = 0 AND (
             a.bookId = :bookId OR a.scopeAllBooks = 1
@@ -73,6 +83,32 @@ interface AccountDao {
         """
     )
     fun observeWithBalance(bookId: String): Flow<List<AccountWithBalance>>
+
+    /** 单个账户的余额行（理财详情页，M3-10）。 */
+    @Query(
+        """
+        SELECT a.id AS id, a.name AS name, a.type AS type, a.groupName AS groupName, a.remark AS remark,
+            a.archived AS archived, a.initialBalanceCents AS initialBalanceCents,
+            a.initialBalanceCents
+            + IFNULL((SELECT SUM(CASE WHEN t.type = 'INCOME' THEN t.amountCents ELSE -t.amountCents END)
+                      FROM transactions t
+                      WHERE t.deleted = 0 AND t.accountId = a.id
+                        AND t.type IN ('INCOME', 'EXPENSE')), 0)
+            + IFNULL((SELECT SUM(-(t.amountCents + t.feeCents)) FROM transactions t
+                      WHERE t.deleted = 0 AND t.accountId = a.id AND t.type = 'TRANSFER'), 0)
+            + IFNULL((SELECT SUM(t.amountCents) FROM transactions t
+                      WHERE t.deleted = 0 AND t.targetAccountId = a.id AND t.type = 'TRANSFER'), 0)
+            AS balanceCents,
+            IFNULL((SELECT SUM(-(t.amountCents + t.feeCents)) FROM transactions t
+                    WHERE t.deleted = 0 AND t.accountId = a.id AND t.type = 'TRANSFER'), 0)
+            + IFNULL((SELECT SUM(t.amountCents) FROM transactions t
+                      WHERE t.deleted = 0 AND t.targetAccountId = a.id AND t.type = 'TRANSFER'), 0)
+            AS netTransferCents
+        FROM accounts a
+        WHERE a.deleted = 0 AND a.id = :accountId
+        """
+    )
+    fun observeWithBalanceByAccount(accountId: String): Flow<AccountWithBalance?>
 
     @Query(
         """

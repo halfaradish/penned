@@ -53,7 +53,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.penned.app.PennedApplication
 import dev.penned.app.data.db.dao.AccountWithBalance
 import dev.penned.app.domain.AccountType
+import dev.penned.app.data.db.dao.toInvestSnapshot
 import dev.penned.app.domain.DebtMath
+import dev.penned.app.domain.InvestMath
 import dev.penned.app.domain.Money
 import dev.penned.app.ui.components.CategoryAvatar
 import dev.penned.app.ui.components.AnimatedNumberText
@@ -92,6 +94,11 @@ data class AssetsUiState(
     /** 债务（M3-4）：应付 = 我欠对方的剩余合计、应收 = 对方欠我的剩余合计。 */
     val payableCents: Long = 0,
     val receivableCents: Long = 0,
+    /** 理财（M3-10）：总额 = Σ 各理财账户的总额（最近快照 / 无快照退回余额）；盈亏 = 总额 − 成本。 */
+    val investTotalCents: Long = 0,
+    val investProfitCents: Long = 0,
+    /** 理财账户（点理财卡进详情用）。 */
+    val investAccounts: List<AccountWithBalance> = emptyList(),
 )
 
 class AssetsViewModel(private val app: PennedApplication) : ViewModel() {
@@ -106,11 +113,22 @@ class AssetsViewModel(private val app: PennedApplication) : ViewModel() {
                 db.accountDao().observeWithBalance(bookId),
                 db.transactionDao().observeReimburseSums(bookId),
                 db.debtDao().observeByBook(bookId),
-            ) { accounts, reimb, debts ->
+                db.snapshotDao().observeForBook(bookId),
+            ) { accounts, reimb, debts, snapshots ->
                 // 债务不落库（D004/D068）：净资产 = Σ账户余额 − 应付 + 应收（DebtMath 的口径）
                 val payable = DebtMath.payableCents(debts.map { it.toBalance() })
                 val receivable = DebtMath.receivableCents(debts.map { it.toBalance() })
                 val accountSum = accounts.sumOf { it.balanceCents }
+                // 理财三数（M3-10）：每个理财账户各算一份再求和；快照按账户取最近一条
+                val investAccounts = accounts.filter { it.type == AccountType.INVEST }
+                val investSummaries = investAccounts.map { account ->
+                    InvestMath.summary(
+                        snapshots = snapshots.filter { it.accountId == account.id }.map { it.toInvestSnapshot() },
+                        balanceCents = account.balanceCents,
+                        initialBalanceCents = account.initialBalanceCents,
+                        netTransferCents = account.netTransferCents,
+                    )
+                }
                 AssetsUiState(
                     accounts = accounts,
                     netCents = DebtMath.netAssetCents(accountSum, payable, receivable),
@@ -120,6 +138,9 @@ class AssetsViewModel(private val app: PennedApplication) : ViewModel() {
                     reimburseDoneCents = reimb.doneCents,
                     payableCents = payable,
                     receivableCents = receivable,
+                    investTotalCents = investSummaries.sumOf { it.totalCents },
+                    investProfitCents = investSummaries.sumOf { it.profitCents },
+                    investAccounts = investAccounts,
                 )
             }
         }
@@ -179,6 +200,8 @@ fun AssetsScreen(
     onAddAccount: (AccountGroup, String?) -> Unit = { _, _ -> },
     onOpenAccount: (String) -> Unit = {},
     onOpenDebts: () -> Unit = {},
+    /** 点理财卡进理财详情（M3-10）。 */
+    onOpenInvest: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val app = dev.penned.app.ui.LocalApp.current
@@ -214,6 +237,7 @@ fun AssetsScreen(
         onAddAccount = onAddAccount,
         onOpenAccount = onOpenAccount,
         onOpenDebts = onOpenDebts,
+        onOpenInvest = onOpenInvest,
         onDeleteAccount = viewModel::deleteAccount,
         revealedRowId = revealedRowId,
         onRevealedRowChange = { revealedRowId = it },
@@ -229,8 +253,9 @@ fun AssetsContent(
     onAddAccount: (AccountGroup, String?) -> Unit,
     modifier: Modifier = Modifier,
     onOpenAccount: (String) -> Unit = {},
-    /** 点「债务」卡进债务列表（M3-4）；报销/理财两张卡还没有可进的页面。 */
+    /** 点「债务」卡进债务列表（M3-4）；点「理财」卡进理财详情（M3-10）。 */
     onOpenDebts: () -> Unit = {},
+    onOpenInvest: (String) -> Unit = {},
     onDeleteAccount: (AccountWithBalance) -> Unit = {},
     /** 当前左滑展开动作区的账户 id（null = 都收起）；只留一行为开。 */
     revealedRowId: String? = null,
@@ -290,7 +315,14 @@ fun AssetsContent(
             item(key = "net") {
                 NetAssetCard(state = state, masked = masked, onToggleMask = { masked = !masked })
             }
-            item(key = "summary") { SummaryCards(state = state, masked = masked, onOpenDebts = onOpenDebts) }
+            item(key = "summary") {
+                SummaryCards(
+                    state = state,
+                    masked = masked,
+                    onOpenDebts = onOpenDebts,
+                    onOpenInvest = { id -> onOpenInvest(id) },
+                )
+            }
 
             if (state.accounts.isEmpty()) {
                 item(key = "empty") {
@@ -426,7 +458,12 @@ private data class SummaryLine(val label: String, val cents: Long, val color: Co
 
 /** 报销 / 债务 / 理财：三张独立小卡（债务 M3-4 起接真数据并可点进列表；理财仍是占位）。 */
 @Composable
-private fun SummaryCards(state: AssetsUiState, masked: Boolean, onOpenDebts: () -> Unit) {
+private fun SummaryCards(
+    state: AssetsUiState,
+    masked: Boolean,
+    onOpenDebts: () -> Unit,
+    onOpenInvest: (String) -> Unit,
+) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
         horizontalArrangement = Arrangement.spacedBy(PennedSpacing.md),
@@ -453,10 +490,19 @@ private fun SummaryCards(state: AssetsUiState, masked: Boolean, onOpenDebts: () 
         SummaryCard(
             title = "理财",
             lines = listOf(
-                SummaryLine("总额", 0L, MaterialTheme.colorScheme.onSurface),
-                SummaryLine("盈亏", 0L, primaryInkColor()),
+                SummaryLine("总额", state.investTotalCents, MaterialTheme.colorScheme.onSurface),
+                // 盈亏：正=品牌青绿、负=朱砂（与净资产同一个颜色语言）
+                SummaryLine(
+                    "盈亏",
+                    state.investProfitCents,
+                    if (state.investProfitCents < 0) expenseColor() else primaryInkColor(),
+                ),
             ),
             masked = masked,
+            // 只有一个理财账户就直接进它；多个先让用户选（M3-10）
+            onClick = if (state.investAccounts.isEmpty()) null else {
+                { onOpenInvest(state.investAccounts.first().id) }
+            },
             modifier = Modifier.weight(1f),
         )
     }
