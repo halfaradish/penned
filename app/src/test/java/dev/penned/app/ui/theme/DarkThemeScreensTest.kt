@@ -660,6 +660,28 @@ class DarkThemeScreensTest {
         capture("recurring_edit")
     }
 
+    @Test
+    fun darkFilter() {
+        dark {
+            dev.penned.app.ui.home.SearchContent(
+                filter = dev.penned.app.domain.TxFilter(
+                    type = TxType.EXPENSE,
+                    categoryIds = listOf("c1"),
+                    amountMinCents = 1000,
+                ),
+                results = listOf(
+                    txRow("1", TxType.EXPENSE, 1600, "晚餐", "食品餐饮"),
+                    txRow("2", TxType.EXPENSE, 700, "打车", "出行交通"),
+                ),
+                summary = dev.penned.app.ui.home.FilterSummary(2, 0, 2300),
+                autofocus = false,
+            )
+        }
+        composeRule.onNodeWithText("筛选").assertIsDisplayed()
+        composeRule.onNodeWithText("分类 · 1").assertIsDisplayed()
+        capture("filter")
+    }
+
     private fun txRow(
         id: String,
         type: TxType,

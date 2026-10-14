@@ -120,6 +120,77 @@ interface TransactionDao {
     )
     fun observeSearchWithCategory(bookId: String, pattern: String, cents: Long?): Flow<List<TxWithCategory>>
 
+    /**
+     * 组合筛选（M3-7）：条件全可空，`null`/空列表 = 不限（口径在 `TxFilter`）。
+     *
+     * 几个写法上的坑（都踩过）：
+     * - **多值条件不能直接 `IN (:list)`**：空列表会生成 `IN ()` 语法错，所以配一个 `hasX` 标志位
+     *   （`0` = 这个条件没用），调用方在没有选中项时传 `listOf("")` + `hasX = 0`；
+     * - 关键词用 `LIKE :pattern ESCAPE '\\'`，pattern 由 `SearchQuery.likePattern` 转义（字面量匹配）；
+     * - 分类的"含二级"在 Kotlin 侧展开（`TxFilters.expandCategoryIds`）后传进来，SQL 不递归；
+     * - **不设 LIMIT**：结果集就是导出集（"精准导出"必须与屏幕上看到的一致，截断会静默丢数据）；
+     *   列表侧是 LazyColumn，几千行也不打紧。
+     */
+    @Query(
+        """
+        SELECT t.id AS id, t.type AS type, t.amountCents AS amountCents,
+               t.accountId AS accountId, t.categoryId AS categoryId,
+               t.dateEpochMinute AS dateEpochMinute, t.note AS note,
+               c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey,
+               ta.name AS targetAccountName,
+               t.excludeFromStats AS excludeFromStats,
+               t.refundCents AS refundCents, t.discountCents AS discountCents,
+               dt.direction AS debtDirection, dt.counterparty AS debtCounterparty
+        FROM transactions t
+        LEFT JOIN categories c ON c.id = t.categoryId
+        LEFT JOIN categories p ON p.id = c.parentId
+        LEFT JOIN accounts ta ON ta.id = t.targetAccountId
+        LEFT JOIN debts dt ON dt.id = t.debtId
+        WHERE t.deleted = 0 AND t.bookId = :bookId
+          AND (:pattern IS NULL OR t.note LIKE :pattern ESCAPE '\'
+               OR c.name LIKE :pattern ESCAPE '\' OR p.name LIKE :pattern ESCAPE '\'
+               OR (:keywordCents IS NOT NULL AND t.amountCents = :keywordCents))
+          AND (:type IS NULL OR t.type = :type)
+          AND (:fromMinute IS NULL OR t.dateEpochMinute >= :fromMinute)
+          AND (:toMinute IS NULL OR t.dateEpochMinute <= :toMinute)
+          AND (:hasCategories = 0 OR t.categoryId IN (:categoryIds))
+          AND (:hasAccounts = 0 OR t.accountId IN (:accountIds))
+          AND (:hasTags = 0 OR EXISTS (SELECT 1 FROM transaction_tags r
+                                       WHERE r.transactionId = t.id AND r.tagId IN (:tagIds)))
+          AND (:minCents IS NULL OR t.amountCents >= :minCents)
+          AND (:maxCents IS NULL OR t.amountCents <= :maxCents)
+          AND (:excludeFromStats IS NULL OR t.excludeFromStats = :excludeFromStats)
+          AND (:excludeFromBudget IS NULL OR t.excludeFromBudget = :excludeFromBudget)
+          AND (:includeTransfer IS NULL
+               OR (:includeTransfer = 1 AND t.type = 'TRANSFER')
+               OR (:includeTransfer = 0 AND t.type != 'TRANSFER'))
+        ORDER BY t.dateEpochMinute DESC
+        """
+    )
+    fun observeFiltered(
+        bookId: String,
+        pattern: String?,
+        keywordCents: Long?,
+        type: TxType?,
+        fromMinute: Long?,
+        toMinute: Long?,
+        hasCategories: Int,
+        categoryIds: List<String>,
+        hasAccounts: Int,
+        accountIds: List<String>,
+        hasTags: Int,
+        tagIds: List<String>,
+        minCents: Long?,
+        maxCents: Long?,
+        excludeFromStats: Boolean?,
+        excludeFromBudget: Boolean?,
+        includeTransfer: Int?,
+    ): Flow<List<TxWithCategory>>
+
+    /** 导出用：按 id 取整行实体（筛选结果集 → CSV，`PennedCsv.export` 吃实体）。 */
+    @Query("SELECT * FROM transactions WHERE id IN (:ids)")
+    suspend fun entitiesByIds(ids: List<String>): List<TransactionEntity>
+
     /** 批次明细（导入批次管理页钻取）。 */
     @Query(
         """
