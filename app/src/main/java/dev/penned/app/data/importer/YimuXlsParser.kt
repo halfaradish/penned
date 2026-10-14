@@ -9,6 +9,9 @@ import java.time.format.DateTimeFormatter
  * - 列语义按导出模板 23 列，头部按列名定位（宽容列序）；
  * - 金额：支出为负、收入为正（导出层做了 ×(-1)），入库恒为正、符号由 type 表达（D001）；
  * - 退款/优惠是流水属性（D007），退款列在真实导出里是文本单元格；
+ * - 报销列（模板 11-13：报销账户/报销金额/报销明细，M3-3）只取**账户名与金额**——
+ *   导出里**没有报销状态列**，状态一律留 NONE（不臆断"已报/待报"，否则会凭空进资产页的可报/已报）；
+ *   报销明细不做（D008 明确不做单据明细）；
  * - 分类/账本/账户按显示名引用（导出无 ID），匹配交给 ImportRepository；
  * - 日期 "yyyy-MM-dd HH:mm" 分钟精度文本 → epochMinute（D002）。
  */
@@ -28,6 +31,10 @@ object YimuXlsParser {
         val refundCents: Long = 0,
         val discountCents: Long = 0,
         val note: String? = null,
+        /** 报销账户名（M3-3，导出「报销账户」列）。 */
+        val reimburseAccountName: String? = null,
+        /** 报销金额（M3-3，导出「报销金额」列）；0 = 按流水净额全额（`ReimburseMath`）。 */
+        val reimburseCents: Long = 0,
     )
 
     data class Problem(val rowIndex: Int, val message: String)
@@ -67,6 +74,8 @@ object YimuXlsParser {
         val cRefund = colOf("退款")
         val cDiscount = colOf("优惠")
         val cNote = colOf("备注")
+        val cReimburseAccount = colOf("报销账户")
+        val cReimburseAmount = colOf("报销金额")
 
         val byRow = cells.filter { it.row > 0 }.groupBy { it.row }
         val rows = ArrayList<YimuTx>()
@@ -108,6 +117,8 @@ object YimuXlsParser {
                         refundCents = numOf(cRefund)?.let { Math.round(Math.abs(it) * 100.0) } ?: 0L,
                         discountCents = numOf(cDiscount)?.let { Math.round(Math.abs(it) * 100.0) } ?: 0L,
                         note = textOf(cNote),
+                        reimburseAccountName = textOf(cReimburseAccount),
+                        reimburseCents = numOf(cReimburseAmount)?.let { Math.round(Math.abs(it) * 100.0) } ?: 0L,
                     )
                 )
             } catch (e: YimuFormatException) {

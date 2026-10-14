@@ -103,13 +103,21 @@ interface TransactionDao {
     )
     fun observeByBatch(batchId: String): Flow<List<TxWithCategory>>
 
-    /** 报销汇总（资产页）：可报 = 待报销金额，已报 = 已报销金额 */
+    /**
+     * 报销汇总（资产页）：可报 = 待报销金额，已报 = 已报销金额。
+     *
+     * 口径（M3-3，D008；`ReimburseMath.claimCents` 的 SQL 版）：**`reimburseCents` 缺省 0 = 按流水净额全额**
+     * ——`CASE WHEN reimburseCents > 0 THEN reimburseCents ELSE amountCents END`。
+     * 改这里必须同时改 `ReimburseMath`（口径的表驱动测试在那边，这段 SQL 由 DAO 测试钉）。
+     */
     data class ReimburseSums(val pendingCents: Long, val doneCents: Long)
 
     @Query(
         """
-        SELECT COALESCE(SUM(CASE WHEN reimburseState = 'PENDING' THEN amountCents END), 0) AS pendingCents,
-               COALESCE(SUM(CASE WHEN reimburseState = 'DONE' THEN amountCents END), 0) AS doneCents
+        SELECT COALESCE(SUM(CASE WHEN reimburseState = 'PENDING'
+                                 THEN CASE WHEN reimburseCents > 0 THEN reimburseCents ELSE amountCents END END), 0) AS pendingCents,
+               COALESCE(SUM(CASE WHEN reimburseState = 'DONE'
+                                 THEN CASE WHEN reimburseCents > 0 THEN reimburseCents ELSE amountCents END END), 0) AS doneCents
         FROM transactions
         WHERE deleted = 0 AND bookId = :bookId AND reimburseState != 'NONE'
         """

@@ -65,6 +65,9 @@ class ImportRepository(
                 val book = resolveBook(row.bookName)
                 val categoryId = resolveCategory(book.id, row)
                 val accountId = row.accountName?.let { resolveAccount(book.id, it) }
+                // 报销账户名同样按名匹配/缺则建（M3-3）；状态留 NONE——导出没有报销状态列，
+                // 不猜"已报/待报"，否则资产页的可报/已报会凭空多出数字（口径见 YimuXlsParser 头注释）
+                val reimburseAccountId = row.reimburseAccountName?.let { resolveAccount(book.id, it) }
                 txs.add(
                     TransactionEntity(
                         id = UUID.randomUUID().toString(),
@@ -78,6 +81,8 @@ class ImportRepository(
                         note = row.note,
                         refundCents = row.refundCents,
                         discountCents = row.discountCents,
+                        reimburseAccountId = reimburseAccountId,
+                        reimburseCents = row.reimburseCents,
                         source = TxSource.IMPORT,
                         importBatchId = batchId,
                         creatorDeviceId = deviceId,

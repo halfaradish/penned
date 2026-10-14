@@ -72,6 +72,11 @@ class AssetsScreenScreenshotTest {
         composeRule.onAllNodesWithText("-589.00").assertCountEquals(2)
         // 三张汇总卡
         listOf("报销", "债务", "理财").forEach { composeRule.onNodeWithText(it).assertIsDisplayed() }
+        // 报销卡两张数字（M3-3）：可报 50.00 / 已报 120.00——口径是 PENDING/DONE 的报销金额和
+        composeRule.onNodeWithText("可报").assertIsDisplayed()
+        composeRule.onNodeWithText("50.00").assertIsDisplayed()
+        composeRule.onNodeWithText("已报").assertIsDisplayed()
+        composeRule.onNodeWithText("120.00").assertIsDisplayed()
         // 眼睛（隐藏金额）
         composeRule.onNodeWithContentDescription("隐藏金额").assertIsDisplayed()
         capture("m1_assets_screen")

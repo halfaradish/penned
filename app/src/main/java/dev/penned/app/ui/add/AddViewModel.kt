@@ -13,6 +13,8 @@ import dev.penned.app.domain.CategoryType
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.MoneyExpression
 import dev.penned.app.domain.RefundMath
+import dev.penned.app.domain.ReimburseMath
+import dev.penned.app.domain.ReimburseState
 import dev.penned.app.domain.TxType
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,7 +44,16 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
     /** 优惠额（M3-2），同退款。 */
     var discountText = MutableStateFlow("")
         private set
-    /** 金额键盘当前在编辑哪一格——退款/优惠复用同一个键盘，不另做输入控件（M3 §二·3 交互）。 */
+    /** 报销状态（M3-3，D008）：NONE 不报销 / PENDING 待报销 / DONE 已报销。 */
+    var reimburseState = MutableStateFlow(ReimburseState.NONE)
+        private set
+    /** 收到报销款的账户（M3-3），可空。 */
+    var reimburseAccountId = MutableStateFlow<String?>(null)
+        private set
+    /** 报销金额（M3-3）文本：空 = 缺省 0 = 按流水净额全额（`ReimburseMath`）。 */
+    var reimburseText = MutableStateFlow("")
+        private set
+    /** 金额键盘当前在编辑哪一格——退款/优惠/报销金额复用同一个键盘，不另做输入控件（M3 §二·3 交互）。 */
     var amountField = MutableStateFlow(AmountField.AMOUNT)
         private set
     var selectedCategoryId = MutableStateFlow<String?>(null)
@@ -162,10 +173,23 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
         RefundMath.summaryText(original, centsOrZero(refund), centsOrZero(discount))
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /** 表达式待求值时，完成键显示为 "="（只在编辑主金额时；退款/优惠的算式按保存键时结算） */
+    /** 表达式待求值时，完成键显示为 "="（只在编辑主金额时；退款/优惠/报销金额的算式按保存键时结算） */
     val showEquals: StateFlow<Boolean> = combine(amountText, amountField) { text, field ->
         field == AmountField.AMOUNT && MoneyExpression.hasPendingOperator(text)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    /**
+     * 报销抽屉里「报销金额」行的文案（M3-3）：`全额 100.00`（缺省）/ `30.00`（自定）。
+     * 全额里的那个数是**净额**（退款/优惠扣完之后的落库额）——报销按实付算，不按标价算。
+     */
+    val claimLabel: StateFlow<String?> = combine(
+        amountText, refundText, discountText, reimburseText,
+    ) { amount, refund, discount, claim ->
+        val original = parseCents(amount) ?: return@combine null
+        val net = RefundMath.netCents(original, centsOrZero(refund), centsOrZero(discount))
+        if (net <= 0L) return@combine null
+        ReimburseMath.claimLabel(centsOrZero(claim), net)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     init {
         if (editId != null) loadForEdit(editId)
@@ -197,6 +221,10 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
             dateEpochDay.value = AddDate.dayFromMinute(tx.dateEpochMinute)
             // 标签引用直查关系表（`allTags` 与 `categories` 同病：WhileSubscribed 的 stateIn 在刚开页时是空表）
             selectedTagIds.value = db.tagDao().tagsForTx(id).map { it.id }.toSet()
+            // 报销三字段（M3-3）：状态/账户直接回填；金额 0 = 按全额，输入框留空（0 是缺省不是"报 0 元"）
+            reimburseState.value = tx.reimburseState
+            reimburseAccountId.value = tx.reimburseAccountId
+            reimburseText.value = if (tx.reimburseCents > 0L) Money.format(tx.reimburseCents, grouped = false) else ""
         }
     }
 
@@ -204,12 +232,29 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
         type.value = t
         if (t != TxType.TRANSFER) selectedCategoryId.value = null
         expandedParentId.value = null
-        // 转账没有退款/优惠，键盘也就没有另外两格可指
+        // 转账没有退款/优惠/报销，键盘也就没有另外几格可指
         amountField.value = AmountField.AMOUNT
         if (t == TxType.TRANSFER) {
             refundText.value = ""
             discountText.value = ""
+            reimburseState.value = ReimburseState.NONE
+            reimburseAccountId.value = null
+            reimburseText.value = ""
         }
+    }
+
+    /** 报销状态三选（M3-3）：改状态时顺手清掉不适用的附带项（不报销 = 没有账户/金额可言）。 */
+    fun pickReimburseState(state: ReimburseState) {
+        reimburseState.value = state
+        if (state == ReimburseState.NONE) {
+            reimburseAccountId.value = null
+            reimburseText.value = ""
+            if (amountField.value == AmountField.REIMBURSE) amountField.value = AmountField.AMOUNT
+        }
+    }
+
+    fun pickReimburseAccount(id: String?) {
+        reimburseAccountId.value = id
     }
 
     fun selectParent(id: String, hasSubs: Boolean) {
@@ -273,45 +318,45 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
         }
     }
 
-    /** 键盘切格（M3-2）：点信息条上的「退款」「优惠」chip 时把键盘指过去；[AmountField.AMOUNT] 指回主金额。 */
+    /** 键盘切格（M3-2/M3-3）：点信息条上的 chip 或抽屉里的「报销金额」行时把键盘指过去。 */
     fun focusAmountField(field: AmountField) {
         amountField.value = field
     }
 
-    /** 键位落到当前格：主金额 / 退款 / 优惠共用一个键盘（M3-2）。 */
-    fun pressKey(key: String) {
-        val current = when (amountField.value) {
-            AmountField.AMOUNT -> amountText.value
-            AmountField.REFUND -> refundText.value
-            AmountField.DISCOUNT -> discountText.value
+    /** 键盘那一格对应的输入文本。 */
+    private fun textOf(field: AmountField): String = when (field) {
+        AmountField.AMOUNT -> amountText.value
+        AmountField.REFUND -> refundText.value
+        AmountField.DISCOUNT -> discountText.value
+        AmountField.REIMBURSE -> reimburseText.value
+    }
+
+    private fun writeText(field: AmountField, text: String) {
+        when (field) {
+            AmountField.AMOUNT -> amountText.value = text
+            AmountField.REFUND -> refundText.value = text
+            AmountField.DISCOUNT -> discountText.value = text
+            AmountField.REIMBURSE -> reimburseText.value = text
         }
+    }
+
+    /** 键位落到当前格：主金额 / 退款 / 优惠 / 报销金额共用一个键盘。 */
+    fun pressKey(key: String) {
+        val current = textOf(amountField.value)
         val next = when (key) {
             KEY_BACKSPACE -> current.dropLast(1)
             KEY_CLEAR -> ""
             else -> MoneyExpression.append(current, key)
         }
-        when (amountField.value) {
-            AmountField.AMOUNT -> amountText.value = next
-            AmountField.REFUND -> refundText.value = next
-            AmountField.DISCOUNT -> discountText.value = next
-        }
+        writeText(amountField.value, next)
     }
 
     fun evaluate() {
         val field = amountField.value
-        val expr = when (field) {
-            AmountField.AMOUNT -> amountText.value
-            AmountField.REFUND -> refundText.value
-            AmountField.DISCOUNT -> discountText.value
-        }
+        val expr = textOf(field)
         if (!MoneyExpression.hasPendingOperator(expr)) return
         val cents = MoneyExpression.evaluate(expr) ?: return
-        val text = Money.format(cents, grouped = false)
-        when (field) {
-            AmountField.AMOUNT -> amountText.value = text
-            AmountField.REFUND -> refundText.value = text
-            AmountField.DISCOUNT -> discountText.value = text
-        }
+        writeText(field, Money.format(cents, grouped = false))
     }
 
     fun setNote(text: String) {
@@ -371,6 +416,9 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
                 note.value = ""
                 refundText.value = ""
                 discountText.value = ""
+                // 报销金额也清（它和金额/退款一样是"本笔的数"）；报销状态与账户**留着**——
+                // 一摞要报销的单子连着记，每笔都重新选待报销才叫烦（分类/账户同理保留）
+                reimburseText.value = ""
                 amountField.value = AmountField.AMOUNT
             }
         }
@@ -386,6 +434,10 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
         val originalCents = effectiveCents(amountText.value) ?: return false
         val refundCents = centsOrZero(refundText.value)
         val discountCents = centsOrZero(discountText.value)
+        // 报销（M3-3）：状态/账户照选；金额空 = 0 = 按流水净额全额（ReimburseMath 的口径）
+        val claimState = reimburseState.value
+        val claimAccountId = reimburseAccountId.value
+        val claimCents = centsOrZero(reimburseText.value)
         val now = System.currentTimeMillis()
         val book = currentBook.value ?: db.bookDao().observeAll().first().firstOrNull() ?: return false
         val original = editId?.let { db.transactionDao().get(it) }
@@ -397,7 +449,7 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
                 if (from == to) return false
                 EditableTx(
                     type = TxType.TRANSFER,
-                    // 转账面板没有退款/优惠：原价即落库额
+                    // 转账面板没有退款/优惠/报销：原价即落库额
                     amountCents = originalCents,
                     accountId = from,
                     targetAccountId = to,
@@ -407,6 +459,9 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
                     feeCents = Money.parseToCents(feeText.value) ?: 0L,
                     refundCents = 0L,
                     discountCents = 0L,
+                    reimburseState = ReimburseState.NONE,
+                    reimburseAccountId = null,
+                    reimburseCents = 0L,
                 )
             }
             else -> {
@@ -423,6 +478,9 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
                     feeCents = 0L,
                     refundCents = refundCents,
                     discountCents = discountCents,
+                    reimburseState = claimState,
+                    reimburseAccountId = claimAccountId,
+                    reimburseCents = claimCents,
                 )
             }
         }
@@ -457,5 +515,5 @@ class AddViewModel(private val app: PennedApplication, private val editId: Strin
     }
 }
 
-/** 金额键盘当前在编辑的格（M3-2）：退款/优惠与主金额共用一个键盘，只是键位落到不同的文本上。 */
-enum class AmountField { AMOUNT, REFUND, DISCOUNT }
+/** 金额键盘当前在编辑的格（M3-2/M3-3）：退款/优惠/报销金额与主金额共用一个键盘，只是键位落到不同的文本上。 */
+enum class AmountField { AMOUNT, REFUND, DISCOUNT, REIMBURSE }

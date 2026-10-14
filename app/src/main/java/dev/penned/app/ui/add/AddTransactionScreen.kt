@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.domain.Money
+import dev.penned.app.domain.ReimburseState
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.components.CategoryAvatar
 import dev.penned.app.ui.components.PennedCard
@@ -49,6 +50,7 @@ import dev.penned.app.ui.components.PennedListRow
 import dev.penned.app.ui.components.PennedSegmentedTabs
 import dev.penned.app.ui.components.PennedSheet
 import dev.penned.app.ui.components.TagCreateDialog
+import dev.penned.app.ui.components.reimburseStateLabel
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
@@ -88,6 +90,9 @@ fun AddTransactionScreen(
     val accounts by viewModel.accounts.collectAsStateWithLifecycle()
     val tags by viewModel.selectableTags.collectAsStateWithLifecycle()
     val selectedTagIds by viewModel.selectedTagIds.collectAsStateWithLifecycle()
+    val reimburseState by viewModel.reimburseState.collectAsStateWithLifecycle()
+    val reimburseAccountId by viewModel.reimburseAccountId.collectAsStateWithLifecycle()
+    val claimLabel by viewModel.claimLabel.collectAsStateWithLifecycle()
     val canSave by viewModel.canSave.collectAsStateWithLifecycle()
     val showEquals by viewModel.showEquals.collectAsStateWithLifecycle()
     val dateEpochDay by viewModel.dateEpochDay.collectAsStateWithLifecycle()
@@ -127,9 +132,14 @@ fun AddTransactionScreen(
         discountText = discountText,
         amountField = amountField,
         paySummary = paySummary,
+        reimburseState = reimburseState,
+        reimburseAccountId = reimburseAccountId,
+        claimLabel = claimLabel,
         onSelectType = viewModel::selectType,
         onKey = viewModel::pressKey,
         onFocusField = viewModel::focusAmountField,
+        onPickReimburseState = viewModel::pickReimburseState,
+        onPickReimburseAccount = viewModel::pickReimburseAccount,
         onSelectParent = { viewModel.selectParent(it.id, it.hasSubs) },
         onSelectSub = { viewModel.selectSub(it.id) },
         onNoteChange = viewModel::setNote,
@@ -180,6 +190,13 @@ fun AddTransactionContent(
     amountField: AmountField = AmountField.AMOUNT,
     /** 「实付」行文案（[dev.penned.app.domain.RefundMath.summaryText]）；没退优惠时为 null。 */
     paySummary: String? = null,
+    /** 报销状态/账户（M3-3）：「报销」chip 的回显与抽屉；金额文案见 [claimLabel]。 */
+    reimburseState: ReimburseState = ReimburseState.NONE,
+    reimburseAccountId: String? = null,
+    /** 报销金额正在键盘上打的文本（抽屉收起后才进得了键盘）。 */
+    reimburseText: String = "",
+    /** 报销金额文案（`全额 100.00` / `30.00`）；金额还没输时为 null。 */
+    claimLabel: String? = null,
     onSelectType: (TxType) -> Unit,
     onKey: (String) -> Unit,
     onSelectParent: (CategoryUi) -> Unit,
@@ -192,6 +209,8 @@ fun AddTransactionContent(
     onToggleTag: (String) -> Unit = {},
     onCreateTag: (name: String, parentId: String?) -> Unit = { _, _ -> },
     onFocusField: (AmountField) -> Unit = {},
+    onPickReimburseState: (ReimburseState) -> Unit = {},
+    onPickReimburseAccount: (String?) -> Unit = {},
     onFeeChange: (String) -> Unit,
     onPickDate: (Long?) -> Unit = {},
     onAddCategory: (name: String, parentId: String?) -> Unit = { _, _ -> },
@@ -212,6 +231,8 @@ fun AddTransactionContent(
     var addCategoryParent by remember { mutableStateOf<String?>(null) }
     var showTagPicker by remember { mutableStateOf(false) }
     var showTagCreate by remember { mutableStateOf(false) }
+    var showReimburse by remember { mutableStateOf(false) }
+    var showReimburseAccount by remember { mutableStateOf(false) }
     val amountColor = when (type) {
         TxType.EXPENSE -> expenseColor()
         TxType.INCOME -> incomeColor()
@@ -385,8 +406,13 @@ fun AddTransactionContent(
                             selected = discountText.isNotBlank() || amountField == AmountField.DISCOUNT,
                             onClick = { onFocusField(AmountField.DISCOUNT) },
                         )
-                        // 报销状态是 M3 的编辑能力，这里保持只读语义（新记为"不报销"）
-                        PennedChip(label = "不报销", icon = PennedIcons.Info, enabled = false)
+                        // 报销（M3-3）：chip 只回显状态，三态 + 报销账户/金额在抽屉里选
+                        PennedChip(
+                            label = reimburseStateLabel(reimburseState),
+                            icon = PennedIcons.Receipt,
+                            selected = reimburseState != ReimburseState.NONE,
+                            onClick = { showReimburse = true },
+                        )
                     }
                 }
                 // 实付 = 原价 − 退款 − 优惠（只回显，落库在 saveInternal 一次算清）
@@ -401,11 +427,20 @@ fun AddTransactionContent(
             }
         }
 
-        // 键盘正指在退款/优惠格时的提示条：值由上面的 chip 与这里同时回显，右端给一条回主金额的出路
+        // 键盘正指在退款/优惠/报销金额格时的提示条：值由上面的 chip 与这里同时回显，
+        // 右端给一条回主金额的出路
         if (amountField != AmountField.AMOUNT) {
             AmountFocusBar(
-                label = if (amountField == AmountField.REFUND) "退款" else "优惠",
-                value = if (amountField == AmountField.REFUND) refundText else discountText,
+                label = when (amountField) {
+                    AmountField.REFUND -> "退款"
+                    AmountField.DISCOUNT -> "优惠"
+                    else -> "报销金额"
+                },
+                value = when (amountField) {
+                    AmountField.REFUND -> refundText
+                    AmountField.DISCOUNT -> discountText
+                    else -> reimburseText
+                },
                 onBackToAmount = { onFocusField(AmountField.AMOUNT) },
             )
         }
@@ -524,6 +559,37 @@ fun AddTransactionContent(
                 showTagCreate = false
             },
             onDismiss = { showTagCreate = false },
+        )
+    }
+    if (showReimburse) {
+        ReimburseSheet(
+            state = reimburseState,
+            accountName = accounts.firstOrNull { it.id == reimburseAccountId }?.name,
+            claimLabel = claimLabel,
+            onPickState = onPickReimburseState,
+            onPickAccount = {
+                // 两层抽屉不叠（与标签抽屉同一个做法）：先收这个，再起账户选择
+                showReimburse = false
+                showReimburseAccount = true
+            },
+            onEditAmount = {
+                // 金额用同一个键盘录：收起抽屉，把键盘指到报销那一格
+                showReimburse = false
+                onFocusField(AmountField.REIMBURSE)
+            },
+            onDismiss = { showReimburse = false },
+        )
+    }
+    if (showReimburseAccount) {
+        AccountPickerSheet(
+            accounts = accounts,
+            selectedId = reimburseAccountId,
+            includeNone = true,
+            onPick = {
+                onPickReimburseAccount(it)
+                showReimburseAccount = false
+            },
+            onDismiss = { showReimburseAccount = false },
         )
     }
 }

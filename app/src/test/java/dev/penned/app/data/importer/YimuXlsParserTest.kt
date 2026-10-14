@@ -75,6 +75,21 @@ class YimuXlsParserTest {
     }
 
     @Test
+    fun `reimburse columns are parsed but never turn into a state`() {
+        // 报销列（模板 11-13，M3-3）：样本给「班费支出」填了账户与金额；其余行这两列为空。
+        // 状态一律 NONE——导出里没有状态列，猜"已报/待报"会让资产页凭空多出可报/已报。
+        val rows = YimuXlsParser.parse(load("yimu_sample.xls")).rows
+        val claimRows = rows.filter { it.note == "班费支出" }
+        assertEquals(6, claimRows.size)   // 大 fixture 每行复制 6 份（改日/改额）
+        assertTrue(claimRows.all { it.reimburseAccountName == "现金" && it.reimburseCents == 5000L })
+        assertTrue(
+            "其余行不该带报销值",
+            rows.filter { it.note != "班费支出" }
+                .all { it.reimburseAccountName == null && it.reimburseCents == 0L },
+        )
+    }
+
+    @Test
     fun `bad file gives clear errors`() {
         try {
             Ole2Reader.readStream("not ole2".toByteArray(), "Workbook")

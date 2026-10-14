@@ -1,6 +1,7 @@
 package dev.penned.app.ui.add
 
 import dev.penned.app.data.db.entity.TransactionEntity
+import dev.penned.app.domain.ReimburseState
 import dev.penned.app.domain.TxSource
 import dev.penned.app.domain.TxType
 import java.util.UUID
@@ -17,7 +18,8 @@ object TxEdit {
     /**
      * 记一笔页能改的字段（[Editable] 之外的一切字段编辑时不可变）。
      * 退款/优惠 M3-2 起可改——注意 `amountCents` 存的是**净额**，退款/优惠是各自原值（D069）。
-     * 字段**有意不给默认值**：新增调用点必须显式写出这三个数，免得"忘了传"被静默当成"清空"。
+     * 报销三字段（状态/账户/金额）M3-3 起可改；金额缺省 0 = 按净额全额（`ReimburseMath`）。
+     * 字段**有意不给默认值**：新增调用点必须显式写出这些数，免得"忘了传"被静默当成"清空"。
      */
     data class Editable(
         val type: TxType,
@@ -30,6 +32,9 @@ object TxEdit {
         val feeCents: Long,
         val refundCents: Long,
         val discountCents: Long,
+        val reimburseState: ReimburseState,
+        val reimburseAccountId: String?,
+        val reimburseCents: Long,
     )
 
     /** 编辑：在原记录上覆盖本页字段。 */
@@ -49,6 +54,9 @@ object TxEdit {
         feeCents = editable.feeCents,
         refundCents = editable.refundCents,
         discountCents = editable.discountCents,
+        reimburseState = editable.reimburseState,
+        reimburseAccountId = editable.reimburseAccountId,
+        reimburseCents = editable.reimburseCents,
         updatedAt = now,
         deviceId = deviceId,
     )
@@ -72,6 +80,9 @@ object TxEdit {
         feeCents = editable.feeCents,
         refundCents = editable.refundCents,
         discountCents = editable.discountCents,
+        reimburseState = editable.reimburseState,
+        reimburseAccountId = editable.reimburseAccountId,
+        reimburseCents = editable.reimburseCents,
         source = TxSource.MANUAL,
         creatorDeviceId = deviceId,
         createdAt = now,

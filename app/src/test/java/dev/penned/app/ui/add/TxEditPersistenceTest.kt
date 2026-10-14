@@ -87,6 +87,10 @@ class TxEditPersistenceTest {
                 feeCents = original.feeCents,
                 refundCents = original.refundCents,
                 discountCents = original.discountCents,
+                // 报销三字段自 M3-3 起也在可编辑白名单里：只改备注时按记录现值回传
+                reimburseState = original.reimburseState,
+                reimburseAccountId = original.reimburseAccountId,
+                reimburseCents = original.reimburseCents,
             ),
             now = 5000L,
             deviceId = "device-1",

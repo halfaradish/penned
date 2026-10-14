@@ -51,7 +51,11 @@ class DetailScreenScreenshotTest {
         deviceId = "device-1",
     )
 
-    private fun ui(tx: TransactionEntity, tagNames: List<String> = emptyList()) = DetailUi(
+    private fun ui(
+        tx: TransactionEntity,
+        tagNames: List<String> = emptyList(),
+        reimburseAccountName: String? = null,
+    ) = DetailUi(
         tx = tx,
         categoryName = "食品餐饮",
         categoryParentName = null,
@@ -59,11 +63,12 @@ class DetailScreenScreenshotTest {
         targetAccountName = null,
         bookName = "日常账本",
         tagNames = tagNames,
+        reimburseAccountName = reimburseAccountName,
     )
 
     @androidx.compose.runtime.Composable
-    private fun content(tx: TransactionEntity) = DetailContent(
-        detail = ui(tx),
+    private fun content(tx: TransactionEntity, reimburseAccountName: String? = null) = DetailContent(
+        detail = ui(tx, reimburseAccountName = reimburseAccountName),
         onEdit = {}, onDelete = {}, onToggleStats = {}, onToggleBudget = {}, onBack = {},
     )
 
@@ -103,7 +108,8 @@ class DetailScreenScreenshotTest {
                         rate = 0.048,
                         reimburseState = ReimburseState.PENDING,
                         reimburseAccountId = "acc-9",
-                    )
+                    ),
+                    reimburseAccountName = "招行信用卡",
                 )
             }
         }
@@ -112,8 +118,26 @@ class DetailScreenScreenshotTest {
         composeRule.onNodeWithText("原币种").assertIsDisplayed()
         composeRule.onNodeWithText("JPY · 汇率 0.048").assertIsDisplayed()
         composeRule.onNodeWithText("报销").assertIsDisplayed()
-        composeRule.onNodeWithText("待报销").assertIsDisplayed()
+        // M3-3：一行写全 状态 · 报销金额（缺省 0 = 按净额全额）· 收到款的账户
+        composeRule.onNodeWithText("待报销 · 22.00 · 招行信用卡").assertIsDisplayed()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_detail_full_fields.png")
+    }
+
+    @Test
+    fun captureDetailReimbursePartialAmount() {
+        // 自定报销金额（部分报销）：行里按填的数显示，不是按全额
+        composeRule.setContent {
+            PennedTheme {
+                content(
+                    row(amountCents = 10_000, note = "住酒店").copy(
+                        reimburseState = ReimburseState.DONE,
+                        reimburseCents = 4_000,
+                    )
+                )
+            }
+        }
+        composeRule.onNodeWithText("已报销 · 40.00").assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m3_detail_reimburse.png")
     }
 
     @Test

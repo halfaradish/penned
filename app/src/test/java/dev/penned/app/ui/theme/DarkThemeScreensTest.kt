@@ -9,11 +9,13 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.penned.app.PennedApplication
 import dev.penned.app.data.db.dao.TxWithCategory
 import dev.penned.app.domain.RefundMath
+import dev.penned.app.domain.ReimburseState
 import dev.penned.app.domain.StatsMath
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.add.AddTransactionContent
@@ -221,6 +223,39 @@ class DarkThemeScreensTest {
         composeRule.onNodeWithText("正在输入：退款").assertIsDisplayed()
         composeRule.onNodeWithText("实付 12.00（20.00 − 退款 3.00 − 优惠 5.00）").assertIsDisplayed()
         capture("add_refund")
+    }
+
+    @Test
+    fun darkAddReimburse() {
+        // 报销抽屉（M3-3）深色：三态 chip + 账户/金额两行 + 收尾按钮
+        dark {
+            AddTransactionContent(
+                type = TxType.EXPENSE,
+                amountText = "100",
+                note = "住酒店",
+                selectedId = "p0",
+                expandedId = null,
+                canSave = true,
+                showEquals = false,
+                accountId = null,
+                fromId = null,
+                toId = null,
+                feeText = "",
+                reimburseState = ReimburseState.PENDING,
+                claimLabel = "全额 100.00",
+                accounts = emptyList(),
+                parents = listOf(CategoryUi("p0", "其他", hasSubs = false)),
+                expandedSubs = emptyList(),
+                onSelectType = {}, onKey = {}, onSelectParent = {}, onSelectSub = {},
+                onNoteChange = {}, onPickAccount = {}, onPickFrom = {}, onPickTo = {},
+                onSwap = {}, onFeeChange = {}, onEvaluate = {},
+                onSave = {}, onSaveAgain = {}, onBack = {}, onEdit = {},
+            )
+        }
+        composeRule.onNodeWithText("待报销").performClick()
+        composeRule.onNodeWithText("报销金额").assertIsDisplayed()
+        composeRule.onNodeWithText("选好了").assertIsDisplayed()
+        capture("add_reimburse")
     }
 
     @Test

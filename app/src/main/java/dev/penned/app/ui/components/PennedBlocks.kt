@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.penned.app.domain.ReimburseState
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.PennedTextStyles
@@ -236,4 +237,14 @@ fun EmptyState(
         }
         if (action != null) Box(Modifier.padding(top = PennedSpacing.xs)) { action() }
     }
+}
+
+/**
+ * 报销状态的中文（M3-3）：记一笔的 chip / 抽屉与详情页「报销」行**共用这一处**，
+ * 三处各写一份必然漂移（"不报销" vs "无需报销"）。
+ */
+fun reimburseStateLabel(state: ReimburseState): String = when (state) {
+    ReimburseState.NONE -> "不报销"
+    ReimburseState.PENDING -> "待报销"
+    ReimburseState.DONE -> "已报销"
 }

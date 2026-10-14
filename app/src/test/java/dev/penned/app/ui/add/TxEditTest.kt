@@ -13,7 +13,8 @@ import java.lang.reflect.Modifier
 /**
  * 复查 P0 回归（纯函数）：编辑流水只改记一笔页能改的字段，
  * 不计收支/不计预算/导入批次/报销等一律原样保留。
- * 退款/优惠自 M3-2 起**属于**可改字段（D069：金额存净额、退优惠存原值）。
+ * 退款/优惠自 M3-2 起**属于**可改字段（D069：金额存净额、退优惠存原值）；
+ * 报销三字段自 M3-3 起同样可改（状态/账户/金额，金额缺省 0 = 按净额全额）。
  */
 class TxEditTest {
 
@@ -32,6 +33,7 @@ class TxEditTest {
         discountCents = 100,
         reimburseState = ReimburseState.PENDING,
         reimburseAccountId = "acc-2",
+        reimburseCents = 1500,
         currencyCode = "USD",
         rate = 7.12,
         address = "上海市",
@@ -58,6 +60,9 @@ class TxEditTest {
         feeCents = 55,
         refundCents = 300,
         discountCents = 20,
+        reimburseState = ReimburseState.DONE,
+        reimburseAccountId = "acc-5",
+        reimburseCents = 800,
     )
 
     @Test
@@ -76,14 +81,15 @@ class TxEditTest {
         assertEquals(55L, edited.feeCents)
         assertEquals(300L, edited.refundCents)
         assertEquals(20L, edited.discountCents)
+        assertEquals(ReimburseState.DONE, edited.reimburseState)
+        assertEquals("acc-5", edited.reimburseAccountId)
+        assertEquals(800L, edited.reimburseCents)
         assertEquals(5000L, edited.updatedAt)
         assertEquals("device-1", edited.deviceId)
 
         // 本页管不着的：一个都不能丢
         assertEquals("tx-1", edited.id)
         assertEquals("book-1", edited.bookId)
-        assertEquals(ReimburseState.PENDING, edited.reimburseState)
-        assertEquals("acc-2", edited.reimburseAccountId)
         assertEquals("USD", edited.currencyCode)
         assertEquals(7.12, edited.rate!!, 1e-9)
         assertEquals("上海市", edited.address)
@@ -116,6 +122,7 @@ class TxEditTest {
             setOf(
                 "type", "amountCents", "accountId", "targetAccountId", "categoryId",
                 "dateEpochMinute", "note", "feeCents", "refundCents", "discountCents",
+                "reimburseState", "reimburseAccountId", "reimburseCents",
                 "updatedAt", "deviceId",
             ),
             changed,
@@ -134,7 +141,9 @@ class TxEditTest {
         assertEquals(5000L, tx.updatedAt)
         assertEquals(300L, tx.refundCents)
         assertEquals(20L, tx.discountCents)
-        assertEquals(ReimburseState.NONE, tx.reimburseState)
+        assertEquals(ReimburseState.DONE, tx.reimburseState)
+        assertEquals("acc-5", tx.reimburseAccountId)
+        assertEquals(800L, tx.reimburseCents)
         assertEquals(null, tx.importBatchId)
         assertFalse(tx.excludeFromStats)
         assertFalse(tx.excludeFromBudget)

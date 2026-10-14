@@ -317,6 +317,32 @@ object PennedIcons {
         }
     }
 
+    /**
+     * 报销（记一笔信息条，M3-3）：单据——上端平、下缘锯齿的收据 + 三行明细。
+     * 报销语义就是"拿单据去换钱"，比抽象的回形箭头好认。
+     */
+    val Receipt: ImageVector by lazy {
+        icon("receipt") {
+            stroke {
+                moveTo(5.6f, 3.8f)
+                lineTo(18.4f, 3.8f)
+                lineTo(18.4f, 20.2f)
+                lineTo(16.8f, 18.5f)
+                lineTo(15.2f, 20.2f)
+                lineTo(13.6f, 18.5f)
+                lineTo(12f, 20.2f)
+                lineTo(10.4f, 18.5f)
+                lineTo(8.8f, 20.2f)
+                lineTo(7.2f, 18.5f)
+                lineTo(5.6f, 20.2f)
+                close()
+                line(8.6f, 8.2f, 15.4f, 8.2f)
+                line(8.6f, 11.8f, 15.4f, 11.8f)
+                line(8.6f, 15.4f, 12.8f, 15.4f)
+            }
+        }
+    }
+
     // —— 构建辅助 ——
 
     private const val STROKE = 1.9f

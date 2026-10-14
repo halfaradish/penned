@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import dev.penned.app.data.SettingsRepository
 import dev.penned.app.data.db.PennedDatabase
 import dev.penned.app.data.seed.DefaultSeed
+import dev.penned.app.domain.ReimburseState
 import dev.penned.app.domain.TxSource
 import dev.penned.app.domain.TxType
 import kotlinx.coroutines.flow.first
@@ -93,6 +94,28 @@ class ImportRepositoryTest {
         assertNotNull(batch)
         assertEquals(8, batch!!.count)
         assertEquals("yimu_sample_mini.xls", batch.fileName)
+    }
+
+    @Test
+    fun `import maps reimburse columns but leaves state NONE`() = runTest {
+        // 大 fixture 里「班费支出」带报销账户/金额（M3-3）。导入要落这两列，
+        // 但**状态留 NONE**：导出没有状态列，猜出来的"可报/已报"会凭空多出数字
+        val book = seedBook()
+        repository.importYimuXls("yimu_sample.xls", fixture("yimu_sample.xls"))
+
+        val txs = db.transactionDao().allInBook(book.id)
+        val claimRows = txs.filter { it.note == "班费支出" }
+        assertEquals(6, claimRows.size)
+        val cash = db.accountDao().allInBook(book.id).first { it.name == "现金" }
+        assertTrue(claimRows.all { it.reimburseCents == 5000L })
+        assertTrue(claimRows.all { it.reimburseAccountId == cash.id })
+        assertTrue(claimRows.all { it.reimburseState == ReimburseState.NONE })
+        assertTrue(txs.filter { it.note != "班费支出" }.all { it.reimburseCents == 0L && it.reimburseAccountId == null })
+
+        // 资产页两张数字不受导入影响（可报/已报都是 0）
+        val sums = db.transactionDao().observeReimburseSums(book.id).first()
+        assertEquals(0L, sums.pendingCents)
+        assertEquals(0L, sums.doneCents)
     }
 
     @Test

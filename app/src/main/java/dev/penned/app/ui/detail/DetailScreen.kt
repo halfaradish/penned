@@ -31,6 +31,7 @@ import dev.penned.app.PennedApplication
 import dev.penned.app.data.db.entity.TransactionEntity
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.RefundMath
+import dev.penned.app.domain.ReimburseMath
 import dev.penned.app.domain.ReimburseState
 import dev.penned.app.domain.TxType
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,6 +53,7 @@ import dev.penned.app.ui.components.PennedDivider
 import dev.penned.app.ui.components.PennedSwitchRow
 import dev.penned.app.ui.components.PennedTopBar
 import dev.penned.app.ui.components.SectionCard
+import dev.penned.app.ui.components.reimburseStateLabel
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedPigment
@@ -68,6 +70,8 @@ data class DetailUi(
     val bookName: String,
     /** 标签名（M3-1），详情页「标签」行按 `·` 连接展示。 */
     val tagNames: List<String> = emptyList(),
+    /** 收到报销款的账户名（M3-3），「报销」行展示。 */
+    val reimburseAccountName: String? = null,
 )
 
 class DetailViewModel(app: PennedApplication, txId: String) : ViewModel() {
@@ -82,6 +86,7 @@ class DetailViewModel(app: PennedApplication, txId: String) : ViewModel() {
         val category = tx.categoryId?.let { db.categoryDao().get(it) }
         val account = tx.accountId?.let { db.accountDao().get(it) }
         val target = tx.targetAccountId?.let { db.accountDao().get(it) }
+        val reimburseAccount = tx.reimburseAccountId?.let { db.accountDao().get(it) }
         val book = db.bookDao().get(tx.bookId)
         DetailUi(
             tx = tx,
@@ -91,6 +96,7 @@ class DetailViewModel(app: PennedApplication, txId: String) : ViewModel() {
             targetAccountName = target?.name,
             bookName = book?.name ?: "",
             tagNames = tags.map { it.name },
+            reimburseAccountName = reimburseAccount?.name,
         )
     }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -236,7 +242,15 @@ fun DetailContent(
                 }
                 if (d.tx.reimburseState != ReimburseState.NONE) {
                     PennedDivider()
-                    DetailRow("报销", reimburseLabel(d.tx.reimburseState))
+                    // 状态 · 报销金额 · 收到款的账户（M3-3）；金额缺省 0 = 按净额全额，走 ReimburseMath 的口径
+                    DetailRow(
+                        "报销",
+                        listOfNotNull(
+                            reimburseStateLabel(d.tx.reimburseState),
+                            Money.format(ReimburseMath.claimCents(d.tx.reimburseCents, d.tx.amountCents)),
+                            d.reimburseAccountName,
+                        ).joinToString(" · "),
+                    )
                 }
             }
 
@@ -288,12 +302,6 @@ private fun RefundBadge(fullRefund: Boolean) {
         container = MaterialTheme.colorScheme.primaryContainer,
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
     )
-}
-
-private fun reimburseLabel(state: ReimburseState): String = when (state) {
-    ReimburseState.PENDING -> "待报销"
-    ReimburseState.DONE -> "已报销"
-    ReimburseState.NONE -> "不报销"
 }
 
 private fun sourceLabel(tx: TransactionEntity): String = when (tx.source.name) {
