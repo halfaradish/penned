@@ -442,6 +442,23 @@ class DarkThemeScreensTest {
         capture("loan")
     }
 
+    /** 统计设置（M3-14）：模块开关 + 上移/下移在深色下的着色。 */
+    @Test
+    fun darkStatsSettings() {
+        dark {
+            dev.penned.app.ui.stats.StatsSettingsContent(
+                layout = dev.penned.app.domain.StatsLayout(),
+                onToggle = { _, _ -> },
+                onMoveUp = {},
+                onMoveDown = {},
+                onBack = {},
+            )
+        }
+        composeRule.onNodeWithText("统计设置").assertIsDisplayed()
+        composeRule.onNodeWithText("资产走势").assertIsDisplayed()
+        capture("stats_settings")
+    }
+
     /** 信用卡年费到期行（M3-11）：副标题 + 「记年费」胶囊在深色下的着色。 */
     @Test
     fun darkAssetsFeeDue() {

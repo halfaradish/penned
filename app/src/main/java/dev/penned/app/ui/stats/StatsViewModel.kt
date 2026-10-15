@@ -3,7 +3,11 @@ package dev.penned.app.ui.stats
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.penned.app.PennedApplication
+import dev.penned.app.data.db.dao.TagTotalRow
 import dev.penned.app.data.db.dao.TxWithCategory
+import dev.penned.app.domain.AssetTrendMath
+import dev.penned.app.domain.StatsLayout
+import dev.penned.app.domain.StatsLayoutCodec
 import dev.penned.app.domain.StatsMath
 import dev.penned.app.domain.StatsPeriod
 import dev.penned.app.domain.StatsPeriods
@@ -41,6 +45,11 @@ data class StatsPage(
     val trendBars: List<Long> = emptyList(),
     /** 趋势卡的横轴类型（按日窗口 / 年统计的 12 个月）。 */
     val trendAxis: TrendAxis = TrendAxis.Months(YearMonth.now().year),
+    /** 标签聚合（M3-14 标签占比/标签数据）：按标签分组的金额与笔数。 */
+    val tagTotals: List<StatsMath.CategoryTotal> = emptyList(),
+    /** 资产走势（M3-14）：期初 + 逐日账户合计余额（长度 = 窗口天数）。 */
+    val assetOpeningCents: Long = 0,
+    val assetSeries: List<Long> = emptyList(),
 )
 
 /**
@@ -62,6 +71,8 @@ class StatsViewModel(private val app: PennedApplication) : ViewModel() {
         val stripMonths: List<YearMonth> = emptyList(),
         /** 时间切换条 + 快速定位弹窗的年列：新→旧，年统计视图与弹窗共用。 */
         val stripYears: List<Int> = emptyList(),
+        /** 统计模块的顺序与开关（M3-14）：渲染按它排。 */
+        val layout: StatsLayout = StatsLayout(),
     ) {
         val currentPage: StatsPage get() = pages[view] ?: StatsPage()
     }
@@ -102,6 +113,42 @@ class StatsViewModel(private val app: PennedApplication) : ViewModel() {
             }
 
     /**
+     * 标签聚合（M3-14）：四个视图各拉一份（支出/收入两侧都由页面上的切换器驱动，所以两侧都拉）。
+     * 与 [pageRows] 同源（本账本 + 窗口 + 不计收支剔除）。
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val pageTags: Flow<Map<StatsView, List<TagTotalRow>>> =
+        combine(app.settings.currentBookId, periods) { bookId, ps -> bookId to ps }
+            .flatMapLatest { (bookId, ps) ->
+                if (bookId == null) {
+                    flowOf(StatsView.entries.associateWith { emptyList<TagTotalRow>() })
+                } else {
+                    val dao = app.database.transactionDao()
+                    val flows = StatsView.entries.map { each ->
+                        val window = StatsPeriods.window(ps.getValue(each))
+                        dao.observeTagTotals(bookId, window.startMinute, window.lastMinute, type.value)
+                    }
+                    combine(flows) { lists -> StatsView.entries.zip(lists).toMap() }
+                }
+            }
+
+    /** 资产走势的期初值（M3-14）：四个视图各一条（窗口前一刻的账户合计）。 */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val pageOpeningAsset: Flow<Map<StatsView, Long>> =
+        combine(app.settings.currentBookId, periods) { bookId, ps -> bookId to ps }
+            .flatMapLatest { (bookId, ps) ->
+                if (bookId == null) {
+                    flowOf(StatsView.entries.associateWith { 0L })
+                } else {
+                    val dao = app.database.transactionDao()
+                    val flows = StatsView.entries.map { each ->
+                        dao.observeOpeningAssetCents(bookId, StatsPeriods.window(ps.getValue(each)).startMinute)
+                    }
+                    combine(flows) { lists -> StatsView.entries.zip(lists).toMap() }
+                }
+            }
+
+    /**
      * 本账本最早有流水的月份：时间切换条的跨度起点。
      * 从 epoch 分钟按本地墙钟换算（与 StatsPeriods 的窗口口径一致）。
      */
@@ -121,15 +168,48 @@ class StatsViewModel(private val app: PennedApplication) : ViewModel() {
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val state: StateFlow<UiState> = combine(
-        pageRows,
-        periods,
+    /** 四份"按视图分片"的数据先拼成一份（Kotlin 的 combine 只到 5 个类型化参数）。 */
+    private data class ViewSlices(
+        val rowsByView: Map<StatsView, List<TxWithCategory>>,
+        val periods: Map<StatsView, StatsPeriod>,
+        val tagsByView: Map<StatsView, List<TagTotalRow>>,
+        val openingByView: Map<StatsView, Long>,
+    )
+
+    private val slices: Flow<ViewSlices> =
+        combine(pageRows, periods, pageTags, pageOpeningAsset) { rows, ps, tags, opening ->
+            ViewSlices(rows, ps, tags, opening)
+        }
+
+    private val stateFlow: Flow<UiState> = combine(
+        slices,
         view,
         type,
         earliestMonth,
-    ) { rowsByView, ps, current, type, earliest ->
+        app.settings.statsOrder,
+        app.settings.statsEnabled,
+    ) { values ->
+        val slices = values[0] as ViewSlices
+        val current = values[1] as StatsView
+        val type = values[2] as TxType
+        val earliest = values[3] as YearMonth?
+        val layout = StatsLayoutCodec.decode(values[4] as String?, values[5] as String?)
+        buildState(slices, current, type, earliest, layout)
+    }
+
+    private fun buildState(
+        slices: ViewSlices,
+        current: StatsView,
+        type: TxType,
+        earliest: YearMonth?,
+        layout: StatsLayout,
+    ): UiState {
+        val rowsByView = slices.rowsByView
+        val ps = slices.periods
+        val tagsByView = slices.tagsByView
+        val openingByView = slices.openingByView
         val asOf = YearMonth.now()
-        UiState(
+        return UiState(
             view = current,
             pages = StatsView.entries.associateWith { each ->
                 val period = ps.getValue(each)
@@ -143,6 +223,13 @@ class StatsViewModel(private val app: PennedApplication) : ViewModel() {
                     incomeCategories = StatsMath.categoryTotals(rows, TxType.INCOME),
                     trendBars = StatsTrend.bars(rows, type, period, window),
                     trendAxis = StatsTrend.axisOf(period, window),
+                    tagTotals = StatsMath.tagTotals(tagsByView[each].orEmpty()),
+                    assetOpeningCents = openingByView[each] ?: 0L,
+                    assetSeries = AssetTrendMath.series(
+                        openingCents = openingByView[each] ?: 0L,
+                        dayCount = window.dayCount,
+                        dayDeltas = assetDayDeltas(rows, window),
+                    ),
                 )
             },
             type = type,
@@ -157,8 +244,25 @@ class StatsViewModel(private val app: PennedApplication) : ViewModel() {
                 asOf,
                 include = (ps[StatsView.YEAR] as? StatsPeriod.Year)?.year,
             ),
+            layout = layout,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState())
+    }
+
+    val state: StateFlow<UiState> =
+        stateFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState())
+
+    /**
+     * 窗口内逐日的"账户合计变化"：按自然日分桶（与趋势卡的分桶口径一致，都用本地墙钟）。
+     * 桶的边界 = `window.startEpochDay + i`；窗口外的行（理论上不该有）忽略。
+     */
+    private fun assetDayDeltas(rows: List<TxWithCategory>, window: StatsWindow): List<Long> {
+        val zone = ZoneId.systemDefault()
+        val byDay = rows.filter { !it.excludeFromStats && AssetTrendMath.affectsAccount(it) }
+            .groupBy { Instant.ofEpochSecond(it.dateEpochMinute * 60).atZone(zone).toLocalDate().toEpochDay() }
+        return (0 until window.dayCount).map { index ->
+            AssetTrendMath.dayDeltaCents(byDay[window.startEpochDay + index].orEmpty())
+        }
+    }
 
     fun selectType(value: TxType) {
         if (value == TxType.EXPENSE || value == TxType.INCOME) type.value = value

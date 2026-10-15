@@ -75,6 +75,20 @@ object StatsMath {
             }
     }
 
+    /**
+     * 标签聚合行 → 占比行（M3-14 标签占比/标签数据）。
+     *
+     * **标签不可下钻**（没有标签详细页）：`drillable = false`，数据卡的行就不给点（D049 起由标记决定，不看名字）。
+     * 金额与笔数来自 `TransactionDao.observeTagTotals`（一笔挂多个标签会各算一次，占比之和可能超过 100%）。
+     */
+    fun tagTotals(rows: List<dev.penned.app.data.db.dao.TagTotalRow>): List<CategoryTotal> {
+        val total = rows.sumOf { it.cents }
+        if (total <= 0L) return emptyList()
+        return rows.filter { it.cents > 0L }
+            .sortedByDescending { it.cents }
+            .map { CategoryTotal(it.name, it.cents, it.count, it.cents.toFloat() / total, drillable = false) }
+    }
+
     /** 行所属的一级分类名：二级分类并进父分类（与 [nodeRows] 的一级节点筛选同一口径）。 */
     fun topLevelName(row: TxWithCategory): String =
         row.categoryParentName ?: row.categoryName ?: UNCATEGORIZED

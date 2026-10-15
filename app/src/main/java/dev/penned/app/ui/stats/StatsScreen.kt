@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -41,6 +42,9 @@ import dev.penned.app.domain.AddDate
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.StatsMath
 import dev.penned.app.domain.StatsPeriod
+import dev.penned.app.domain.AssetTrendMath
+import dev.penned.app.domain.StatsLayout
+import dev.penned.app.domain.StatsModule
 import dev.penned.app.domain.StatsPeriods
 import dev.penned.app.domain.StatsTrend
 import dev.penned.app.domain.StatsView
@@ -60,6 +64,8 @@ import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.PennedTextStyles
 import dev.penned.app.ui.theme.PennedTheme
 import dev.penned.app.ui.theme.expenseColor
+import dev.penned.app.ui.theme.iconMutedColor
+import dev.penned.app.ui.theme.primaryInkColor
 import dev.penned.app.ui.theme.incomeColor
 import java.time.LocalDate
 import java.time.YearMonth
@@ -74,12 +80,16 @@ fun StatsScreen(
     viewModel: StatsViewModel,
     modifier: Modifier = Modifier,
     onOpenCategory: (CategoryTarget, StatsWindow) -> Unit = { _, _ -> },
+    /** 右上「⋯」→ 统计设置（M3-14）。 */
+    onOpenSettings: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     StatsContent(
         view = state.view,
         pages = state.pages,
         type = state.type,
+        layout = state.layout,
+        onOpenStatsSettings = onOpenSettings,
         stripMonths = state.stripMonths,
         stripYears = state.stripYears,
         onSelectView = viewModel::selectView,
@@ -111,6 +121,10 @@ fun StatsContent(
     onSelectYear: (Int) -> Unit = {},
     onPickRange: (Long, Long) -> Unit = { _, _ -> },
     onOpenCategory: (CategoryTarget, StatsWindow) -> Unit = { _, _ -> },
+    /** 统计模块的顺序与开关（M3-14）；默认 = 原有四块全开、原有顺序（观感不变）。 */
+    layout: StatsLayout = StatsLayout(),
+    /** 右上「⋯」：开统计设置（M3-14）。 */
+    onOpenStatsSettings: () -> Unit = {},
     modifier: Modifier = Modifier,
     today: LocalDate = LocalDate.now(),
 ) {
@@ -137,16 +151,30 @@ fun StatsContent(
 
     // 不透明页面：下钻推入时父子两页同屏，透明根会让下层页透出来（AP-2）
     Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        // 时间维度分段固定当首行（2026-10-07：去掉冗余的「统计」页头大标题——底栏 Tab 已写着"统计"）
-        PennedSegmentedTabs(
-            options = StatsView.entries.toList(),
-            selected = view,
-            onSelect = onSelectView,
-            label = { it.label },
-            modifier = Modifier
+        // 时间维度分段固定当首行（2026-10-07：去掉冗余的「统计」页头大标题——底栏 Tab 已写着"统计"）；
+        // 右端「⋯」进统计设置（M3-14：模块开关 + 顺序）
+        Row(
+            Modifier
                 .fillMaxWidth()
-                .padding(top = PennedSpacing.md, start = PennedSpacing.lg, end = PennedSpacing.lg),
-        )
+                .padding(top = PennedSpacing.md, start = PennedSpacing.lg, end = PennedSpacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PennedSegmentedTabs(
+                options = StatsView.entries.toList(),
+                selected = view,
+                onSelect = onSelectView,
+                label = { it.label },
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = onOpenStatsSettings, modifier = Modifier.size(PennedDimens.iconButton)) {
+                Icon(
+                    PennedIcons.MoreVert,
+                    contentDescription = "统计设置",
+                    tint = iconMutedColor(),
+                    modifier = Modifier.size(PennedDimens.iconInline),
+                )
+            }
+        }
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.weight(1f).fillMaxWidth().testTag(STATS_PAGER_TAG),
@@ -165,6 +193,7 @@ fun StatsContent(
                     page = data,
                     type = type,
                     today = today,
+                    layout = layout,
                     stripMonths = stripMonths,
                     stripYears = stripYears,
                     onSelectType = onSelectType,
@@ -243,6 +272,7 @@ private fun StatsPageBody(
     page: StatsPage,
     type: TxType,
     today: LocalDate,
+    layout: StatsLayout,
     stripMonths: List<YearMonth>,
     stripYears: List<Int>,
     onSelectType: (TxType) -> Unit,
@@ -266,18 +296,39 @@ private fun StatsPageBody(
         onPickEnd = onPickEnd,
     )
 
-    // 汇总卡
-    PennedCard(modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg)) {
-        PennedStatCells(
-            listOf(
-                StatCell("支出", Money.format(page.totals.expenseCents), expenseColor()),
-                StatCell("收入", Money.format(page.totals.incomeCents), incomeColor()),
-                StatCell("结余", Money.format(page.totals.incomeCents - page.totals.expenseCents)),
-            ),
+    // 模块全关：整页空态（规格 M3-14 的"含全关的空态"）——统计页可以一块都不放
+    if (layout.visibleModules.isEmpty()) {
+        EmptyState(
+            title = "统计页没有模块",
+            hint = "点右上「⋯」去统计设置里打开几块",
+            icon = PennedIcons.Pie,
+            modifier = Modifier.padding(top = PennedSpacing.xxl),
         )
+        return
+    }
+
+    // 汇总卡（模块顺序里排到哪就画到哪；不再固定在最上面）
+    val summary: @Composable () -> Unit = {
+        PennedCard(modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg)) {
+            PennedStatCells(
+                listOf(
+                    StatCell("支出", Money.format(page.totals.expenseCents), expenseColor()),
+                    StatCell("收入", Money.format(page.totals.incomeCents), incomeColor()),
+                    StatCell("结余", Money.format(page.totals.incomeCents - page.totals.expenseCents)),
+                ),
+            )
+        }
     }
 
     if (page.expenseCategories.isEmpty() && page.incomeCategories.isEmpty()) {
+        // 有数据才有得算：本期一条都没有时，除了汇总（恒为 0）与资产走势（期初还在），其余模块给一句空态
+        layout.visibleModules.forEach { module ->
+            when (module) {
+                StatsModule.SUMMARY -> summary()
+                StatsModule.ASSET_TREND -> StatsAssetTrendCard(page = page)
+                else -> Unit
+            }
+        }
         EmptyState(
             title = StatsPeriods.emptyTitle(page.period, today = today),
             hint = "记几笔之后回来看统计",
@@ -302,53 +353,136 @@ private fun StatsPageBody(
             modifier = Modifier.width(PennedDimens.segmentToggle),
         )
     }
-    if (shown.isEmpty()) {
-        // 该侧本期没数据：卡内给句话，切换器留在原处（一点即可看另一侧）
-        PennedCard(modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.sm)) {
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "${unit}占比",
-                    style = PennedTextStyles.cardTitle,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f),
-                )
-                toggle()
-            }
-            Text(
-                "本期没有${unit}记录",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+    // 这一张图里分配好的槽位：环、图例、数据行三处共用，段段不同色。
+    // 撞色时要在 P(8,k) 个排列里搜最优（AR 轮）——拿 remember 记住，别在每次重组里重搜
+    val names = shown.map { it.name }
+    val slots = remember(names) { PennedPigment.assignSlots(names) }
+    val tagNames = page.tagTotals.map { it.name }
+    val tagSlots = remember(tagNames) { PennedPigment.assignSlots(tagNames) }
+
+    // 模块按用户设置的顺序渲染；关掉的模块**不渲染也不计算**（页面这一层就不进 when 分支）
+    layout.visibleModules.forEach { module ->
+        when (module) {
+            StatsModule.SUMMARY -> summary()
+            StatsModule.TREND -> StatsBarChartCard(
+                title = StatsTrend.title(type),
+                bars = page.trendBars,
+                xLabels = trendAxisLabels(page.trendAxis, today),
+                color = unitColor,
+                seriesLabel = unit,
             )
+            StatsModule.DONUT -> if (shown.isEmpty()) {
+                // 该侧本期没数据：卡内给句话，切换器留在原处（一点即可看另一侧）
+                EmptyUnitCard(title = "${unit}占比", unit = unit, toggle = toggle)
+            } else {
+                StatsDonutCard(
+                    title = "${unit}占比",
+                    centerLabel = "总$unit",
+                    categories = shown,
+                    totalCents = total,
+                    totalColor = unitColor,
+                    slots = slots,
+                    trailing = toggle,
+                )
+            }
+            StatsModule.DATA -> if (shown.isNotEmpty()) {
+                StatsDataCard(
+                    title = "${unit}数据",
+                    categories = shown,
+                    type = type,
+                    slots = slots,
+                    onOpenCategory = { name -> onOpenCategory(CategoryTarget(type, name, parent = null), page.window) },
+                )
+            }
+            StatsModule.TAG_DONUT -> if (page.tagTotals.isEmpty()) {
+                EmptyUnitCard(title = "标签占比", unit = "标签", toggle = toggle)
+            } else {
+                StatsDonutCard(
+                    title = "标签占比",
+                    centerLabel = "标签合计",
+                    categories = page.tagTotals,
+                    totalCents = page.tagTotals.sumOf { it.cents },
+                    totalColor = unitColor,
+                    slots = tagSlots,
+                    trailing = toggle,
+                )
+            }
+            StatsModule.TAG_DATA -> if (page.tagTotals.isNotEmpty()) {
+                StatsDataCard(
+                    title = "标签数据",
+                    categories = page.tagTotals,
+                    type = type,
+                    slots = tagSlots,
+                    // 标签没有详细页可下钻（drillable = false），点击不接任何目标
+                    onOpenCategory = {},
+                )
+            }
+            StatsModule.ASSET_TREND -> StatsAssetTrendCard(page = page)
         }
-    } else {
-        // 趋势卡坐落在汇总卡与占比卡之间（四个视图都有：按日 / 年统计按 12 个月），
-        // 跟着卡头的支出/收入切换走
-        StatsBarChartCard(
-            title = StatsTrend.title(type),
-            bars = page.trendBars,
-            xLabels = trendAxisLabels(page.trendAxis, today),
-            color = unitColor,
-            seriesLabel = unit,
+    }
+}
+
+/** 该侧本期没数据时的占位卡（标题 + 切换器 + 一句说明）。 */
+@Composable
+private fun EmptyUnitCard(title: String, unit: String, toggle: @Composable () -> Unit) {
+    PennedCard(modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.sm)) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                title,
+                style = PennedTextStyles.cardTitle,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            toggle()
+        }
+        Text(
+            "本期没有${unit}记录",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        // 这一张图里分配好的槽位：环、图例、数据行三处共用，段段不同色。
-        // 撞色时要在 P(8,k) 个排列里搜最优（AR 轮）——拿 remember 记住，别在每次重组里重搜
-        val names = shown.map { it.name }
-        val slots = remember(names) { PennedPigment.assignSlots(names) }
-        StatsDonutCard(
-            title = "${unit}占比",
-            centerLabel = "总$unit",
-            categories = shown,
-            totalCents = total,
-            totalColor = unitColor,
-            slots = slots,
-            trailing = toggle,
+    }
+}
+
+/**
+ * 资产走势卡（M3-14）：账户合计余额的期初/期末/最高/最低 + 变化。
+ *
+ * **不画折线**（M3-10 的取舍：自绘折线留 M6 统一打磨，避免与统计页图表口径打架）——
+ * 这里先把四数摆清楚，副标题写明"账户合计"（债务的应付/应收不在账户里，不算）。
+ */
+@Composable
+private fun StatsAssetTrendCard(page: StatsPage) {
+    val summary = AssetTrendMath.summary(page.assetOpeningCents, page.assetSeries)
+    val changeColor = if (summary.changeCents < 0) expenseColor() else primaryInkColor()
+    PennedCard(modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.sm)) {
+        Text(
+            "资产走势",
+            style = PennedTextStyles.cardTitle,
+            color = MaterialTheme.colorScheme.onSurface,
         )
-        StatsDataCard(
-            title = "${unit}数据",
-            categories = shown,
-            type = type,
-            slots = slots,
-            onOpenCategory = { name -> onOpenCategory(CategoryTarget(type, name, parent = null), page.window) },
+        Text(
+            "账户合计余额（转账对冲、手续费计入；债务不在账户里，不计入）",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(PennedSpacing.md))
+        Text(
+            "期末",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            Money.format(summary.closingCents),
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(PennedSpacing.sm))
+        PennedStatCells(
+            listOf(
+                StatCell("期初", Money.format(summary.openingCents)),
+                StatCell("变化", Money.format(summary.changeCents), changeColor),
+                StatCell("最高", Money.format(summary.highestCents)),
+                StatCell("最低", Money.format(summary.lowestCents)),
+            ),
         )
     }
 }

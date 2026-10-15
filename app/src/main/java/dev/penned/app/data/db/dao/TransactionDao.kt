@@ -22,11 +22,15 @@ data class TxWithCategory(
     val categoryIconKey: String?,
     /** 转账行的转入账户名（非转账为 null），首页行显示"转账 · 转入 X"。 */
     val targetAccountName: String?,
+    /** 转账行的转入账户 id（M3-14 资产走势判"这笔落在账户上吗"用它，别用名字当身份）。 */
+    val targetAccountId: String? = null,
     /** D020「不计入收支」：仍显示在列表里，但不计入日/月/分类合计。 */
     val excludeFromStats: Boolean,
     /** 退款额 / 优惠额（M3-2）：行上给一个「退款」标记，说明金额为什么变小甚至是 0。 */
     val refundCents: Long,
     val discountCents: Long,
+    /** 转账手续费（M3-14 资产走势要扣它：转账在对冲后只剩手续费离开账户体系）。 */
+    val feeCents: Long = 0,
     /**
      * 债务资金流水（M3-4，D068）：行标题写「借入 · 张三」而不是"未分类"。手记为 null。
      * 这两个是**展示投影**（Room 一定填上），给默认值只为截图/单测的 fixture 少写两行；
@@ -34,6 +38,17 @@ data class TxWithCategory(
      */
     val debtDirection: DebtDirection? = null,
     val debtCounterparty: String? = null,
+)
+
+/**
+ * 标签聚合行（M3-14 标签占比/标签数据）：标签名 + 该标签下的金额合计与笔数。
+ * **一笔挂多个标签会各算一次**（标签是并行的维度，不像分类那样互斥）——所以标签金额之和
+ * 可以大于本期总额，这是口径本身的性质，卡片副标题里写明。
+ */
+data class TagTotalRow(
+    val name: String,
+    val cents: Long,
+    val count: Int,
 )
 
 /** 债务详情页的还款记录行（M3-4）：一笔资金流水 + 账户名；动作词由 `DebtMath.flowLabel` 推。 */
@@ -56,9 +71,9 @@ interface TransactionDao {
                t.accountId AS accountId, t.categoryId AS categoryId,
                t.dateEpochMinute AS dateEpochMinute, t.note AS note,
                c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey,
-               ta.name AS targetAccountName,
+               ta.name AS targetAccountName, t.targetAccountId AS targetAccountId,
                t.excludeFromStats AS excludeFromStats,
-               t.refundCents AS refundCents, t.discountCents AS discountCents,
+               t.refundCents AS refundCents, t.discountCents AS discountCents, t.feeCents AS feeCents,
                dt.direction AS debtDirection, dt.counterparty AS debtCounterparty
         FROM transactions t
         LEFT JOIN categories c ON c.id = t.categoryId
@@ -98,9 +113,9 @@ interface TransactionDao {
                t.accountId AS accountId, t.categoryId AS categoryId,
                t.dateEpochMinute AS dateEpochMinute, t.note AS note,
                c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey,
-               ta.name AS targetAccountName,
+               ta.name AS targetAccountName, t.targetAccountId AS targetAccountId,
                t.excludeFromStats AS excludeFromStats,
-               t.refundCents AS refundCents, t.discountCents AS discountCents,
+               t.refundCents AS refundCents, t.discountCents AS discountCents, t.feeCents AS feeCents,
                dt.direction AS debtDirection, dt.counterparty AS debtCounterparty
         FROM transactions t
         LEFT JOIN categories c ON c.id = t.categoryId
@@ -137,9 +152,9 @@ interface TransactionDao {
                t.accountId AS accountId, t.categoryId AS categoryId,
                t.dateEpochMinute AS dateEpochMinute, t.note AS note,
                c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey,
-               ta.name AS targetAccountName,
+               ta.name AS targetAccountName, t.targetAccountId AS targetAccountId,
                t.excludeFromStats AS excludeFromStats,
-               t.refundCents AS refundCents, t.discountCents AS discountCents,
+               t.refundCents AS refundCents, t.discountCents AS discountCents, t.feeCents AS feeCents,
                dt.direction AS debtDirection, dt.counterparty AS debtCounterparty
         FROM transactions t
         LEFT JOIN categories c ON c.id = t.categoryId
@@ -198,9 +213,9 @@ interface TransactionDao {
                t.accountId AS accountId, t.categoryId AS categoryId,
                t.dateEpochMinute AS dateEpochMinute, t.note AS note,
                c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey,
-               ta.name AS targetAccountName,
+               ta.name AS targetAccountName, t.targetAccountId AS targetAccountId,
                t.excludeFromStats AS excludeFromStats,
-               t.refundCents AS refundCents, t.discountCents AS discountCents,
+               t.refundCents AS refundCents, t.discountCents AS discountCents, t.feeCents AS feeCents,
                dt.direction AS debtDirection, dt.counterparty AS debtCounterparty
         FROM transactions t
         LEFT JOIN categories c ON c.id = t.categoryId
@@ -307,9 +322,9 @@ interface TransactionDao {
                t.accountId AS accountId, t.categoryId AS categoryId,
                t.dateEpochMinute AS dateEpochMinute, t.note AS note,
                c.name AS categoryName, p.name AS categoryParentName, c.iconKey AS categoryIconKey,
-               ta.name AS targetAccountName,
+               ta.name AS targetAccountName, t.targetAccountId AS targetAccountId,
                t.excludeFromStats AS excludeFromStats,
-               t.refundCents AS refundCents, t.discountCents AS discountCents,
+               t.refundCents AS refundCents, t.discountCents AS discountCents, t.feeCents AS feeCents,
                dt.direction AS debtDirection, dt.counterparty AS debtCounterparty
         FROM transactions t
         LEFT JOIN categories c ON c.id = t.categoryId
@@ -322,6 +337,60 @@ interface TransactionDao {
         """
     )
     fun observeRangeTxsWithCategory(bookId: String, fromMinute: Long, toMinute: Long): Flow<List<TxWithCategory>>
+
+    /**
+     * 标签聚合（M3-14）：本账本窗口内、按标签分组的金额与笔数（支出或收入一侧）。
+     * 与统计页其余模块同源：`deleted = 0` + 本账本 + `excludeFromStats = 0`（不计收支的流水不进统计）；
+     * 标签本身软删后不再进榜（`g.deleted = 0`），但**历史流水的金额照算在本期**——这里按标签分组，
+     * 标签删了就没有可显示的名字，所以直接不列（与"删分类不连带删流水"同一类取舍，卡片说明里写明）。
+     */
+    @Query(
+        """
+        SELECT g.name AS name, SUM(t.amountCents) AS cents, COUNT(*) AS count
+        FROM transactions t
+        JOIN transaction_tags r ON r.transactionId = t.id
+        JOIN tags g ON g.id = r.tagId AND g.deleted = 0
+        WHERE t.deleted = 0 AND t.bookId = :bookId AND t.excludeFromStats = 0
+          AND t.type = :type AND t.dateEpochMinute BETWEEN :fromMinute AND :toMinute
+        GROUP BY g.id, g.name
+        ORDER BY cents DESC
+        """
+    )
+    fun observeTagTotals(
+        bookId: String,
+        fromMinute: Long,
+        toMinute: Long,
+        type: TxType,
+    ): Flow<List<TagTotalRow>>
+
+    /**
+     * 窗口开始前的「账户合计」（M3-14 资产走势的期初值）：
+     * **可见账户的初始余额之和** + **本账本在窗口前的净变化之和**。
+     *
+     * 净变化的口径与余额重算同源：收入 +、支出 −、转账只减手续费（转账本身上下账户对冲，
+     * 对手续费来说钱确实离开了账户体系）；不计收支的流水不进（统计口径一致）。
+     * 账户可见性沿用资产页那套（所属账本 / 全部账本 / account_books 勾选）。
+     */
+    @Query(
+        """
+        SELECT IFNULL((SELECT SUM(a.initialBalanceCents) FROM accounts a
+                       WHERE a.deleted = 0 AND (
+                           a.bookId = :bookId OR a.scopeAllBooks = 1
+                           OR EXISTS (SELECT 1 FROM account_books r
+                                      WHERE r.accountId = a.id AND r.bookId = :bookId AND r.deleted = 0))), 0)
+             + IFNULL((SELECT SUM(CASE
+                           WHEN t.type = 'INCOME' THEN t.amountCents
+                           WHEN t.type = 'EXPENSE' THEN -t.amountCents
+                           WHEN t.type = 'TRANSFER' THEN -t.feeCents
+                           ELSE 0 END)
+                       FROM transactions t
+                       WHERE t.deleted = 0 AND t.bookId = :bookId AND t.excludeFromStats = 0
+                         AND t.dateEpochMinute < :beforeMinute
+                         -- 只算落在账户上的流水（D005 允许"纯现金无账户"记账，那种流水不改变任何账户余额）
+                         AND (t.accountId IS NOT NULL OR t.targetAccountId IS NOT NULL)), 0)
+        """
+    )
+    fun observeOpeningAssetCents(bookId: String, beforeMinute: Long): Flow<Long>
 
     @Query("SELECT COUNT(*) FROM transactions")
     suspend fun count(): Int

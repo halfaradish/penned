@@ -81,6 +81,7 @@ import dev.penned.app.ui.lock.PinViewModel
 import dev.penned.app.ui.mine.MineScreen
 import dev.penned.app.ui.stats.CategoryDetailScreen
 import dev.penned.app.ui.stats.StatsScreen
+import dev.penned.app.ui.stats.StatsSettingsScreen
 import dev.penned.app.ui.stats.categoryDetailRoute
 import dev.penned.app.ui.stats.StatsViewModel
 import dev.penned.app.ui.stub.StubScreen
@@ -537,7 +538,13 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onOpenCategory = { target, window ->
                         navController.navigate(categoryDetailRoute(target, window))
                     },
+                    // 右上「⋯」→ 统计设置（M3-14：模块开关 + 顺序）
+                    onOpenSettings = { navController.navigate("stats/settings") },
                 )
+            }
+            // 统计设置（M3-14）：模块显示开关 + 顺序，改动即生效
+            composable("stats/settings") {
+                StatsSettingsScreen(onBack = { navController.popBackStack() })
             }
             // 分类详细页：统计页「支出/收入数据」行点进来，可逐级下钻，窗口跟着参数走
             composable(

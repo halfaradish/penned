@@ -46,6 +46,12 @@ class SettingsRepository(private val context: Context) {
     /** 首页月卡头显示项（M3-13）：存逗号串（`HomeDisplay.encode`）；**没存过 = 全开**、空串 = 用户全关。 */
     val homeStatItems: Flow<String?> = context.dataStore.data.map { it[KEY_HOME_STAT_ITEMS] }
 
+    /** 统计模块顺序（M3-14）：逗号串（`StatsLayoutCodec`）；没存过 = 默认顺序。 */
+    val statsOrder: Flow<String?> = context.dataStore.data.map { it[KEY_STATS_ORDER] }
+
+    /** 统计模块开关（M3-14）：逗号串；**没存过 = 全开**、空串 = 全关（统计页给空态，不兜底）。 */
+    val statsEnabled: Flow<String?> = context.dataStore.data.map { it[KEY_STATS_ENABLED] }
+
     suspend fun setThemeAccent(accentName: String) {
         context.dataStore.edit { it[KEY_THEME_ACCENT] = accentName }
     }
@@ -56,6 +62,14 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setHomeStatItems(encoded: String) {
         context.dataStore.edit { it[KEY_HOME_STAT_ITEMS] = encoded }
+    }
+
+    suspend fun setStatsOrder(encoded: String) {
+        context.dataStore.edit { it[KEY_STATS_ORDER] = encoded }
+    }
+
+    suspend fun setStatsEnabled(encoded: String) {
+        context.dataStore.edit { it[KEY_STATS_ENABLED] = encoded }
     }
 
     suspend fun setCurrentBook(id: String) {
@@ -89,5 +103,7 @@ class SettingsRepository(private val context: Context) {
         private val KEY_THEME_ACCENT = stringPreferencesKey("theme_accent")
         private val KEY_DARK_MODE = stringPreferencesKey("dark_mode")
         private val KEY_HOME_STAT_ITEMS = stringPreferencesKey("home_stat_items")
+        private val KEY_STATS_ORDER = stringPreferencesKey("stats_order")
+        private val KEY_STATS_ENABLED = stringPreferencesKey("stats_enabled")
     }
 }
