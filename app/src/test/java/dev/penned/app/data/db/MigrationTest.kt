@@ -290,6 +290,51 @@ class MigrationTest {
     }
 
     @Test
+    fun `migrate 7 to 8 creates wishlist table and keeps data`() {
+        createLegacyDatabase(7) { db ->
+            db.execSQL(
+                "INSERT INTO books (id, name, sortOrder, createdAt, updatedAt, deleted, deviceId) " +
+                    "VALUES ('b1', '测试账本', 0, 1, 1, 0, 'd')"
+            )
+            db.execSQL(
+                "INSERT INTO transactions (id, bookId, type, amountCents, accountId, targetAccountId, categoryId, " +
+                    "dateEpochMinute, note, refundCents, discountCents, reimburseState, reimburseAccountId, " +
+                    "currencyCode, rate, address, feeCents, excludeFromStats, excludeFromBudget, source, " +
+                    "importBatchId, reimburseCents, recurringRuleId, debtId, creatorDeviceId, createdAt, " +
+                    "updatedAt, deleted, deviceId) " +
+                    "VALUES ('t1', 'b1', 'EXPENSE', 1600, NULL, NULL, NULL, 100, NULL, 0, 0, 'NONE', NULL, " +
+                    "NULL, NULL, NULL, 0, 0, 0, 'MANUAL', NULL, 0, NULL, NULL, 'd', 1, 1, 0, 'd')"
+            )
+        }
+        val real = Room.databaseBuilder(context, PennedDatabase::class.java, dbName)
+            .addMigrations(*PennedDatabase.MIGRATIONS)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            runTest {
+                // 旧数据保留
+                assertEquals(1, real.transactionDao().all().size)
+                // 新表可用：写一条攒钱目标再读回（含跟随账户两列与状态枚举）
+                real.wishlistDao().upsert(
+                    dev.penned.app.data.db.entity.WishlistItemEntity(
+                        id = "w1", bookId = "b1", name = "换电脑", targetCents = 800_000L,
+                        savedCents = 320_000L, accountId = null, status = dev.penned.app.domain.WishlistStatus.ACTIVE,
+                        sortOrder = 0, createdAt = 1L, updatedAt = 1L, deviceId = "d",
+                    )
+                )
+                val rows = real.wishlistDao().observeByBook("b1").first()
+                assertEquals(1, rows.size)
+                assertEquals("换电脑", rows[0].item.name)
+                assertEquals(800_000L, rows[0].item.targetCents)
+                // 升级后的库版本 = 8
+                assertEquals(8, real.openHelper.readableDatabase.version)
+            }
+        } finally {
+            real.close()
+        }
+    }
+
+    @Test
     fun `seed still works on fresh v2 database`() = runTest {
         val db = Room.inMemoryDatabaseBuilder(context, PennedDatabase::class.java)
             .allowMainThreadQueries()

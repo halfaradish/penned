@@ -442,6 +442,28 @@ class DarkThemeScreensTest {
         capture("loan")
     }
 
+    /** 愿望清单（M3-15）：进度条 + 已达成 chip + 跟随账户副标题在深色下的着色。 */
+    @Test
+    fun darkWishlist() {
+        dark {
+            dev.penned.app.ui.wishlist.WishlistContent(
+                rows = listOf(
+                    dev.penned.app.domain.WishlistProgress(
+                        "w1", "换电脑", 800_000L, 320_000L, null, dev.penned.app.domain.WishlistStatus.ACTIVE,
+                    ),
+                    dev.penned.app.domain.WishlistProgress(
+                        "w2", "旅行基金", 500_000L, 500_000L, null, dev.penned.app.domain.WishlistStatus.ACTIVE,
+                        accountName = "微信",
+                    ),
+                ),
+                onBack = {},
+            )
+        }
+        composeRule.onNodeWithText("换电脑").assertIsDisplayed()
+        composeRule.onNodeWithText("跟随「微信」的余额").assertIsDisplayed()
+        capture("wishlist")
+    }
+
     /** 统计设置（M3-14）：模块开关 + 上移/下移在深色下的着色。 */
     @Test
     fun darkStatsSettings() {

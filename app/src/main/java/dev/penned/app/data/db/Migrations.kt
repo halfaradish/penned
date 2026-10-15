@@ -143,3 +143,24 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
         db.execSQL("ALTER TABLE categories ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0")
     }
 }
+
+/**
+ * v7→v8：建愿望清单表（M3-15，D072 = 攒钱目标）——**M3 唯一一次迁移**。
+ *
+ * 表结构与 `WishlistItemEntity` 逐列对齐（Room 的 schema 校验会逐列比对，少一列就报错）；
+ * 索引照 `@Entity(indices = [Index("bookId"), Index("accountId")])` 建，名字必须是 `index_<表>_<列>`。
+ */
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `wishlist_items` (`id` TEXT NOT NULL, `bookId` TEXT NOT NULL, " +
+                "`name` TEXT NOT NULL, `targetCents` INTEGER NOT NULL, `savedCents` INTEGER NOT NULL, " +
+                "`startEpochDay` INTEGER, `dueEpochDay` INTEGER, `accountId` TEXT, `note` TEXT, " +
+                "`status` TEXT NOT NULL, `sortOrder` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, " +
+                "`updatedAt` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, `deviceId` TEXT NOT NULL, " +
+                "PRIMARY KEY(`id`))"
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_wishlist_items_bookId` ON `wishlist_items` (`bookId`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_wishlist_items_accountId` ON `wishlist_items` (`accountId`)")
+    }
+}

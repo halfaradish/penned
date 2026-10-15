@@ -14,6 +14,9 @@ enum class TxSource { MANUAL, VOICE, TEXT, SCREENSHOT, IMPORT, AUTO }
 /** 周期记账的期次单位（M3-6）。 */
 enum class RecurringPeriod { DAILY, WEEKLY, MONTHLY, YEARLY }
 
+/** 攒钱目标的状态（M3-15）：ACTIVE = 还在攒；DONE = 用户手动标记达成（与"金额够了"不是一回事）。 */
+enum class WishlistStatus { ACTIVE, DONE }
+
 /** 债务方向（D068）：BORROW = 我欠人（应付），LEND = 人欠我（应收）。 */
 enum class DebtDirection { BORROW, LEND }
 

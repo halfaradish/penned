@@ -90,6 +90,8 @@ import dev.penned.app.ui.recurring.RecurringScreen
 import dev.penned.app.ui.tags.TagsScreen
 import dev.penned.app.ui.templates.TemplateEditScreen
 import dev.penned.app.ui.templates.TemplatesScreen
+import dev.penned.app.ui.wishlist.WishlistEditScreen
+import dev.penned.app.ui.wishlist.WishlistScreen
 import dev.penned.app.ui.tags.TagsViewModel
 
 /** 首页提示条的一次性消息键（保存完成后由记一笔页写进首页的 savedStateHandle）。 */
@@ -378,6 +380,24 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onOpenAbout = { navController.navigate("about") },
                     onOpenLoan = { navController.navigate("loan") },
                     onOpenAppearance = { navController.navigate("appearance") },
+                    onOpenWishlist = { navController.navigate("wishlist") },
+                )
+            }
+            // 愿望清单（M3-15）：攒钱目标列表 + 新建/编辑（不生成流水）
+            composable("wishlist") {
+                WishlistScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenItem = { id -> navController.navigate("wishlist/edit?editId=$id") },
+                    onNewItem = { navController.navigate("wishlist/edit") },
+                )
+            }
+            composable(
+                route = "wishlist/edit?editId={editId}",
+                arguments = listOf(navArgument("editId") { type = NavType.StringType; defaultValue = "" }),
+            ) { entry ->
+                WishlistEditScreen(
+                    editId = entry.arguments?.getString("editId")?.ifEmpty { null },
+                    onBack = { navController.popBackStack() },
                 )
             }
             // 主题外观（M3-12）：品牌色相 4 套 + 深浅模式，选中即生效

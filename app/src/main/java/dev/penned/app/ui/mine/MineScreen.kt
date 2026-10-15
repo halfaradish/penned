@@ -40,6 +40,8 @@ fun MineScreen(
     onOpenLoan: () -> Unit = {},
     /** 主题外观（M3-12）。 */
     onOpenAppearance: () -> Unit = {},
+    /** 愿望清单（M3-15）。 */
+    onOpenWishlist: () -> Unit = {},
     modifier: Modifier = Modifier,
     versionName: String = dev.penned.app.BuildConfig.VERSION_NAME,
 ) {
@@ -115,6 +117,17 @@ fun MineScreen(
                 subtitle = "把常用筛选条件存下来，下次一键应用",
                 leadingIcon = PennedIcons.Search,
                 onClick = onOpenBillFilters,
+            )
+        }
+
+        Spacer(Modifier.height(PennedSpacing.sm))
+        // M3-15：愿望清单（攒钱目标；规划工具，不生成流水）
+        SectionCard(title = "规划") {
+            PennedListRow(
+                title = "愿望清单",
+                subtitle = "攒钱目标：目标金额 + 进度 + 存入一笔（不生成流水）",
+                leadingIcon = PennedIcons.Wallet,
+                onClick = onOpenWishlist,
             )
         }
 

@@ -4,7 +4,7 @@
 
 ## 进行中
 
-**M3 规格已冻结（2026-10-12）**：`docs/specs/M3.md` —— 会员功能解锁（标签 / 退款 / 报销 / 债务 / 模板 / 周期 / 组合筛选 / 账单组合 / 资产模块 / 理财快照 / 房贷年费 / 主题 / 首页显示 / 统计设置 / 愿望清单 / 分享卡片 / 日历，共 `M3-0`~`M3-17` 十八片）。**§五 7 条裁决已并入**：债务**实体式** / 退款优惠**保存净额** / 周期**打开即补** / 主题**只换品牌色相 4 套** / 愿望清单 = **攒钱目标** / **日历进 M3** / **18 片分 6 批、每批 3 片**（决策 D068~D074）。**当前：批次一~四 + 批次五全部交付（`M3-0`~`M3-14`）；下一步 = 批次六 `M3-15` 愿望清单（**M3 唯一允许的迁移 v7→v8**）**。
+**M3 规格已冻结（2026-10-12）**：`docs/specs/M3.md` —— 会员功能解锁（标签 / 退款 / 报销 / 债务 / 模板 / 周期 / 组合筛选 / 账单组合 / 资产模块 / 理财快照 / 房贷年费 / 主题 / 首页显示 / 统计设置 / 愿望清单 / 分享卡片 / 日历，共 `M3-0`~`M3-17` 十八片）。**§五 7 条裁决已并入**：债务**实体式** / 退款优惠**保存净额** / 周期**打开即补** / 主题**只换品牌色相 4 套** / 愿望清单 = **攒钱目标** / **日历进 M3** / **18 片分 6 批、每批 3 片**（决策 D068~D074）。**当前：批次一~五 + 批次六的 `M3-15` 已交付（`M3-0`~`M3-15`，**库已到 v8**）；下一步 = `M3-16` 数据小卡片（三款 Canvas → Bitmap → FileProvider → 分享）**。
 
 （M2 应用内更新与 M2-10 首次真实发布均已收尾，见「已完成」；遗留与测试坑见下方「待办 · M2 遗留与测试坑」）
 
@@ -32,7 +32,7 @@
     - ~~`M3-13` 首页数据自定义（月卡汇总块勾选 + 预算块开关）~~ → **已完成（2026-10-15，见「已完成 · M3-13」）**
     - ~~`M3-14` 自定义统计（模块开关 + 顺序 + 标签/资产模块）~~ → **已完成（2026-10-15，见「已完成 · M3-14」）；批次五收官**
   - **批次六 · 产出与视图（P2）**
-    - `M3-15` 愿望清单（D072：攒钱目标；**单独迁移 v7→v8**——M3 唯一允许的迁移，`wishlist_items` 建表）
+    - ~~`M3-15` 愿望清单（D072：攒钱目标；**单独迁移 v7→v8**——M3 唯一允许的迁移，`wishlist_items` 建表）~~ → **已完成（2026-10-15，见「已完成 · M3-15」）；库版本 7 → 8**
     - `M3-16` 数据小卡片（月汇总 / 占比 / 小票三款，Canvas→Bitmap→FileProvider 分享）
     - `M3-17` 日历视图（D073：**进 M3**；默认不做农历/节气）
 - **M2 遗留与测试坑**（M2 切片本身已收尾，逐片细节见「已完成 · M2 应用内更新」）：
@@ -137,6 +137,25 @@ obolectric-*`，其中两个 `robolectric-nativeruntime*` 各 40–200MB）：�
 - **动效候选（AP 轮明确不做）**：预测性返回手势（`PredictiveBackHandler`，返回手势拖到一半能看见下页跟着走）、共享元素转场（分类头像/标题从列表 morph 到详情页）、**记一笔改从底部升起的模态**（现在是和别的下钻页一样的右推入）、**Tab 之间跟手横滑**（现在固定淡入淡出）；另有"转场时长/视差比例做成可调设置项"这一档（现在写死在 `MotionSpec`）
 
 ## 已完成
+
+### M3-15 愿望清单：攒钱目标（2026-10-15）
+
+- **交付**（**M3 唯一一次迁移：v7→v8**）：
+  - **数据层**：`WishlistItemEntity`（`wishlist_items`：id/bookId/name/targetCents/savedCents/startEpochDay?/dueEpochDay?/accountId?/note?/status/sortOrder + 同步四件套）+ `WishlistDao`（`observeByBook`（带跟随账户的**重算余额**投影，与资产页同一份口径）/`get`/`upsert`/`softDelete`/`restoreAll`/`softDeleteByBook`/`addSaved`（±，只动 savedCents）/`setStatus`/`countInBook`/`nextSortOrder`）；`MIGRATION_7_8` 建表 + 两个索引，`PennedDatabase` version 8 + `MIGRATIONS` 追加 + `8.json` 入库
+  - **口径层**：`domain/WishlistMath`（`savedCents` 两态 / `progress` 夹取 / `remainingCents` 与 `overCents` / `achieved` 两条路 / `amountsLabel` / `statusLabel`）+ `WishlistProgress`；`WishlistStatus`（ACTIVE/DONE）
+  - **页面**：我的 → 规划 → **愿望清单**（卡片列表：进度条 + 已存/目标 + 状态文案 + 达成 chip + 跟随账户小字；左滑删除 10s 撤销；空态）；**新建/编辑页**（名称/目标/存入方式两段/已存或跟随账户/截止日/备注 + 编辑时「标记达成」与「删除目标」）；**存入抽屉**（存入/取出 + 金额，写明不生成流水）
+- **测试**：新增 18 条（**629 条全绿**）——`WishlistMathTest`（6）、`WishlistDaoTest`（5）、`MigrationTest`（+1：7→8 建表 + 旧数据保留 + version=8）、`WishlistScreenTest`（5：三态截图 / 空态 / 抽屉正负号 / 编辑页 / 真库真导航）、`DarkThemeScreensTest`（+1）；截图 `m3_wishlist*` / `dark_wishlist`；`./gradlew build test lint` 全绿
+- **模拟机（GxuDev，用户真实数据）**：
+  - **装包即触发 v7→v8 迁移**：`user_version 7 → 8`，transactions **756 活跃/15 软删**、accounts **3 活跃/4 软删**全都没变，`wishlist_items` 表已建且为空
+  - 走查：我的 → 规划 → 愿望清单（空态）→ 新建（HuanDianNao / 8000）→ 保存 → 「已存 0.00 / 目标 8,000.00 · 还差 8,000.00」→「存入一笔」500 → 「已存 500.00 / 还差 7,500.00」+ 进度条一小截；库内一行（savedCents 50000）、**transactions 仍 756**
+  - 收工：探针目标软删 → `wishlist_items 0 活跃/1 软删`；截图 9 张归档 `docs/local/界面重构验证/m3_15_*.png`
+- **本轮新增的坑（写给下个会话）**：
+  - **`performTextInput` 是"追加"不是"替换"**：同一个输入框第二轮输入前要 `performTextClearance()`（抽屉测试里"500"+"100" 变成了 500100）
+  - **占位文字不是输入框**：`onNodeWithText("0.00")` 命中的是 decorationBox 里的占位 Text，打字打不进去——一律用 `onAllNodes(hasSetTextAction())[i]` 定位
+  - **NavHost 长表单上的打字不稳**（nav 转场期间旧页还在树上）：本片把"保存落库"那条链路改到 VM 上验（`WishlistEditViewModel.save` + `awaitUi` 轮询），表单本身用截图验
+  - **跨线程回调的局部变量不可见**：`var saved = false` 在 VM 协程里写、测试线程里读 → 用 `AtomicBoolean`
+  - **机器内存吃紧时 Gradle/测试 JVM 会崩**（`insufficient memory` / `hs_err_pid*.log`）：跑全量前先关模拟机；崩完的 `hs_err_pid*.log`/`replay_pid*.log`/`.kotlin/` 不入库（`.gitignore` 已加 `.kotlin/`）
+- **下一条**：`M3-16` 数据小卡片（月汇总 / 占比 / 单笔小票三款：Canvas → Bitmap → cacheDir → FileProvider → ACTION_SEND；用当前主题 token；分享 Intent 组成测试）。
 
 ### M3-14 自定义统计：模块开关与顺序（2026-10-15）
 

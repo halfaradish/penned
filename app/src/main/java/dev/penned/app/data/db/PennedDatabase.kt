@@ -17,6 +17,7 @@ import dev.penned.app.data.db.dao.SnapshotDao
 import dev.penned.app.data.db.dao.TagDao
 import dev.penned.app.data.db.dao.TemplateDao
 import dev.penned.app.data.db.dao.TransactionDao
+import dev.penned.app.data.db.dao.WishlistDao
 import dev.penned.app.data.db.entity.AccountBookRefEntity
 import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.data.db.entity.AssetSnapshotEntity
@@ -33,6 +34,7 @@ import dev.penned.app.data.db.entity.TemplateTagRefEntity
 import dev.penned.app.data.db.entity.TransactionEntity
 import dev.penned.app.data.db.entity.TransactionTagRefEntity
 import dev.penned.app.data.db.entity.TxTemplateEntity
+import dev.penned.app.data.db.entity.WishlistItemEntity
 
 @Database(
     entities = [
@@ -52,8 +54,9 @@ import dev.penned.app.data.db.entity.TxTemplateEntity
         BillFilterEntity::class,
         AssetSnapshotEntity::class,
         DebtEntity::class,
+        WishlistItemEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -70,11 +73,13 @@ abstract class PennedDatabase : RoomDatabase() {
     abstract fun recurringDao(): RecurringDao
     abstract fun billFilterDao(): BillFilterDao
     abstract fun snapshotDao(): SnapshotDao
+    abstract fun wishlistDao(): WishlistDao
 
     companion object {
         /** 全部迁移。生产构建与 migration 测试共用这一份，测试不会漏掉新迁移。 */
         val MIGRATIONS = arrayOf(
             MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
+            MIGRATION_7_8,
         )
 
         fun build(context: Context): PennedDatabase =
