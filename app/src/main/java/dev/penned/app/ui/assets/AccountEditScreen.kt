@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -102,6 +104,11 @@ data class AccountEditUiState(
     val archived: Boolean = false,
     /** 自定义分组（M3-9）：非空时资产页分组标题用它（优先于账户大类）。 */
     val groupName: String? = null,
+    /** 年费金额文本（M3-11，信用卡）：空 = 没设年费（没设就永远不到期）。 */
+    val feeText: String = "",
+    /** 年费收费月/日（M3-11）：null = 未设。 */
+    val feeMonth: Int? = null,
+    val feeDay: Int? = null,
     /** 生效账本：true = 所有账本可见（含以后新建的），false = 所属账本 + [extraBookIds]（D028）。 */
     val scopeAllBooks: Boolean = false,
     /** 可选账本（用于勾选）与所属账本；[extraBookIds] 是额外勾选的账本。 */
@@ -130,6 +137,9 @@ data class AccountEditUiState(
             val cents = Money.parseToCents(initialText.removePrefix("-")) ?: 0L
             return if (negative) -cents else cents
         }
+
+    /** 年费金额（分）：空/非法 = 0（0 = 没设年费，`FeeMath` 对 0 一律判不到期）。 */
+    val feeCents: Long get() = Money.parseToCents(feeText) ?: 0L
 
     /** 生效账本行的摘要：全部账本，或者列出生效的账本名（所属账本恒定在列）。 */
     val bookSummary: String
@@ -195,6 +205,9 @@ class AccountEditViewModel(
             remark = account.remark.orEmpty(),
             archived = account.archived,
             groupName = account.groupName,
+            feeText = if (account.annualFeeCents == 0L) "" else Money.format(account.annualFeeCents, grouped = false),
+            feeMonth = account.feeMonth,
+            feeDay = account.feeDay,
             scopeAllBooks = account.scopeAllBooks,
             books = books,
             ownerBookId = account.bookId,
@@ -235,6 +248,16 @@ class AccountEditViewModel(
         val trimmed = name?.trim().orEmpty().ifEmpty { null }
         update { it.copy(groupName = trimmed) }
     }
+
+    /** 年费金额（M3-11）：只留数字与小数点。 */
+    fun setFee(input: String) {
+        update { it.copy(feeText = input.filter { ch -> ch.isDigit() || ch == '.' }) }
+    }
+
+    /** 收费月/日（M3-11）：null = 不设（`FeeMath` 对没设日期的一律判不到期）。 */
+    fun setFeeMonth(month: Int?) = update { it.copy(feeMonth = month?.coerceIn(1, 12)) }
+
+    fun setFeeDay(day: Int?) = update { it.copy(feeDay = day?.coerceIn(1, 31)) }
 
     /**
      * 流水迁移（M3-9，解 D026）：把名下流水整批转到另一个账户（`accountId` 与 `targetAccountId` 两端都搬），
@@ -301,6 +324,9 @@ class AccountEditViewModel(
                         groupName = s.groupName,
                         archived = s.archived,
                         scopeAllBooks = s.scopeAllBooks,
+                        annualFeeCents = s.feeCents,
+                        feeMonth = s.feeMonth,
+                        feeDay = s.feeDay,
                         createdAt = now,
                         updatedAt = now,
                         deviceId = app.deviceId,
@@ -309,6 +335,7 @@ class AccountEditViewModel(
                 id
             } else {
                 // 读回落库实体再改这几个字段：groupName/currencyCode 等本页不碰的字段原样保留
+                // （lastFeePaidYear 也在其中——"今年已记"不能被一次编辑抹掉）
                 val original = db.accountDao().get(existingId) ?: return@launch
                 db.accountDao().upsert(
                     original.copy(
@@ -319,6 +346,9 @@ class AccountEditViewModel(
                         groupName = s.groupName,
                         archived = s.archived,
                         scopeAllBooks = s.scopeAllBooks,
+                        annualFeeCents = s.feeCents,
+                        feeMonth = s.feeMonth,
+                        feeDay = s.feeDay,
                         updatedAt = now,
                     )
                 )
@@ -412,6 +442,9 @@ fun AccountEditScreen(
         onRemarkChange = viewModel::setRemark,
         onScopeChange = viewModel::setScopeAllBooks,
         onToggleBook = viewModel::toggleBook,
+        onFeeChange = viewModel::setFee,
+        onFeeMonthChange = viewModel::setFeeMonth,
+        onFeeDayChange = viewModel::setFeeDay,
         onSave = { viewModel.save(onDone = onBack) },
         onDelete = if (state.isEdit) ({ confirmDelete = true }) else null,
         modifier = modifier,
@@ -452,6 +485,10 @@ fun AccountEditContent(
     migrateTargets: List<AccountEntity> = emptyList(),
     /** 已有的自定义分组名（抽屉里列出）。 */
     customGroups: List<String> = emptyList(),
+    /** 年费三字段（M3-11，信用卡才有这张卡）。 */
+    onFeeChange: (String) -> Unit = {},
+    onFeeMonthChange: (Int?) -> Unit = {},
+    onFeeDayChange: (Int?) -> Unit = {},
 ) {
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -460,6 +497,9 @@ fun AccountEditContent(
     var showNewGroup by remember { mutableStateOf(false) }
     var showMigratePicker by remember { mutableStateOf(false) }
     var migrateTarget by remember { mutableStateOf<AccountEntity?>(null) }
+    // 年费收费月/日（M3-11）：数字选择抽屉
+    var showFeeMonthPicker by remember { mutableStateOf(false) }
+    var showFeeDayPicker by remember { mutableStateOf(false) }
 
     // 从「自定义」格进来时名称没有预设兜底，直接把光标送进名称输入
     LaunchedEffect(Unit) {
@@ -552,6 +592,32 @@ fun AccountEditContent(
             onToggleAll = { onScopeChange(!state.scopeAllBooks) },
             onToggleBook = onToggleBook,
             onDismiss = { showScopePicker = false },
+        )
+    }
+    if (showFeeMonthPicker) {
+        NumberPickerSheet(
+            title = "收费月",
+            range = 1..12,
+            suffix = "月",
+            selected = state.feeMonth,
+            onPick = { month ->
+                onFeeMonthChange(month)
+                showFeeMonthPicker = false
+            },
+            onDismiss = { showFeeMonthPicker = false },
+        )
+    }
+    if (showFeeDayPicker) {
+        NumberPickerSheet(
+            title = "收费日",
+            range = 1..31,
+            suffix = "日",
+            selected = state.feeDay,
+            onPick = { day ->
+                onFeeDayChange(day)
+                showFeeDayPicker = false
+            },
+            onDismiss = { showFeeDayPicker = false },
         )
     }
 
@@ -653,7 +719,47 @@ fun AccountEditContent(
                         )
                     }
                 }
-                // 卡片三（仅编辑）：停用 + 流水迁移（M3-9）
+                // 卡片三（信用卡，M3-11）：年费——到期时资产页行尾提示「记年费」（只在打开资产页时判定）
+                if (state.type == AccountType.CREDIT) {
+                    PennedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
+                        contentPadding = PaddingValues(0.dp),
+                    ) {
+                        EditFieldRow(
+                            label = "年费",
+                            value = state.feeText,
+                            placeholder = "0.00",
+                            money = true,
+                            onValueChange = onFeeChange,
+                        )
+                        PennedDivider()
+                        PickerRow(
+                            label = "收费月",
+                            value = state.feeMonth?.let { "$it 月" } ?: "未设",
+                            onClick = { showFeeMonthPicker = true },
+                        )
+                        PennedDivider()
+                        PickerRow(
+                            label = "收费日",
+                            value = state.feeDay?.let { "$it 日" } ?: "未设",
+                            onClick = { showFeeDayPicker = true },
+                        )
+                        Text(
+                            "到期后资产页这张卡的下一行会提示「记年费」，点一下就记一笔并标记今年已记" +
+                                "（只在打开资产页时判定，不做后台通知）；31 日遇短月按当月最后一天算",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(
+                                start = PennedSpacing.lg,
+                                end = PennedSpacing.lg,
+                                bottom = PennedSpacing.md,
+                            ),
+                        )
+                    }
+                }
+                // 卡片四（仅编辑）：停用 + 流水迁移（M3-9）
                 if (state.isEdit) {
                     PennedCard(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.md),
@@ -709,6 +815,42 @@ fun AccountEditContent(
                 }
             }
         }
+    }
+}
+
+/**
+ * 数字选择抽屉（年费收费月 1~12 / 收费日 1~31，M3-11）：行高按列表行来，
+ * 31 天的清单在 [NUMBER_SHEET_MAX_HEIGHT] 内滚动（不然抽屉会长过屏幕）。
+ */
+private val NUMBER_SHEET_MAX_HEIGHT = 360.dp
+
+@Composable
+private fun NumberPickerSheet(
+    title: String,
+    range: IntRange,
+    suffix: String,
+    selected: Int?,
+    onPick: (Int?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    PennedSheet(onDismiss = onDismiss, title = title) {
+        LazyColumn(Modifier.fillMaxWidth().heightIn(max = NUMBER_SHEET_MAX_HEIGHT)) {
+            items(range.toList()) { value ->
+                PennedListRow(
+                    title = "$value $suffix",
+                    trailing = if (value == selected) "已选" else null,
+                    showChevron = false,
+                    onClick = { onPick(value) },
+                )
+            }
+        }
+        Spacer(Modifier.height(PennedSpacing.sm))
+        PennedListRow(
+            title = "不设",
+            subtitle = "不设日期就不会提示年费到期",
+            showChevron = false,
+            onClick = { onPick(null) },
+        )
     }
 }
 

@@ -73,4 +73,14 @@ class FeeMathTest {
         assertEquals(null, FeeMath.label(0L, 3, 12))
         assertEquals(null, FeeMath.label(48_000L, null, null))
     }
+
+    @Test
+    fun `年费流水的分类：优先含年费、其次含手续费、都没有就不落分类`() {
+        val categories = listOf("c1" to "餐饮", "c2" to "手续费", "c3" to "年费")
+        assertEquals("c3", FeeMath.feeCategoryId(categories))
+        assertEquals("c2", FeeMath.feeCategoryId(listOf("c1" to "餐饮", "c2" to "手续费")))
+        assertEquals("c4", FeeMath.feeCategoryId(listOf("c4" to "银行年费与手续费")))
+        assertEquals(null, FeeMath.feeCategoryId(listOf("c1" to "餐饮", "c2" to "交通")))
+        assertEquals(null, FeeMath.feeCategoryId(emptyList()))
+    }
 }

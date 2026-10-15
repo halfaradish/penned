@@ -13,6 +13,7 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import dev.penned.app.data.db.dao.AccountWithBalance
 import dev.penned.app.domain.AccountType
 import dev.penned.app.ui.theme.PennedTheme
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -20,6 +21,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.time.LocalDate
 
 /** M1 第一批验收缺项：资产页 Roborazzi 截图（AD-2 按参考图重做后的版面）。 */
 @RunWith(RobolectricTestRunner::class)
@@ -144,6 +146,54 @@ class AssetsScreenScreenshotTest {
         composeRule.waitForIdle()
         composeRule.onAllNodesWithText("删除").onFirst().assertIsDisplayed()
         capture("ui13_assets_row_action")
+    }
+
+    /**
+     * 信用卡年费（M3-11）：副标题写年费与收费日；到期未标记时行尾「记年费」（点它 = 记一笔），
+     * 今年已标记后提示消失、副标题仍在。判定日期钉死（`today` 可注入），不跟着真实时钟漂。
+     */
+    @Test
+    fun captureCreditCardFeeRow() {
+        val today = LocalDate.of(2026, 3, 12)
+        val card = AccountWithBalance(
+            "c1", "招行信用卡", AccountType.CREDIT, null, -58_900L,
+            annualFeeCents = 48_000L, feeMonth = 3, feeDay = 12,
+        )
+        val cardState = androidx.compose.runtime.mutableStateOf(card)
+        var recorded: AccountWithBalance? = null
+        composeRule.setContent {
+            PennedTheme {
+                AssetsContent(
+                    state = AssetsUiState(
+                        accounts = listOf(cardState.value),
+                        netCents = cardState.value.balanceCents,
+                        liabilityCents = -cardState.value.balanceCents,
+                    ),
+                    onAddAccount = { _, _ -> },
+                    onRecordFee = { recorded = it },
+                    today = today,
+                )
+            }
+        }
+        composeRule.onNodeWithText("年费 ¥480.00 · 每年 3 月 12 日").assertIsDisplayed()
+        composeRule.onNodeWithText("记年费").assertIsDisplayed()
+        capture("m3_assets_fee_due")
+
+        // 点「记年费」→ 回调带着这个账户出去（真正的落库在 AssetsViewModel.recordFee）
+        composeRule.onNodeWithText("记年费").performClick()
+        assertEquals("c1", recorded?.id)
+
+        // 今年已标记 → 提示消失，副标题还在
+        cardState.value = card.copy(lastFeePaidYear = 2026)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("记年费").assertDoesNotExist()
+        composeRule.onNodeWithText("年费 ¥480.00 · 每年 3 月 12 日").assertIsDisplayed()
+        capture("m3_assets_fee_paid")
+
+        // 把标记清掉（换一年/清数据的情形）→ 到期提示回来
+        cardState.value = card.copy(lastFeePaidYear = null)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("记年费").assertIsDisplayed()
     }
 
     @Test

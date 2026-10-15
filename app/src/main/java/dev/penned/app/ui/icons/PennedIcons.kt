@@ -343,6 +343,24 @@ object PennedIcons {
         }
     }
 
+    /**
+     * 房贷计算器（M3-11，「我的」入口）：计算器——机身圆角矩形 + 一条显示窗 + 六个按键点。
+     */
+    val Calculator: ImageVector by lazy {
+        icon("calculator") {
+            stroke {
+                roundRect(5.4f, 3.6f, 18.6f, 20.4f, 2.6f)
+                line(8.4f, 7.6f, 15.6f, 7.6f)
+                circle(9.1f, 12.6f, 0.95f)
+                circle(12f, 12.6f, 0.95f)
+                circle(14.9f, 12.6f, 0.95f)
+                circle(9.1f, 16.6f, 0.95f)
+                circle(12f, 16.6f, 0.95f)
+                circle(14.9f, 16.6f, 0.95f)
+            }
+        }
+    }
+
     // —— 构建辅助 ——
 
     private const val STROKE = 1.9f

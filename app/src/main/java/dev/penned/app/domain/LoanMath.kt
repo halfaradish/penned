@@ -91,6 +91,22 @@ object LoanMath {
         return Plan(method, principalCents, schedule)
     }
 
+    /**
+     * 逐期还款日：首期还款日 + (i−1) 个月，**月对齐与周期记账同一套**（`RecurringMath.advance`，
+     * 锚定日 29/30/31 遇短月夹到月末、后续期回到锚定日）——月对齐的规则只此一处，改一处改另一处。
+     */
+    fun periodDates(firstEpochDay: Long, periods: Int): List<Long> {
+        if (periods <= 0) return emptyList()
+        val anchorDay = LocalDate.ofEpochDay(firstEpochDay).dayOfMonth
+        val dates = mutableListOf(firstEpochDay)
+        while (dates.size < periods) {
+            val next = RecurringMath.advance(dates.last(), RecurringPeriod.MONTHLY, 1, anchorDay)
+            if (next <= dates.last()) break // 防御：推进不动就停
+            dates += next
+        }
+        return dates
+    }
+
     /** 中文名（结果卡与计划表头共用）。 */
     fun methodLabel(method: Method): String = when (method) {
         Method.EQUAL_INSTALLMENT -> "等额本息"
@@ -136,4 +152,13 @@ object FeeMath {
         if (feeCents <= 0L || feeMonth == null || feeDay == null) return null
         return "年费 ¥${Money.format(feeCents)} · 每年 ${feeMonth} 月 ${feeDay} 日"
     }
+
+    /**
+     * 年费流水该落在哪个分类（M3-11）：在**支出**分类里先找名字含「年费」的，再找含「手续费」的；
+     * 都没有返回 null（**不擅自新建分类**——用户可以在记一笔里自己补一个）。
+     * 入参是 `(id, name)` 对，顺序即优先顺序（分类按 sortOrder 排好的展示序）。
+     */
+    fun feeCategoryId(expenseCategories: List<Pair<String, String>>): String? =
+        expenseCategories.firstOrNull { it.second.contains("年费") }?.first
+            ?: expenseCategories.firstOrNull { it.second.contains("手续费") }?.first
 }

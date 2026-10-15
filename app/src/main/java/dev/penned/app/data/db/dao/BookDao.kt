@@ -42,6 +42,11 @@ data class AccountWithBalance(
     val remark: String? = null,
     /** 已停用（M3-9）：资产页收进「已停用」段，净资产仍计入。 */
     val archived: Boolean = false,
+    /** 信用卡年费四列（M3-11）：行副标题与到期提示用；判定只在 `FeeMath`，UI 不自己算。 */
+    val annualFeeCents: Long = 0,
+    val feeMonth: Int? = null,
+    val feeDay: Int? = null,
+    val lastFeePaidYear: Int? = null,
 )
 
 @Dao
@@ -57,6 +62,8 @@ interface AccountDao {
         """
         SELECT a.id AS id, a.name AS name, a.type AS type, a.groupName AS groupName, a.remark AS remark,
             a.archived AS archived, a.initialBalanceCents AS initialBalanceCents,
+            a.annualFeeCents AS annualFeeCents, a.feeMonth AS feeMonth, a.feeDay AS feeDay,
+            a.lastFeePaidYear AS lastFeePaidYear,
             a.initialBalanceCents
             + IFNULL((SELECT SUM(CASE WHEN t.type = 'INCOME' THEN t.amountCents ELSE -t.amountCents END)
                       FROM transactions t
@@ -89,6 +96,8 @@ interface AccountDao {
         """
         SELECT a.id AS id, a.name AS name, a.type AS type, a.groupName AS groupName, a.remark AS remark,
             a.archived AS archived, a.initialBalanceCents AS initialBalanceCents,
+            a.annualFeeCents AS annualFeeCents, a.feeMonth AS feeMonth, a.feeDay AS feeDay,
+            a.lastFeePaidYear AS lastFeePaidYear,
             a.initialBalanceCents
             + IFNULL((SELECT SUM(CASE WHEN t.type = 'INCOME' THEN t.amountCents ELSE -t.amountCents END)
                       FROM transactions t
@@ -147,6 +156,13 @@ interface AccountDao {
     /** 自定义分组（M3-9）：null = 回到按账户大类推导的默认分组。 */
     @Query("UPDATE accounts SET groupName = :groupName, updatedAt = :now WHERE id = :id")
     suspend fun setGroupName(id: String, groupName: String?, now: Long)
+
+    /**
+     * 标记"今年的年费已记"（M3-11）：记一笔年费流水时一并写，写完今年的到期提示不再出现。
+     * 年费金额/收费月日由编辑账户页落库（走 `upsert`，不在这里）。
+     */
+    @Query("UPDATE accounts SET lastFeePaidYear = :year, updatedAt = :now WHERE id = :id")
+    suspend fun setLastFeePaidYear(id: String, year: Int, now: Long)
 
     /**
      * 流水迁移（M3-9，解 D026「有流水账户删不掉」）：把名下流水整批转到另一个账户。

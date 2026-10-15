@@ -50,16 +50,23 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.room.withTransaction
 import dev.penned.app.PennedApplication
 import dev.penned.app.data.db.dao.AccountWithBalance
+import dev.penned.app.data.db.entity.TransactionEntity
 import dev.penned.app.domain.AccountType
 import dev.penned.app.data.db.dao.toInvestSnapshot
+import dev.penned.app.domain.AddDate
+import dev.penned.app.domain.CategoryType
 import dev.penned.app.domain.DebtMath
+import dev.penned.app.domain.FeeMath
 import dev.penned.app.domain.InvestMath
 import dev.penned.app.domain.Money
+import dev.penned.app.domain.TxType
 import dev.penned.app.ui.components.CategoryAvatar
 import dev.penned.app.ui.components.AnimatedNumberText
 import dev.penned.app.ui.components.EmptyState
+import dev.penned.app.ui.components.PennedChip
 import dev.penned.app.ui.components.PennedSnackbarHost
 import dev.penned.app.ui.components.PennedCard
 import dev.penned.app.ui.components.PennedDivider
@@ -76,10 +83,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.util.UUID
 
 /** 眼睛藏起来时金额显示成它（页面内状态，不落库）。 */
 private const val MASK = "****"
@@ -156,6 +167,43 @@ class AssetsViewModel(private val app: PennedApplication) : ViewModel() {
 
     fun consumeMessage() {
         _message.value = null
+    }
+
+    /**
+     * 记一笔年费（M3-11）：到期提示点按 → 写一条支出流水（分类找「年费/手续费」，没有就不落分类）
+     * + 标记 `lastFeePaidYear`，**同一事务**里做（标记写进去、流水没写 = 白记一年）。
+     * 不做后台通知：这条路径只在用户打开资产页、看见到期提示、自己点的时候走。
+     */
+    fun recordFee(account: AccountWithBalance) {
+        viewModelScope.launch {
+            val bookId = app.settings.currentBookId.firstOrNull() ?: return@launch
+            val now = System.currentTimeMillis()
+            val today = LocalDate.now()
+            val categories = db.categoryDao().allInBook(bookId)
+                .filter { it.type == CategoryType.EXPENSE && !it.hidden }
+                .map { it.id to it.name }
+            val categoryId = FeeMath.feeCategoryId(categories)
+            db.withTransaction {
+                db.transactionDao().upsert(
+                    TransactionEntity(
+                        id = UUID.randomUUID().toString(),
+                        bookId = bookId,
+                        type = TxType.EXPENSE,
+                        amountCents = account.annualFeeCents,
+                        accountId = account.id,
+                        categoryId = categoryId,
+                        dateEpochMinute = AddDate.epochMinuteFor(null, java.time.ZonedDateTime.now()),
+                        note = "信用卡年费 · ${account.name}",
+                        creatorDeviceId = app.deviceId,
+                        createdAt = now,
+                        updatedAt = now,
+                        deviceId = app.deviceId,
+                    )
+                )
+                db.accountDao().setLastFeePaidYear(account.id, today.year, now)
+            }
+            _message.value = "已记年费 ${Money.format(account.annualFeeCents)}，今年的提示不再出现"
+        }
     }
 
     /** 行左滑删除（单个账户）；有流水会被 [deleteAccountIfEmpty] 拦下并提示。 */
@@ -239,6 +287,7 @@ fun AssetsScreen(
         onOpenDebts = onOpenDebts,
         onOpenInvest = onOpenInvest,
         onDeleteAccount = viewModel::deleteAccount,
+        onRecordFee = viewModel::recordFee,
         revealedRowId = revealedRowId,
         onRevealedRowChange = { revealedRowId = it },
         snackbarHostState = snackbarHostState,
@@ -257,6 +306,10 @@ fun AssetsContent(
     onOpenDebts: () -> Unit = {},
     onOpenInvest: (String) -> Unit = {},
     onDeleteAccount: (AccountWithBalance) -> Unit = {},
+    /** 年费到期提示点按 = 记一笔年费流水（M3-11）。 */
+    onRecordFee: (AccountWithBalance) -> Unit = {},
+    /** 年费到期判定的"今天"（截图测试钉日期用；页面默认真今天）。 */
+    today: LocalDate = LocalDate.now(),
     /** 当前左滑展开动作区的账户 id（null = 都收起）；只留一行为开。 */
     revealedRowId: String? = null,
     onRevealedRowChange: (String?) -> Unit = {},
@@ -352,6 +405,8 @@ fun AssetsContent(
                             },
                             onOpenAccount = onOpenAccount,
                             onDeleteAccount = onDeleteAccount,
+                            onRecordFee = onRecordFee,
+                            today = today,
                             revealedRowId = revealedRowId,
                             onRevealedRowChange = onRevealedRowChange,
                         )
@@ -375,6 +430,8 @@ fun AssetsContent(
                             },
                             onOpenAccount = onOpenAccount,
                             onDeleteAccount = onDeleteAccount,
+                            onRecordFee = onRecordFee,
+                            today = today,
                             revealedRowId = revealedRowId,
                             onRevealedRowChange = onRevealedRowChange,
                             rowTag = "已停用",
@@ -562,6 +619,8 @@ private fun AccountGroupCard(
     onToggle: () -> Unit,
     onOpenAccount: (String) -> Unit,
     onDeleteAccount: (AccountWithBalance) -> Unit,
+    onRecordFee: (AccountWithBalance) -> Unit = {},
+    today: LocalDate = LocalDate.now(),
     revealedRowId: String? = null,
     onRevealedRowChange: (String?) -> Unit = {},
     /** 行尾标记（「已停用」段用，M3-9）。 */
@@ -614,6 +673,8 @@ private fun AccountGroupCard(
                             account = account,
                             masked = masked,
                             tag = rowTag,
+                            today = today,
+                            onRecordFee = onRecordFee,
                             // 展开态点行 = 收起动作区，不进编辑页（QQ 口径）
                             onClick = {
                                 if (revealedRowId == account.id) {
@@ -633,7 +694,23 @@ private fun AccountGroupCard(
 
 /** 账户行：头像（统一淡灰绿）+ 名称 + 等宽余额（正=品牌青绿、负=朱砂）。 */
 @Composable
-private fun AccountRow(account: AccountWithBalance, masked: Boolean, tag: String? = null, onClick: () -> Unit) {
+private fun AccountRow(
+    account: AccountWithBalance,
+    masked: Boolean,
+    tag: String? = null,
+    today: LocalDate = LocalDate.now(),
+    onRecordFee: (AccountWithBalance) -> Unit = {},
+    onClick: () -> Unit,
+) {
+    // 年费（M3-11）：副标题写年费与收费日，到期时行尾一枚「记年费」——判定都在 FeeMath，UI 不自己算
+    val feeLabel = FeeMath.label(account.annualFeeCents, account.feeMonth, account.feeDay)
+    val feeDue = FeeMath.isDue(
+        feeCents = account.annualFeeCents,
+        feeMonth = account.feeMonth,
+        feeDay = account.feeDay,
+        lastPaidYear = account.lastFeePaidYear,
+        today = today,
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -666,6 +743,25 @@ private fun AccountRow(account: AccountWithBalance, masked: Boolean, tag: String
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (feeLabel != null) {
+                Text(
+                    feeLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (feeDue) {
+                Spacer(Modifier.height(PennedSpacing.xs))
+                // 到期提示：点它 = 记一笔年费（不进编辑页）；点行别处仍是进编辑页。
+                // 放在文字列里而不是行尾：行尾还有余额，挤在一起会把年费那行截成"每年 3 月 1…"
+                PennedChip(
+                    label = "记年费",
+                    tint = expenseColor(),
+                    onClick = { onRecordFee(account) },
                 )
             }
         }

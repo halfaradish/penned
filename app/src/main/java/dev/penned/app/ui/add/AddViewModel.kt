@@ -43,6 +43,13 @@ class AddViewModel(
     /** 「记一笔还款」预填（M3-4）：从债务详情页跳进来时带着债务与那一格（缺省 = 债务发生）。 */
     private val presetDebtId: String? = null,
     private val presetDebtAction: DebtAction? = null,
+    /**
+     * 房贷首期预填（M3-11）：分期房贷页「按首期记一笔」带金额（分）/ 日期（epochDay）/ 备注进来。
+     * 只预填这一笔，**不生成整个还款计划**（规格 M3-11 的边界；要每期循环用周期记账）。
+     */
+    private val presetCents: Long? = null,
+    private val presetDay: Long? = null,
+    private val presetNote: String? = null,
 ) : ViewModel() {
 
     private val db = app.database
@@ -258,7 +265,22 @@ class AddViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     init {
-        if (editId != null) loadForEdit(editId) else if (presetDebtId != null) prefillDebt(presetDebtId, presetDebtAction ?: DebtAction.OPEN)
+        if (editId != null) {
+            loadForEdit(editId)
+        } else if (presetDebtId != null) {
+            prefillDebt(presetDebtId, presetDebtAction ?: DebtAction.OPEN)
+        } else if (presetCents != null) {
+            applyLoanPrefill()
+        }
+    }
+
+    /** 房贷首期预填（M3-11）：金额（分）+ 日期 + 备注；分类与账户留给用户选。 */
+    private fun applyLoanPrefill() {
+        val cents = presetCents ?: return
+        type.value = TxType.EXPENSE
+        amountText.value = Money.format(cents, grouped = false)
+        presetDay?.takeIf { it > 0L }?.let { dateEpochDay.value = it }
+        presetNote?.takeIf { it.isNotBlank() }?.let { note.value = it }
     }
 
     /**

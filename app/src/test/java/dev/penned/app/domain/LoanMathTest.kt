@@ -117,4 +117,43 @@ class LoanMathTest {
         assertEquals(10_000L, LoanMath.equalInstallmentPaymentCents(120_000L, 0.0, 12))
         assertEquals(0L, LoanMath.equalInstallmentPaymentCents(120_000L, 5.0, 0))
     }
+
+    @Test
+    fun `逐期还款日：锚定日 31 遇短月夹月末、后续回到 31`() {
+        // 2026-01-31 起：2 月夹到 28、3 月回到 31、4 月夹到 30
+        val dates = LoanMath.periodDates(java.time.LocalDate.of(2026, 1, 31).toEpochDay(), 4)
+            .map { java.time.LocalDate.ofEpochDay(it) }
+        assertEquals(
+            listOf(
+                java.time.LocalDate.of(2026, 1, 31),
+                java.time.LocalDate.of(2026, 2, 28),
+                java.time.LocalDate.of(2026, 3, 31),
+                java.time.LocalDate.of(2026, 4, 30),
+            ),
+            dates,
+        )
+    }
+
+    @Test
+    fun `逐期还款日：跨年与闰年 2 月 29`() {
+        // 2027-12-15 起跨年
+        val crossYear = LoanMath.periodDates(java.time.LocalDate.of(2027, 12, 15).toEpochDay(), 3)
+            .map { java.time.LocalDate.ofEpochDay(it) }
+        assertEquals(java.time.LocalDate.of(2028, 1, 15), crossYear[1])
+        // 2028 是闰年：1/29 起，2 月对齐到 2/29
+        val leap = LoanMath.periodDates(java.time.LocalDate.of(2028, 1, 29).toEpochDay(), 3)
+            .map { java.time.LocalDate.ofEpochDay(it) }
+        assertEquals(java.time.LocalDate.of(2028, 2, 29), leap[1])
+        // 平年同一起点：2 月夹到 28
+        val common = LoanMath.periodDates(java.time.LocalDate.of(2027, 1, 29).toEpochDay(), 3)
+            .map { java.time.LocalDate.ofEpochDay(it) }
+        assertEquals(java.time.LocalDate.of(2027, 2, 28), common[1])
+    }
+
+    @Test
+    fun `逐期还款日：期数非正返回空、期数 1 只有首期`() {
+        assertTrue(LoanMath.periodDates(20_000L, 0).isEmpty())
+        assertTrue(LoanMath.periodDates(20_000L, -3).isEmpty())
+        assertEquals(listOf(20_000L), LoanMath.periodDates(20_000L, 1))
+    }
 }

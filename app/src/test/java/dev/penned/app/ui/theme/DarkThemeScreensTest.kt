@@ -402,6 +402,10 @@ class DarkThemeScreensTest {
                     presetLabel = "信用卡",
                     name = "招行信用卡",
                     initialText = "0.00",
+                    // M3-11：信用卡多一张年费卡（金额 + 收费月/日）
+                    feeText = "480.00",
+                    feeMonth = 3,
+                    feeDay = 12,
                 ),
                 onBack = {},
                 onSelectGroup = {},
@@ -410,7 +414,55 @@ class DarkThemeScreensTest {
             )
         }
         composeRule.onNodeWithText("编辑账户").assertIsDisplayed()
+        composeRule.onNodeWithText("年费").assertIsDisplayed()
+        composeRule.onNodeWithText("3 月").assertIsDisplayed()
         capture("account_edit")
+    }
+
+    /** 分期房贷（M3-11）：结果卡大数 + 三格 + 逐期计划在深色下同样成立。 */
+    @Test
+    fun darkLoan() {
+        dark {
+            dev.penned.app.ui.loan.LoanContent(
+                principalText = "1000000",
+                rateText = "4.9",
+                periodsText = "360",
+                firstEpochDay = java.time.LocalDate.of(2026, 11, 15).toEpochDay(),
+                method = dev.penned.app.domain.LoanMath.Method.EQUAL_INSTALLMENT,
+                onPrincipalChange = {},
+                onRateChange = {},
+                onPeriodsChange = {},
+                onFirstDayChange = {},
+                onMethodChange = {},
+                onBack = {},
+            )
+        }
+        composeRule.onNodeWithText("首期月供").assertIsDisplayed()
+        composeRule.onNodeWithText("总利息").assertIsDisplayed()
+        capture("loan")
+    }
+
+    /** 信用卡年费到期行（M3-11）：副标题 + 「记年费」胶囊在深色下的着色。 */
+    @Test
+    fun darkAssetsFeeDue() {
+        dark {
+            AssetsContent(
+                state = AssetsUiState(
+                    accounts = listOf(
+                        dev.penned.app.data.db.dao.AccountWithBalance(
+                            "c1", "招行信用卡", dev.penned.app.domain.AccountType.CREDIT, "信贷账户", -58_900L,
+                            annualFeeCents = 48_000L, feeMonth = 3, feeDay = 12,
+                        ),
+                    ),
+                    netCents = -58_900L, liabilityCents = 58_900L,
+                ),
+                onAddAccount = { _, _ -> },
+                today = java.time.LocalDate.of(2026, 3, 12),
+            )
+        }
+        composeRule.onNodeWithText("年费 ¥480.00 · 每年 3 月 12 日").assertIsDisplayed()
+        composeRule.onNodeWithText("记年费").assertIsDisplayed()
+        capture("assets_fee_due")
     }
 
     @Test

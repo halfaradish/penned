@@ -36,6 +36,8 @@ fun MineScreen(
     onOpenTags: () -> Unit,
     onOpenPinLock: () -> Unit,
     onOpenAbout: () -> Unit,
+    /** 分期房贷计算器（M3-11）。 */
+    onOpenLoan: () -> Unit = {},
     modifier: Modifier = Modifier,
     versionName: String = dev.penned.app.BuildConfig.VERSION_NAME,
 ) {
@@ -111,6 +113,17 @@ fun MineScreen(
                 subtitle = "把常用筛选条件存下来，下次一键应用",
                 leadingIcon = PennedIcons.Search,
                 onClick = onOpenBillFilters,
+            )
+        }
+
+        Spacer(Modifier.height(PennedSpacing.sm))
+        // M3-11：分期房贷计算器（等额本息/等额本金，只算不落库；「按首期记一笔」跳预填）
+        SectionCard(title = "工具") {
+            PennedListRow(
+                title = "分期房贷",
+                subtitle = "等额本息 / 等额本金：月供、总利息、逐期计划",
+                leadingIcon = PennedIcons.Calculator,
+                onClick = onOpenLoan,
             )
         }
 

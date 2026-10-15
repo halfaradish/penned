@@ -82,10 +82,14 @@ fun AddTransactionScreen(
     /** 「记一笔还款」预填（M3-4）：债务详情页跳进来时带着债务与那一格。 */
     presetDebtId: String? = null,
     presetDebtAction: DebtAction? = null,
+    /** 房贷首期预填（M3-11）：分期房贷页「按首期记一笔」带的金额（分）/ 日期 / 备注。 */
+    presetCents: Long? = null,
+    presetDay: Long? = null,
+    presetNote: String? = null,
 ) {
     val viewModel = androidx.lifecycle.viewmodel.compose.viewModel(
-        key = editId ?: "new-${presetDebtId.orEmpty()}-${presetDebtAction?.name.orEmpty()}",
-        initializer = { AddViewModel(app, editId, presetDebtId, presetDebtAction) },
+        key = editId ?: "new-${presetDebtId.orEmpty()}-${presetDebtAction?.name.orEmpty()}-${presetCents ?: ""}",
+        initializer = { AddViewModel(app, editId, presetDebtId, presetDebtAction, presetCents, presetDay, presetNote) },
     )
     val type by viewModel.type.collectAsStateWithLifecycle()
     val amount by viewModel.amountText.collectAsStateWithLifecycle()

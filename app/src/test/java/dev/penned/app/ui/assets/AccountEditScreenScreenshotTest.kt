@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -37,6 +38,9 @@ class AccountEditScreenScreenshotTest {
     private fun capture(name: String) {
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/$name.png")
     }
+
+    private fun count(text: String): Int =
+        composeRule.onAllNodesWithText(text).fetchSemanticsNodes().size
 
     /** M3-9：编辑页三处新入口（停用开关 / 迁移行 / 自定义分组）。 */
     @Test
@@ -123,6 +127,51 @@ class AccountEditScreenScreenshotTest {
         composeRule.onNodeWithText("信贷账户").assertIsDisplayed()
         composeRule.onNodeWithText("已选").assertIsDisplayed()
         capture("account_group_picker")
+    }
+
+    /**
+     * 信用卡年费三字段（M3-11）：年费金额 + 收费月/日（月/日走数字抽屉）；
+     * 收费月选了之后行上回显「N 月」。非信用卡账户没有这张卡。
+     */
+    @Test
+    fun creditCardFeeFields() {
+        val state = androidx.compose.runtime.mutableStateOf(
+            AccountEditUiState(
+                accountId = "a1",
+                group = AccountGroup.CREDIT,
+                type = AccountType.CREDIT,
+                presetLabel = "信用卡",
+                name = "招行信用卡",
+                feeText = "480.00",
+                feeMonth = 3,
+                feeDay = 12,
+            )
+        )
+        composeRule.setContent {
+            PennedTheme {
+                AccountEditContent(
+                    state = state.value,
+                    onBack = {},
+                    onSelectGroup = {}, onNameChange = {}, onInitialChange = {}, onSave = {},
+                    onDelete = {},
+                    onFeeMonthChange = { state.value = state.value.copy(feeMonth = it) },
+                    onFeeDayChange = { state.value = state.value.copy(feeDay = it) },
+                )
+            }
+        }
+        composeRule.onNodeWithText("年费").assertExists()
+        composeRule.onNodeWithText("480.00").assertIsDisplayed()
+        composeRule.onNodeWithText("3 月").assertExists()
+        composeRule.onNodeWithText("12 日").assertExists()
+        capture("m3_account_fee_card")
+
+        // 收费月抽屉：1~12 + 「不设」；选 5 月 → 状态回填
+        composeRule.onNodeWithText("收费月").performClick()
+        composeRule.waitUntil(5_000) { count("不设") == 1 }
+        composeRule.onNodeWithText("5 月").performClick()
+        composeRule.waitForIdle()
+        assertEquals(5, state.value.feeMonth)
+        composeRule.onNodeWithText("5 月").assertExists()
     }
 
     @Test

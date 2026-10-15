@@ -72,6 +72,7 @@ import dev.penned.app.ui.theme.primaryInkColor
 import dev.penned.app.ui.theme.rememberAnimationsEnabled
 import dev.penned.app.ui.home.HomeScreen
 import dev.penned.app.ui.invest.InvestDetailScreen
+import dev.penned.app.ui.loan.LoanScreen
 import dev.penned.app.ui.home.HomeViewModel
 import dev.penned.app.ui.home.SearchScreen
 import dev.penned.app.ui.lock.PinManageScreen
@@ -255,11 +256,16 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                 )
             }
             composable(
-                route = "add?editId={editId}&debtId={debtId}&debtAction={debtAction}",
+                route = "add?editId={editId}&debtId={debtId}&debtAction={debtAction}" +
+                    "&amountCents={amountCents}&day={day}&note={note}",
                 arguments = listOf(
                     navArgument("editId") { type = NavType.StringType; defaultValue = "" },
                     navArgument("debtId") { type = NavType.StringType; defaultValue = "" },
                     navArgument("debtAction") { type = NavType.StringType; defaultValue = "" },
+                    // 房贷首期预填（M3-11）：-1 = 没带
+                    navArgument("amountCents") { type = NavType.LongType; defaultValue = -1L },
+                    navArgument("day") { type = NavType.LongType; defaultValue = -1L },
+                    navArgument("note") { type = NavType.StringType; defaultValue = "" },
                 ),
             ) { entry ->
                 val editId = entry.arguments?.getString("editId")?.ifEmpty { null }
@@ -270,6 +276,10 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     presetDebtId = entry.arguments?.getString("debtId")?.ifEmpty { null },
                     presetDebtAction = entry.arguments?.getString("debtAction")?.ifEmpty { null }
                         ?.let { name -> dev.penned.app.domain.DebtAction.entries.firstOrNull { it.name == name } },
+                    // 「按首期记一笔」预填（M3-11）：分期房贷页带金额/日期/备注进来（只预填这一笔）
+                    presetCents = entry.arguments?.getLong("amountCents")?.takeIf { it > 0L },
+                    presetDay = entry.arguments?.getLong("day")?.takeIf { it > 0L },
+                    presetNote = entry.arguments?.getString("note")?.ifEmpty { null },
                     // 保存完成给一次反馈：把消息挂到上一个目的地（首页）的 savedStateHandle 上，
                     // 由首页的提示条读出来（此前保存完静默返回，用户不知道成没成）
                     onDone = { savedId ->
@@ -364,6 +374,18 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onOpenTags = { navController.navigate("tags") },
                     onOpenPinLock = { navController.navigate("pin") },
                     onOpenAbout = { navController.navigate("about") },
+                    onOpenLoan = { navController.navigate("loan") },
+                )
+            }
+            // 分期房贷计算器（M3-11）：只算不落库；「按首期记一笔」把金额/日期/备注带给记一笔预填
+            composable("loan") {
+                LoanScreen(
+                    onBack = { navController.popBackStack() },
+                    onRecordFirst = { cents, day, note ->
+                        navController.navigate(
+                            "add?amountCents=$cents&day=$day&note=${android.net.Uri.encode(note)}"
+                        )
+                    },
                 )
             }
             composable("about") {
