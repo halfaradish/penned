@@ -61,10 +61,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.penned.app.data.db.dao.TxWithCategory
 import dev.penned.app.domain.BudgetMath
 import dev.penned.app.domain.Money
+import dev.penned.app.domain.HomeDisplaySettings
+import dev.penned.app.domain.HomeStatItem
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.components.DayHeaderRow
 import dev.penned.app.ui.components.EmptyState
 import dev.penned.app.ui.components.PennedDivider
+import dev.penned.app.ui.components.PennedListRow
+import dev.penned.app.ui.components.PennedSheet
+import dev.penned.app.ui.components.PennedSwitchRow
 import dev.penned.app.ui.components.PennedProgressBar
 import dev.penned.app.ui.components.PennedSnackbarHost
 import dev.penned.app.ui.components.PennedStatCells
@@ -124,8 +129,11 @@ fun HomeScreen(
     val selectionMode by viewModel.selectionMode.collectAsStateWithLifecycle()
     val selectedIds by viewModel.selectedIds.collectAsStateWithLifecycle()
     val budgetSummary by viewModel.budgetSummary.collectAsStateWithLifecycle()
+    val display by viewModel.display.collectAsStateWithLifecycle()
 
     var showBookMenu by remember { mutableStateOf(false) }
+    // 月卡头「⋯」→ 首页显示设置（M3-13）；抽屉里勾选即生效
+    var showDisplaySheet by remember { mutableStateOf(false) }
     var showAddBook by remember { mutableStateOf(false) }
     // 左滑动作区：只留一行为开（UI-12）；纯 UI 状态，不进 ViewModel
     var revealedRowId: String? by rememberSaveable { mutableStateOf<String?>(null) }
@@ -231,8 +239,18 @@ fun HomeScreen(
         },
         onExitSelection = viewModel::exitSelection,
         snackbarHostState = snackbarHostState,
+        display = display,
+        onOpenDisplaySettings = { showDisplaySheet = true },
         modifier = modifier,
     )
+
+    if (showDisplaySheet) {
+        HomeDisplaySheet(
+            display = display,
+            onToggle = viewModel::setStatItem,
+            onDismiss = { showDisplaySheet = false },
+        )
+    }
 
     if (showAddBook) {
         AddBookDialog(
@@ -270,6 +288,10 @@ fun HomeContent(
     onDeleteSelected: () -> Unit = {},
     onExitSelection: () -> Unit = {},
     snackbarHostState: SnackbarHostState? = null,
+    /** 月卡头显示项（M3-13）；默认全开 = 与 M3-13 之前完全一致。 */
+    display: HomeDisplaySettings = HomeDisplaySettings(),
+    /** 月卡头右侧「⋯」：开首页显示设置（M3-13）。 */
+    onOpenDisplaySettings: () -> Unit = {},
     modifier: Modifier = Modifier,
     zone: ZoneId = ZoneId.systemDefault(),
 ) {
@@ -375,10 +397,12 @@ fun HomeContent(
                                                     toggledMonths + month.yearMonth
                                                 }
                                             },
+                                            onOpenDisplaySettings = onOpenDisplaySettings,
                                         )
                                         AnimatedVisibility(visible = expanded) {
                                             MonthOverview(
                                                 totals = month.totals,
+                                                display = display,
                                                 showBudget = isCurrentMonth,
                                                 budgetSummary = budgetSummary,
                                                 onOpenBudgets = onOpenBudgets,
@@ -575,6 +599,38 @@ private fun HomeHeader(
 }
 
 /**
+ * 首页显示设置抽屉（M3-13，月卡头「⋯」）：四项勾选，**勾选即生效**（写 DataStore）。
+ * 全不勾时渲染层兜底保留「支出」（`HomeDisplaySettings.visibleItems`），抽屉里给一句说明。
+ */
+@Composable
+internal fun HomeDisplaySheet(
+    display: HomeDisplaySettings,
+    onToggle: (HomeStatItem, Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    PennedSheet(onDismiss = onDismiss, title = "首页显示设置") {
+        HomeStatItem.entries.forEach { item ->
+            PennedSwitchRow(
+                title = item.label,
+                subtitle = when (item) {
+                    HomeStatItem.BUDGET_PROGRESS -> "月卡里的预算·已用·剩余与进度条（只在本月卡上）"
+                    else -> null
+                },
+                checked = display.isVisible(item),
+                onCheckedChange = { on -> onToggle(item, on) },
+            )
+        }
+        Text(
+            "全都不勾时至少保留「支出」——月卡头不能空着",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = PennedSpacing.xl, vertical = PennedSpacing.sm),
+        )
+        PennedListRow(title = "选好了", showChevron = false, onClick = onDismiss)
+    }
+}
+
+/**
  * 月标题行（卡片最上面一行，点它折叠/展开）：只显示 `yyyy/m`，不带收支（用户裁决）。
  * 右侧箭头指下＝展开、转 90° 指右＝折叠（与资产页分组卡同一套）。
  */
@@ -584,6 +640,8 @@ private fun MonthTitleRow(
     expanded: Boolean,
     onToggle: () -> Unit,
     modifier: Modifier = Modifier,
+    /** 月卡头右侧「⋯」：首页显示设置（M3-13）。 */
+    onOpenDisplaySettings: () -> Unit = {},
 ) {
     val label = HomeGroups.monthLabel(yearMonth.year, yearMonth.monthValue)
     val rotation by animateFloatAsState(if (expanded) 0f else -90f, label = "month-chevron")
@@ -606,6 +664,15 @@ private fun MonthTitleRow(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
+        // 「⋯」：月卡头显示设置（M3-13）——点它只开抽屉，不翻转展开态
+        IconButton(onClick = onOpenDisplaySettings, modifier = Modifier.size(PennedDimens.iconButton)) {
+            Icon(
+                PennedIcons.MoreVert,
+                contentDescription = "首页显示设置",
+                tint = iconMutedColor(),
+                modifier = Modifier.size(PennedDimens.iconInline),
+            )
+        }
         Icon(
             PennedIcons.ChevronDown,
             contentDescription = if (expanded) "折叠 $label" else "展开 $label",
@@ -626,6 +693,8 @@ private fun MonthOverview(
     budgetSummary: HomeViewModel.BudgetSummary?,
     onOpenBudgets: () -> Unit,
     modifier: Modifier = Modifier,
+    /** 显示项（M3-13）：勾了哪几项就渲染哪几项；预算进度 = 整个预算块。 */
+    display: HomeDisplaySettings = HomeDisplaySettings(),
 ) {
     Column(
         modifier = modifier
@@ -637,14 +706,20 @@ private fun MonthOverview(
                 bottom = PennedSpacing.md,
             ),
     ) {
-        PennedStatCells(
-            listOf(
-                StatCell("支出", Money.format(totals.expenseCents), expenseColor()),
-                StatCell("收入", Money.format(totals.incomeCents), incomeColor()),
-                StatCell("结余", Money.format(totals.incomeCents - totals.expenseCents)),
-            ),
-        )
-        if (showBudget) {
+        // 勾选项 → 三格（顺序固定；全不勾时 visibleItems 兜底给「支出」，见 HomeDisplay）
+        val cells = buildList {
+            if (display.isVisible(HomeStatItem.EXPENSE)) {
+                add(StatCell("支出", Money.format(totals.expenseCents), expenseColor()))
+            }
+            if (display.isVisible(HomeStatItem.INCOME)) {
+                add(StatCell("收入", Money.format(totals.incomeCents), incomeColor()))
+            }
+            if (display.isVisible(HomeStatItem.BALANCE)) {
+                add(StatCell("结余", Money.format(totals.incomeCents - totals.expenseCents)))
+            }
+        }
+        PennedStatCells(cells)
+        if (showBudget && display.isVisible(HomeStatItem.BUDGET_PROGRESS)) {
             Spacer(Modifier.height(PennedSpacing.md))
             HomeBudgetRow(budgetSummary = budgetSummary, onOpenBudgets = onOpenBudgets)
         }

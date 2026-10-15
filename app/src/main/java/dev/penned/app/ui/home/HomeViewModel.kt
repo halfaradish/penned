@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import dev.penned.app.PennedApplication
 import dev.penned.app.data.db.dao.TxWithCategory
 import dev.penned.app.data.db.entity.BookEntity
+import dev.penned.app.domain.HomeDisplaySettings
+import dev.penned.app.domain.HomeStatItem
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -46,6 +48,22 @@ class HomeViewModel(private val app: PennedApplication) : ViewModel() {
     /** 首页「剩余预算」：总预算（分类预算不进首页汇总）。 */
     data class BudgetSummary(val totalCents: Long, val spentCents: Long) {
         val remainingCents: Long get() = totalCents - spentCents
+    }
+
+    /**
+     * 月卡头显示项（M3-13）：DataStore 存逗号串，**没存过 = 全开**。
+     * 渲染一律走 `HomeDisplaySettings.isVisible`（兜底在里面：全不勾至少留「支出」）。
+     */
+    val display: StateFlow<HomeDisplaySettings> = app.settings.homeStatItems
+        .map { dev.penned.app.domain.HomeDisplay.decode(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeDisplaySettings())
+
+    /** 勾选/取消一项（写 DataStore；全关时的兜底在渲染层，不在这里硬塞回来）。 */
+    fun setStatItem(item: HomeStatItem, on: Boolean) {
+        viewModelScope.launch {
+            val next = display.value.toggle(item, on)
+            app.settings.setHomeStatItems(dev.penned.app.domain.HomeDisplay.encode(next.items))
+        }
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)

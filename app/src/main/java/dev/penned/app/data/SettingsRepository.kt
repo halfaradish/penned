@@ -43,12 +43,19 @@ class SettingsRepository(private val context: Context) {
     /** 深浅模式（M3-12）：存 `DarkMode.name`；没存过 = 跟随系统。 */
     val darkModeKey: Flow<String?> = context.dataStore.data.map { it[KEY_DARK_MODE] }
 
+    /** 首页月卡头显示项（M3-13）：存逗号串（`HomeDisplay.encode`）；**没存过 = 全开**、空串 = 用户全关。 */
+    val homeStatItems: Flow<String?> = context.dataStore.data.map { it[KEY_HOME_STAT_ITEMS] }
+
     suspend fun setThemeAccent(accentName: String) {
         context.dataStore.edit { it[KEY_THEME_ACCENT] = accentName }
     }
 
     suspend fun setDarkMode(modeName: String) {
         context.dataStore.edit { it[KEY_DARK_MODE] = modeName }
+    }
+
+    suspend fun setHomeStatItems(encoded: String) {
+        context.dataStore.edit { it[KEY_HOME_STAT_ITEMS] = encoded }
     }
 
     suspend fun setCurrentBook(id: String) {
@@ -81,5 +88,6 @@ class SettingsRepository(private val context: Context) {
         private val KEY_AUTO_UPDATE_CHECK = booleanPreferencesKey("update_auto_check")
         private val KEY_THEME_ACCENT = stringPreferencesKey("theme_accent")
         private val KEY_DARK_MODE = stringPreferencesKey("dark_mode")
+        private val KEY_HOME_STAT_ITEMS = stringPreferencesKey("home_stat_items")
     }
 }
