@@ -19,15 +19,16 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.penned.app.ui.LocalApp
 import dev.penned.app.ui.lock.LockScreen
 import dev.penned.app.ui.nav.PennedApp
-import dev.penned.app.ui.theme.PennedTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            PennedTheme {
-                val app = application as PennedApplication
+            val app = application as PennedApplication
+            // 主题外观（M3-12）：品牌色相 + 深浅模式从 DataStore 读（读法抽在 PennedThemeFromSettings，
+            // 与流程测试共用一份；首值未到前先用默认青绿 + 跟随系统）
+            dev.penned.app.ui.theme.PennedThemeFromSettings(app) {
                 CompositionLocalProvider(LocalApp provides app) {
                     LockGate(app) {
                         PennedApp(app)

@@ -11,11 +11,15 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
-private val LightColors = lightColorScheme(
-    primary = PrimaryLight,
-    onPrimary = OnPrimaryLight,
-    primaryContainer = PrimaryContainerLight,
-    onPrimaryContainer = OnPrimaryContainerLight,
+/**
+ * 浅色配色表：中性层固定，品牌一族来自 [brand]（M3-12 起可换色相）。
+ * 默认青绿的值与 M3-12 之前逐位相同——默认主题的观感一行没变。
+ */
+private fun lightColors(brand: BrandColors) = lightColorScheme(
+    primary = brand.primary,
+    onPrimary = brand.onPrimary,
+    primaryContainer = brand.primaryContainer,
+    onPrimaryContainer = brand.onPrimaryContainer,
     background = BackgroundLight,
     onBackground = OnBackgroundLight,
     surface = SurfaceLight,
@@ -31,23 +35,23 @@ private val LightColors = lightColorScheme(
     // 提示条（Snackbar）用的反向槽位：深底浅字（浅色主题）/ 浅底深字（深色主题）
     inverseSurface = OnSurfaceLight,
     inverseOnSurface = BackgroundLight,
-    inversePrimary = InversePrimaryLight,
+    inversePrimary = brand.inversePrimary,
     // "比 surface 更亮一档"的语义槽位：浅色就是白，深色要比卡片亮（分段控件的选中滑块用它）
     surfaceBright = SurfaceLight,
     surfaceDim = BackgroundLight,
     surfaceContainerLowest = SurfaceLight,
-    // 低强调容器 = 日头条底（见 Color.kt 的 DayHeaderLight 注释）
-    surfaceContainerLow = DayHeaderLight,
+    // 低强调容器 = 日头条底（极淡品牌纸，随色相走；见 Brand.kt）
+    surfaceContainerLow = brand.dayHeader,
     surfaceContainer = SurfaceContainerLight,
     surfaceContainerHigh = SurfaceContainerHighLight,
     surfaceContainerHighest = SurfaceContainerHighLight,
 )
 
-private val DarkColors = darkColorScheme(
-    primary = PrimaryDark,
-    onPrimary = OnPrimaryDark,
-    primaryContainer = PrimaryContainerDark,
-    onPrimaryContainer = OnPrimaryContainerDark,
+private fun darkColors(brand: BrandColors) = darkColorScheme(
+    primary = brand.primary,
+    onPrimary = brand.onPrimary,
+    primaryContainer = brand.primaryContainer,
+    onPrimaryContainer = brand.onPrimaryContainer,
     background = BackgroundDark,
     onBackground = OnBackgroundDark,
     surface = SurfaceDark,
@@ -62,11 +66,11 @@ private val DarkColors = darkColorScheme(
     onErrorContainer = OnErrorContainerDark,
     inverseSurface = OnSurfaceDark,
     inverseOnSurface = SurfaceDark,
-    inversePrimary = InversePrimaryDark,
+    inversePrimary = brand.inversePrimary,
     surfaceBright = SurfaceBrightDark,
     surfaceDim = BackgroundDark,
     surfaceContainerLowest = SurfaceDark,
-    surfaceContainerLow = DayHeaderDark,
+    surfaceContainerLow = brand.dayHeader,
     surfaceContainer = SurfaceContainerDark,
     surfaceContainerHigh = SurfaceContainerHighDark,
     surfaceContainerHighest = SurfaceContainerHighDark,
@@ -98,6 +102,10 @@ private val DarkSemantic = PennedSemanticColors(
     iconMuted = IconMutedDark,
 )
 
+/** 语义色里的 `primaryInk` 跟着品牌色相走（支出红/收入青绿/图标灰一律不动）。 */
+private fun semanticFor(brand: BrandColors, darkTheme: Boolean): PennedSemanticColors =
+    (if (darkTheme) DarkSemantic else LightSemantic).copy(primaryInk = brand.primaryInk)
+
 /** 当前主题是否深色。读 PennedTheme 的入参而非系统值——截图测试会强制 darkTheme=true。 */
 private val LocalPennedDark = staticCompositionLocalOf { false }
 private val LocalPennedSemantic = staticCompositionLocalOf { LightSemantic }
@@ -106,17 +114,23 @@ private val LocalPennedSemantic = staticCompositionLocalOf { LightSemantic }
 @ReadOnlyComposable
 internal fun isDarkTheme(): Boolean = LocalPennedDark.current
 
+/**
+ * 应用主题：品牌色相（M3-12，[accent]）+ 深浅（[darkTheme]）。
+ * 中性层、语义色、分类颜料盘不随主题变；默认参数 = 青绿 + 跟随系统，与 M3-12 之前完全一致。
+ */
 @Composable
 fun PennedTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    accent: ThemeAccent = ThemeAccent.TEAL,
     content: @Composable () -> Unit,
 ) {
+    val brand = if (darkTheme) PennedBrands.dark(accent) else PennedBrands.light(accent)
     CompositionLocalProvider(
         LocalPennedDark provides darkTheme,
-        LocalPennedSemantic provides if (darkTheme) DarkSemantic else LightSemantic,
+        LocalPennedSemantic provides semanticFor(brand, darkTheme),
     ) {
         MaterialTheme(
-            colorScheme = if (darkTheme) DarkColors else LightColors,
+            colorScheme = if (darkTheme) darkColors(brand) else lightColors(brand),
             typography = PennedTypography,
             shapes = PennedShapes,
             content = content,

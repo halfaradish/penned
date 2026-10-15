@@ -66,7 +66,11 @@ class ContrastTest {
      */
     private val groundVisible = 1.10
 
-    private fun pairs(): List<ContrastPair> {
+    private fun pairs(accent: ThemeAccent): List<ContrastPair> {
+        // 品牌一族（primary/ink/container/日头条底/提示条动作键）随色相走；
+        // 中性层、语义色、颜料盘四套主题共用——所以只有这一族要在每个色相上重算
+        val light = PennedBrands.light(accent)
+        val dark = PennedBrands.dark(accent)
         val out = mutableListOf<ContrastPair>()
         fun add(label: String, fg: Color, bg: Color, need: Double = body) =
             out.add(ContrastPair(label, fg, bg, need))
@@ -78,20 +82,20 @@ class ContrastTest {
         add("onSurfaceVariant / surface", OnSurfaceVariantLight, SurfaceLight)
         add("onSurfaceVariant / background", OnSurfaceVariantLight, BackgroundLight)
         add("onSurfaceVariant / surfaceContainer", OnSurfaceVariantLight, SurfaceContainerLight)
-        add("白字 / primary（主按钮）", OnPrimaryLight, PrimaryLight)
-        add("primaryInk / surface", PrimaryInkLight, SurfaceLight)
-        add("primaryInk / background", PrimaryInkLight, BackgroundLight)
-        add("primaryInk / primaryContainer", PrimaryInkLight, PrimaryContainerLight)
-        add("onPrimaryContainer / primaryContainer", OnPrimaryContainerLight, PrimaryContainerLight)
+        add("白字 / primary（主按钮）", light.onPrimary, light.primary)
+        add("primaryInk / surface", light.primaryInk, SurfaceLight)
+        add("primaryInk / background", light.primaryInk, BackgroundLight)
+        add("primaryInk / primaryContainer", light.primaryInk, light.primaryContainer)
+        add("onPrimaryContainer / primaryContainer", light.onPrimaryContainer, light.primaryContainer)
         add(
             "日头条右侧 85% 收支 / primaryContainer",
-            over(OnPrimaryContainerLight, PrimaryContainerLight, 0.85f),
-            PrimaryContainerLight,
+            over(light.onPrimaryContainer, light.primaryContainer, 0.85f),
+            light.primaryContainer,
         )
         // 日头条：极淡青灰底 + 墨色日期 + 次要色收支 + 深青竖条（RA 轮 D045）
-        add("日头条 onSurface / 底", OnSurfaceLight, DayHeaderLight)
-        add("日头条 onSurfaceVariant / 底", OnSurfaceVariantLight, DayHeaderLight)
-        add("日头条 竖条 primaryInk / 底", PrimaryInkLight, DayHeaderLight)
+        add("日头条 onSurface / 底", OnSurfaceLight, light.dayHeader)
+        add("日头条 onSurfaceVariant / 底", OnSurfaceVariantLight, light.dayHeader)
+        add("日头条 竖条 primaryInk / 底", light.primaryInk, light.dayHeader)
         add("expense / surface", ExpenseLight, SurfaceLight)
         add("expense / background", ExpenseLight, BackgroundLight)
         add("income / surface", IncomeLight, SurfaceLight)
@@ -102,31 +106,31 @@ class ContrastTest {
         add("onError / error（删除块）", OnErrorLight, ErrorLight)
         // 提示条走反向槽位：深底浅字 + inversePrimary 动作键
         add("inverseOnSurface / inverseSurface（提示条）", BackgroundLight, OnSurfaceLight)
-        add("inversePrimary / inverseSurface（撤销键）", InversePrimaryLight, OnSurfaceLight)
+        add("inversePrimary / inverseSurface（撤销键）", light.inversePrimary, OnSurfaceLight)
         // —— 浅色：非文字（≥3:1）——
         add("iconMuted / surface", IconMutedLight, SurfaceLight, nonText)
         add("iconMuted / background", IconMutedLight, BackgroundLight, nonText)
-        add("进度填充 primary / surface", PrimaryLight, SurfaceLight, nonText)
-        add("进度填充 primary / 轨道 surfaceContainerHigh", PrimaryLight, SurfaceContainerHighLight, nonText)
+        add("进度填充 primary / surface", light.primary, SurfaceLight, nonText)
+        add("进度填充 primary / 轨道 surfaceContainerHigh", light.primary, SurfaceContainerHighLight, nonText)
 
         // —— 深色：文字 ——
         add("onSurface / surface（深）", OnSurfaceDark, SurfaceDark)
         add("onSurface / background（深）", OnSurfaceDark, BackgroundDark)
         add("onSurfaceVariant / surface（深）", OnSurfaceVariantDark, SurfaceDark)
         add("onSurfaceVariant / surfaceContainer（深）", OnSurfaceVariantDark, SurfaceContainerDark)
-        add("onPrimary / primary（深）", OnPrimaryDark, PrimaryDark)
-        add("primaryInk / surface（深）", PrimaryInkDark, SurfaceDark)
-        add("primaryInk / background（深）", PrimaryInkDark, BackgroundDark)
-        add("primaryInk / primaryContainer（深）", PrimaryInkDark, PrimaryContainerDark)
-        add("onPrimaryContainer / primaryContainer（深）", OnPrimaryContainerDark, PrimaryContainerDark)
+        add("onPrimary / primary（深）", dark.onPrimary, dark.primary)
+        add("primaryInk / surface（深）", dark.primaryInk, SurfaceDark)
+        add("primaryInk / background（深）", dark.primaryInk, BackgroundDark)
+        add("primaryInk / primaryContainer（深）", dark.primaryInk, dark.primaryContainer)
+        add("onPrimaryContainer / primaryContainer（深）", dark.onPrimaryContainer, dark.primaryContainer)
         add(
             "日头条右侧 85%（深）",
-            over(OnPrimaryContainerDark, PrimaryContainerDark, 0.85f),
-            PrimaryContainerDark,
+            over(dark.onPrimaryContainer, dark.primaryContainer, 0.85f),
+            dark.primaryContainer,
         )
-        add("日头条 onSurface / 底（深）", OnSurfaceDark, DayHeaderDark)
-        add("日头条 onSurfaceVariant / 底（深）", OnSurfaceVariantDark, DayHeaderDark)
-        add("日头条 竖条 primaryInk / 底（深）", PrimaryInkDark, DayHeaderDark)
+        add("日头条 onSurface / 底（深）", OnSurfaceDark, dark.dayHeader)
+        add("日头条 onSurfaceVariant / 底（深）", OnSurfaceVariantDark, dark.dayHeader)
+        add("日头条 竖条 primaryInk / 底（深）", dark.primaryInk, dark.dayHeader)
         add("expense / surface（深）", ExpenseDark, SurfaceDark)
         add("expense / background（深）", ExpenseDark, BackgroundDark)
         add("income / surface（深）", IncomeDark, SurfaceDark)
@@ -135,10 +139,10 @@ class ContrastTest {
         add("onSurface / surfaceContainerHigh（编辑块·深）", OnSurfaceDark, SurfaceContainerHighDark)
         add("onError / error（删除块·深）", OnErrorDark, ErrorDark)
         add("inverseOnSurface / inverseSurface（提示条·深）", SurfaceDark, OnSurfaceDark)
-        add("inversePrimary / inverseSurface（撤销键·深）", InversePrimaryDark, OnSurfaceDark)
+        add("inversePrimary / inverseSurface（撤销键·深）", dark.inversePrimary, OnSurfaceDark)
         // —— 深色：非文字 ——
         add("iconMuted / surface（深）", IconMutedDark, SurfaceDark, nonText)
-        add("进度填充 primary / surface（深）", PrimaryDark, SurfaceDark, nonText)
+        add("进度填充 primary / surface（深）", dark.primary, SurfaceDark, nonText)
 
         // —— 分类颜料 v6（AS 轮）：图标底统一淡灰绿，色相只留给图表细件与宫格小圆点 ——
         // 图标底**不再分槽**：全 App 一个色（`iconHue` 12%/22%），与白卡 1.17:1、跟日头条底 1.12:1
@@ -152,8 +156,8 @@ class ContrastTest {
         add("图标底 淡灰绿 / surface（浅）", iconGroundLight, SurfaceLight, groundVisible)
         add("图标底 淡灰绿 / surface（深）", iconGroundDark, SurfaceDark, groundVisible)
         // 宫格选中态：品牌青绿实心 + 反白（与日头条那根 3dp 竖条、下方选中的分类名同色）
-        add("白字 / primaryInk（宫格选中态·浅）", OnPrimaryLight, PrimaryInkLight)
-        add("深字 surface / primaryInk（宫格选中态·深）", SurfaceDark, PrimaryInkDark)
+        add("白字 / primaryInk（宫格选中态·浅）", light.onPrimary, light.primaryInk)
+        add("深字 surface / primaryInk（宫格选中态·深）", SurfaceDark, dark.primaryInk)
         PennedPigment.hue.forEachIndexed { i, full ->
             val onDark = PennedPigment.hueOnDark[i]
             val markLight = over(full, SurfaceLight, PennedPigment.MARK_ALPHA_LIGHT)
@@ -175,11 +179,15 @@ class ContrastTest {
     }
 
     @Test
-    fun `每一对前景背景都满足 WCAG 对比度下限`() {
-        val failures = pairs().filter { contrast(it.fg, it.bg) < it.need }
-            .joinToString("\n") {
-                "  ${it.label}: %.2f（要 %.1f）".format(contrast(it.fg, it.bg), it.need)
-            }
+    fun `每一对前景背景都满足 WCAG 对比度下限（四套色相 × 浅深）`() {
+        val failures = ThemeAccent.entries.flatMap { accent ->
+            pairs(accent)
+                .filter { contrast(it.fg, it.bg) < it.need }
+                .map {
+                    "  ${accent.label} · ${it.label}: %.2f（要 %.1f）"
+                        .format(contrast(it.fg, it.bg), it.need)
+                }
+        }.joinToString("\n")
         assertTrue("以下配对的对比度不达标：\n$failures", failures.isEmpty())
     }
 
@@ -188,6 +196,24 @@ class ContrastTest {
         (c.green * 255).roundToInt(),
         (c.blue * 255).roundToInt(),
     )
+
+    @Test
+    fun `默认色相（青绿）= Color_kt 的现状值：默认主题观感不漂`() {
+        val teal = PennedBrands.light(ThemeAccent.TEAL)
+        assertEquals(PrimaryLight, teal.primary)
+        assertEquals(PrimaryInkLight, teal.primaryInk)
+        assertEquals(PrimaryContainerLight, teal.primaryContainer)
+        assertEquals(OnPrimaryContainerLight, teal.onPrimaryContainer)
+        assertEquals(DayHeaderLight, teal.dayHeader)
+        assertEquals(InversePrimaryLight, teal.inversePrimary)
+        val tealDark = PennedBrands.dark(ThemeAccent.TEAL)
+        assertEquals(PrimaryDark, tealDark.primary)
+        assertEquals(PrimaryInkDark, tealDark.primaryInk)
+        assertEquals(PrimaryContainerDark, tealDark.primaryContainer)
+        assertEquals(OnPrimaryContainerDark, tealDark.onPrimaryContainer)
+        assertEquals(DayHeaderDark, tealDark.dayHeader)
+        assertEquals(InversePrimaryDark, tealDark.inversePrimary)
+    }
 
     @Test
     fun `tokens match the documented hexes`() {
@@ -249,6 +275,37 @@ class ContrastTest {
             // AS 轮：全 App 统一的图标底（淡灰绿，与 2 号翠槽同值但独立成 token）
             hex(PennedPigment.iconHue) to "#0D8557",
             hex(PennedPigment.iconHueOnDark) to "#7AEBC0",
+            // M3-12 多主题：三套新色相的品牌一族（界面规范 §3·补二十二 的表）
+            hex(PennedBrands.light(ThemeAccent.INDIGO).primary) to "#3B4CA8",
+            hex(PennedBrands.light(ThemeAccent.INDIGO).primaryInk) to "#303E8E",
+            hex(PennedBrands.light(ThemeAccent.INDIGO).primaryContainer) to "#E4E9F7",
+            hex(PennedBrands.light(ThemeAccent.INDIGO).onPrimaryContainer) to "#1B2461",
+            hex(PennedBrands.light(ThemeAccent.INDIGO).dayHeader) to "#EFF1FA",
+            hex(PennedBrands.dark(ThemeAccent.INDIGO).primary) to "#A3B0F0",
+            hex(PennedBrands.dark(ThemeAccent.INDIGO).primaryInk) to "#9FADEF",
+            hex(PennedBrands.dark(ThemeAccent.INDIGO).primaryContainer) to "#2A3160",
+            hex(PennedBrands.dark(ThemeAccent.INDIGO).onPrimaryContainer) to "#C9D0F7",
+            hex(PennedBrands.dark(ThemeAccent.INDIGO).dayHeader) to "#1B1E2A",
+            hex(PennedBrands.light(ThemeAccent.GRAPHITE).primary) to "#4A5560",
+            hex(PennedBrands.light(ThemeAccent.GRAPHITE).primaryInk) to "#3E4A55",
+            hex(PennedBrands.light(ThemeAccent.GRAPHITE).primaryContainer) to "#E8EBEE",
+            hex(PennedBrands.light(ThemeAccent.GRAPHITE).onPrimaryContainer) to "#242C34",
+            hex(PennedBrands.light(ThemeAccent.GRAPHITE).dayHeader) to "#F1F2F4",
+            hex(PennedBrands.dark(ThemeAccent.GRAPHITE).primary) to "#AEB9C5",
+            hex(PennedBrands.dark(ThemeAccent.GRAPHITE).primaryInk) to "#AAB5C1",
+            hex(PennedBrands.dark(ThemeAccent.GRAPHITE).primaryContainer) to "#333A42",
+            hex(PennedBrands.dark(ThemeAccent.GRAPHITE).onPrimaryContainer) to "#D6DCE2",
+            hex(PennedBrands.dark(ThemeAccent.GRAPHITE).dayHeader) to "#1D2023",
+            hex(PennedBrands.light(ThemeAccent.OCHRE).primary) to "#96552A",
+            hex(PennedBrands.light(ThemeAccent.OCHRE).primaryInk) to "#82481F",
+            hex(PennedBrands.light(ThemeAccent.OCHRE).primaryContainer) to "#F9EFE6",
+            hex(PennedBrands.light(ThemeAccent.OCHRE).onPrimaryContainer) to "#472812",
+            hex(PennedBrands.light(ThemeAccent.OCHRE).dayHeader) to "#F6F1E9",
+            hex(PennedBrands.dark(ThemeAccent.OCHRE).primary) to "#E3AC80",
+            hex(PennedBrands.dark(ThemeAccent.OCHRE).primaryInk) to "#E0A87C",
+            hex(PennedBrands.dark(ThemeAccent.OCHRE).primaryContainer) to "#4E3320",
+            hex(PennedBrands.dark(ThemeAccent.OCHRE).onPrimaryContainer) to "#F2D8C0",
+            hex(PennedBrands.dark(ThemeAccent.OCHRE).dayHeader) to "#241F1B",
         )
         val mismatched = documented.filter { (actual, expected) -> actual != expected }
         assertTrue(

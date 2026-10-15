@@ -37,6 +37,20 @@ class SettingsRepository(private val context: Context) {
      */
     val autoUpdateCheck: Flow<Boolean> = context.dataStore.data.map { it[KEY_AUTO_UPDATE_CHECK] ?: true }
 
+    /** 品牌色相（M3-12）：存 `ThemeAccent.name`；没存过/认不出 = 青绿（默认）。 */
+    val themeAccentKey: Flow<String?> = context.dataStore.data.map { it[KEY_THEME_ACCENT] }
+
+    /** 深浅模式（M3-12）：存 `DarkMode.name`；没存过 = 跟随系统。 */
+    val darkModeKey: Flow<String?> = context.dataStore.data.map { it[KEY_DARK_MODE] }
+
+    suspend fun setThemeAccent(accentName: String) {
+        context.dataStore.edit { it[KEY_THEME_ACCENT] = accentName }
+    }
+
+    suspend fun setDarkMode(modeName: String) {
+        context.dataStore.edit { it[KEY_DARK_MODE] = modeName }
+    }
+
     suspend fun setCurrentBook(id: String) {
         context.dataStore.edit { it[KEY_CURRENT_BOOK] = id }
     }
@@ -65,5 +79,7 @@ class SettingsRepository(private val context: Context) {
         private val KEY_LAST_UPDATE_CHECK_AT = longPreferencesKey("update_last_check_at")
         private val KEY_NOTIFIED_UPDATE_VERSION_CODE = intPreferencesKey("update_notified_version_code")
         private val KEY_AUTO_UPDATE_CHECK = booleanPreferencesKey("update_auto_check")
+        private val KEY_THEME_ACCENT = stringPreferencesKey("theme_accent")
+        private val KEY_DARK_MODE = stringPreferencesKey("dark_mode")
     }
 }

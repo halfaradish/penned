@@ -62,6 +62,7 @@ import dev.penned.app.ui.data.DataManagementScreen
 import dev.penned.app.ui.data.DataViewModel
 import dev.penned.app.ui.data.ImportBatchDetailScreen
 import dev.penned.app.ui.data.ImportBatchesScreen
+import dev.penned.app.ui.appearance.AppearanceScreen
 import dev.penned.app.ui.debts.DebtDetailScreen
 import dev.penned.app.ui.debts.DebtEditScreen
 import dev.penned.app.ui.debts.DebtListScreen
@@ -375,7 +376,12 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onOpenPinLock = { navController.navigate("pin") },
                     onOpenAbout = { navController.navigate("about") },
                     onOpenLoan = { navController.navigate("loan") },
+                    onOpenAppearance = { navController.navigate("appearance") },
                 )
+            }
+            // 主题外观（M3-12）：品牌色相 4 套 + 深浅模式，选中即生效
+            composable("appearance") {
+                AppearanceScreen(onBack = { navController.popBackStack() })
             }
             // 分期房贷计算器（M3-11）：只算不落库；「按首期记一笔」把金额/日期/备注带给记一笔预填
             composable("loan") {

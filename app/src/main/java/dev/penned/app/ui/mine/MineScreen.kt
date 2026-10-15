@@ -38,6 +38,8 @@ fun MineScreen(
     onOpenAbout: () -> Unit,
     /** 分期房贷计算器（M3-11）。 */
     onOpenLoan: () -> Unit = {},
+    /** 主题外观（M3-12）。 */
+    onOpenAppearance: () -> Unit = {},
     modifier: Modifier = Modifier,
     versionName: String = dev.penned.app.BuildConfig.VERSION_NAME,
 ) {
@@ -113,6 +115,17 @@ fun MineScreen(
                 subtitle = "把常用筛选条件存下来，下次一键应用",
                 leadingIcon = PennedIcons.Search,
                 onClick = onOpenBillFilters,
+            )
+        }
+
+        Spacer(Modifier.height(PennedSpacing.sm))
+        SectionCard(title = "外观") {
+            // M3-12：品牌色相 4 套 + 深浅模式（只换品牌一族，中性层与语义色不动）
+            PennedListRow(
+                title = "主题外观",
+                subtitle = "品牌色相 4 套 · 跟随系统 / 浅色 / 深色",
+                leadingIcon = PennedIcons.Pen,
+                onClick = onOpenAppearance,
             )
         }
 
