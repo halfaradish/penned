@@ -136,6 +136,9 @@ fun DetailScreen(
     onBack: () -> Unit,
 ) {
     val app = dev.penned.app.ui.LocalApp.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val shareAccent = dev.penned.app.ui.theme.currentThemeAccent()
+    val shareDark = dev.penned.app.ui.theme.isDarkTheme()
     val viewModel: DetailViewModel = viewModel(
         key = txId,
         initializer = { DetailViewModel(app, txId) },
@@ -159,6 +162,21 @@ fun DetailScreen(
         onToggleStats = viewModel::setExcludeStats,
         onToggleBudget = viewModel::setExcludeBudget,
         onBack = onBack,
+        onShare = {
+            val tx = d.tx
+            val isExpense = tx.type == dev.penned.app.domain.TxType.EXPENSE
+            val plan = dev.penned.app.domain.ShareCardLayout.receipt(
+                categoryName = categoryLabel(d).ifEmpty { "未分类" },
+                amountLabel = (if (isExpense) "-" else "+") + dev.penned.app.domain.Money.format(tx.amountCents),
+                dateLabel = dev.penned.app.domain.DebtText.fullDate(
+                    dev.penned.app.domain.AddDate.dayFromMinute(tx.dateEpochMinute),
+                ),
+                note = tx.note,
+                accountName = d.accountName,
+                isExpense = isExpense,
+            )
+            dev.penned.app.ui.share.ShareCardSharing.share(context, plan, "receipt", shareAccent, shareDark)
+        },
     )
 }
 
@@ -172,6 +190,8 @@ fun DetailContent(
     onToggleStats: (Boolean) -> Unit,
     onToggleBudget: (Boolean) -> Unit,
     onBack: () -> Unit,
+    /** M3-16：把这笔画成小票分享（走系统分享面板）。 */
+    onShare: (() -> Unit)? = null,
 ) {
     val d = detail
     Scaffold(
@@ -291,6 +311,14 @@ fun DetailContent(
             }
 
             Spacer(Modifier.height(PennedSpacing.xs))
+            if (onShare != null) {
+                PennedButton(
+                    "分享小票",
+                    onShare,
+                    variant = PennedButtonVariant.Secondary,
+                    leadingIcon = PennedIcons.Transfer,
+                )
+            }
             PennedButton("编辑", onEdit, leadingIcon = PennedIcons.Edit)
             PennedButton("删除", onDelete, variant = PennedButtonVariant.Danger, leadingIcon = PennedIcons.Trash)
         }

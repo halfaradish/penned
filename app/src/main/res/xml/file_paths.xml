@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 更新包落在 cacheDir/updates/（规格 M2 S3/S5），经 FileProvider 交给系统安装器 -->
+<!-- 更新包落在 cacheDir/updates/（规格 M2 S3/S5），经 FileProvider 交给系统安装器；
+     数据小卡片落在 cacheDir/cards/（M3-16），交给系统分享面板 -->
 <paths>
     <cache-path
         name="updates"
         path="updates/" />
+    <!-- 数据小卡片（M3-16）落在 cacheDir/cards/，经同一个 FileProvider 交给系统分享面板 -->
+    <cache-path
+        name="cards"
+        path="cards/" />
 </paths>

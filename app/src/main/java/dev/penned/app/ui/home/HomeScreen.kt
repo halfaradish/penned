@@ -134,6 +134,10 @@ fun HomeScreen(
     var showBookMenu by remember { mutableStateOf(false) }
     // 月卡头「⋯」→ 首页显示设置（M3-13）；抽屉里勾选即生效
     var showDisplaySheet by remember { mutableStateOf(false) }
+    // M3-16：数据小卡片（当前主题 token 渲染 → cacheDir → FileProvider → 系统分享）
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val accent = dev.penned.app.ui.theme.currentThemeAccent()
+    val dark = dev.penned.app.ui.theme.isDarkTheme()
     var showAddBook by remember { mutableStateOf(false) }
     // 左滑动作区：只留一行为开（UI-12）；纯 UI 状态，不进 ViewModel
     var revealedRowId: String? by rememberSaveable { mutableStateOf<String?>(null) }
@@ -249,6 +253,23 @@ fun HomeScreen(
             display = display,
             onToggle = viewModel::setStatItem,
             onDismiss = { showDisplaySheet = false },
+            onShareMonthCard = {
+                val month = rows.orEmpty().let { list ->
+                    HomeGroups.groupByMonth(list, ZoneId.systemDefault())
+                        .firstOrNull { it.yearMonth == java.time.YearMonth.now() }
+                }
+                val plan = dev.penned.app.domain.ShareCardLayout.monthSummary(
+                    monthLabel = HomeGroups.monthLabel(
+                        java.time.YearMonth.now().year,
+                        java.time.YearMonth.now().monthValue,
+                    ),
+                    incomeCents = month?.totals?.incomeCents ?: 0L,
+                    expenseCents = month?.totals?.expenseCents ?: 0L,
+                    budgetTotalCents = budgetSummary?.totalCents,
+                    budgetSpentCents = budgetSummary?.spentCents,
+                )
+                dev.penned.app.ui.share.ShareCardSharing.share(context, plan, "month-summary", accent, dark)
+            },
         )
     }
 
@@ -607,8 +628,20 @@ internal fun HomeDisplaySheet(
     display: HomeDisplaySettings,
     onToggle: (HomeStatItem, Boolean) -> Unit,
     onDismiss: () -> Unit,
+    /** M3-16：把本月数据画成小卡片分享（同一个「⋯」入口，动作放最上面）。 */
+    onShareMonthCard: () -> Unit = {},
 ) {
     PennedSheet(onDismiss = onDismiss, title = "首页显示设置") {
+        PennedListRow(
+            title = "分享本月小卡片",
+            subtitle = "把本月收支画成一张图，走系统分享",
+            leadingIcon = PennedIcons.Transfer,
+            onClick = {
+                onDismiss()
+                onShareMonthCard()
+            },
+        )
+        PennedDivider(startIndent = PennedSpacing.lg)
         HomeStatItem.entries.forEach { item ->
             PennedSwitchRow(
                 title = item.label,

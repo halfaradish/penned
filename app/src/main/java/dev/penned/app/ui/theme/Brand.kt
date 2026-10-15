@@ -160,6 +160,7 @@ object PennedBrands {
      */
     fun preview(accent: ThemeAccent, darkTheme: Boolean): BrandPreview = BrandPreview(
         brand = if (darkTheme) dark(accent) else light(accent),
+        dark = darkTheme,
         surface = if (darkTheme) SurfaceDark else SurfaceLight,
         onSurface = if (darkTheme) OnSurfaceDark else OnSurfaceLight,
         onSurfaceVariant = if (darkTheme) OnSurfaceVariantDark else OnSurfaceVariantLight,
@@ -171,6 +172,8 @@ object PennedBrands {
 @Immutable
 data class BrandPreview(
     val brand: BrandColors,
+    /** 是不是深色档（渲染器要按它取颜料细件色，而 `isDarkTheme()` 只能在 composition 里读）。 */
+    val dark: Boolean = false,
     val surface: Color,
     val onSurface: Color,
     val onSurfaceVariant: Color,

@@ -564,7 +564,41 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
             }
             // 统计设置（M3-14）：模块显示开关 + 顺序，改动即生效
             composable("stats/settings") {
-                StatsSettingsScreen(onBack = { navController.popBackStack() })
+                // M3-16：同一个「⋯」里给「分享当期小卡片」——数据取统计页当前那一页
+                val statsVm: StatsViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+                    initializer = { StatsViewModel(app) },
+                )
+                val state by statsVm.state.collectAsStateWithLifecycle()
+                val context = androidx.compose.ui.platform.LocalContext.current
+                // 主题要在 composition 里读出来（渲染器不在 composition 里）
+                val shareAccent = dev.penned.app.ui.theme.currentThemeAccent()
+                val shareDark = dev.penned.app.ui.theme.isDarkTheme()
+                StatsSettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onSharePeriodCard = {
+                        val page = state.pages[state.view] ?: dev.penned.app.ui.stats.StatsPage()
+                        val type = state.type
+                        val unit = if (type == dev.penned.app.domain.TxType.EXPENSE) "支出" else "收入"
+                        val shown = if (type == dev.penned.app.domain.TxType.EXPENSE) {
+                            page.expenseCategories
+                        } else {
+                            page.incomeCategories
+                        }
+                        val plan = dev.penned.app.domain.ShareCardLayout.categoryShare(
+                            periodLabel = page.window.label,
+                            unit = unit,
+                            totalCents = if (type == dev.penned.app.domain.TxType.EXPENSE) {
+                                page.totals.expenseCents
+                            } else {
+                                page.totals.incomeCents
+                            },
+                            categories = shown,
+                        )
+                        dev.penned.app.ui.share.ShareCardSharing.share(
+                            context, plan, "period-share", shareAccent, shareDark,
+                        )
+                    },
+                )
             }
             // 分类详细页：统计页「支出/收入数据」行点进来，可逐级下钻，窗口跟着参数走
             composable(

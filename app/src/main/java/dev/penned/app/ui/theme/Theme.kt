@@ -108,11 +108,17 @@ private fun semanticFor(brand: BrandColors, darkTheme: Boolean): PennedSemanticC
 
 /** 当前主题是否深色。读 PennedTheme 的入参而非系统值——截图测试会强制 darkTheme=true。 */
 private val LocalPennedDark = staticCompositionLocalOf { false }
+private val LocalPennedAccent = staticCompositionLocalOf { ThemeAccent.TEAL }
 private val LocalPennedSemantic = staticCompositionLocalOf { LightSemantic }
 
 @Composable
 @ReadOnlyComposable
 internal fun isDarkTheme(): Boolean = LocalPennedDark.current
+
+/** 当前品牌色相（M3-16 的小卡片要按它取色；渲染器不在 composition 里，所以由调用方读出来传进去）。 */
+@Composable
+@ReadOnlyComposable
+internal fun currentThemeAccent(): ThemeAccent = LocalPennedAccent.current
 
 /**
  * 应用主题：品牌色相（M3-12，[accent]）+ 深浅（[darkTheme]）。
@@ -127,6 +133,7 @@ fun PennedTheme(
     val brand = if (darkTheme) PennedBrands.dark(accent) else PennedBrands.light(accent)
     CompositionLocalProvider(
         LocalPennedDark provides darkTheme,
+        LocalPennedAccent provides accent,
         LocalPennedSemantic provides semanticFor(brand, darkTheme),
     ) {
         MaterialTheme(

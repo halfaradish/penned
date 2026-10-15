@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -39,6 +41,7 @@ import dev.penned.app.ui.components.PennedDivider
 import dev.penned.app.ui.components.PennedTopBar
 import dev.penned.app.ui.components.SectionCard
 import dev.penned.app.ui.icons.PennedIcons
+import dev.penned.app.ui.components.PennedListRow
 import dev.penned.app.ui.theme.PennedDimens
 import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.PennedTextStyles
@@ -74,7 +77,7 @@ class StatsSettingsViewModel(private val app: PennedApplication) : ViewModel() {
 }
 
 @Composable
-fun StatsSettingsScreen(onBack: () -> Unit) {
+fun StatsSettingsScreen(onBack: () -> Unit, onSharePeriodCard: (() -> Unit)? = null) {
     val app = LocalApp.current
     val viewModel: StatsSettingsViewModel = viewModel(initializer = { StatsSettingsViewModel(app) })
     val layout by viewModel.layout.collectAsStateWithLifecycle()
@@ -84,6 +87,7 @@ fun StatsSettingsScreen(onBack: () -> Unit) {
         onMoveUp = viewModel::moveUp,
         onMoveDown = viewModel::moveDown,
         onBack = onBack,
+        onSharePeriodCard = onSharePeriodCard,
     )
 }
 
@@ -95,6 +99,8 @@ fun StatsSettingsContent(
     onMoveUp: (StatsModule) -> Unit,
     onMoveDown: (StatsModule) -> Unit,
     onBack: () -> Unit,
+    /** M3-16：把当期占比画成小卡片分享（同一个「⋯」入口，动作放最上面）。 */
+    onSharePeriodCard: (() -> Unit)? = null,
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -107,6 +113,17 @@ fun StatsSettingsContent(
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = PennedSpacing.xxl),
         ) {
+            if (onSharePeriodCard != null) {
+                SectionCard(title = "分享") {
+                    PennedListRow(
+                        title = "分享当期小卡片",
+                        subtitle = "把当期占比与 Top 分类画成一张图",
+                        leadingIcon = PennedIcons.Transfer,
+                        onClick = onSharePeriodCard,
+                    )
+                }
+                Spacer(Modifier.height(PennedSpacing.sm))
+            }
             SectionCard(title = "模块") {
                 layout.order.forEachIndexed { index, module ->
                     if (index > 0) PennedDivider(startIndent = PennedSpacing.lg)
