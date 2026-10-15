@@ -442,6 +442,35 @@ class DarkThemeScreensTest {
         capture("loan")
     }
 
+    /** 日历（M3-17）：网格的今天圈 / 选中底 / 支收小字在深色下的着色。 */
+    @Test
+    fun darkCalendar() {
+        val month = java.time.YearMonth.of(2026, 10)
+        val day8 = java.time.LocalDate.of(2026, 10, 8).toEpochDay()
+        dark {
+            dev.penned.app.ui.calendar.CalendarContent(
+                state = dev.penned.app.ui.calendar.CalendarViewModel.UiState(
+                    month = month,
+                    selectedDay = day8,
+                    dayTotals = mapOf(
+                        day8 to dev.penned.app.ui.home.HomeGroups.DayGroup(day8, 0L, 600L, emptyList()),
+                    ),
+                    selectedItems = listOf(
+                        dev.penned.app.data.db.dao.TxWithCategory(
+                            id = "t1", type = dev.penned.app.domain.TxType.EXPENSE, amountCents = 600L,
+                            accountId = null, categoryId = null, dateEpochMinute = 30_000_000L, note = "饮料",
+                            categoryName = "食品餐饮", categoryParentName = null, categoryIconKey = null,
+                            targetAccountName = null, excludeFromStats = false, refundCents = 0, discountCents = 0,
+                        ),
+                    ),
+                ),
+                today = java.time.LocalDate.of(2026, 10, 15),
+            )
+        }
+        composeRule.onNodeWithText("2026年10月").assertIsDisplayed()
+        capture("calendar")
+    }
+
     /** 愿望清单（M3-15）：进度条 + 已达成 chip + 跟随账户副标题在深色下的着色。 */
     @Test
     fun darkWishlist() {

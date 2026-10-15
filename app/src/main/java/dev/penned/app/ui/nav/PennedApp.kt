@@ -54,6 +54,7 @@ import dev.penned.app.ui.assets.AccountEditScreen
 import dev.penned.app.ui.assets.AccountGroup
 import dev.penned.app.ui.assets.AssetsScreen
 import dev.penned.app.ui.books.BooksScreen
+import dev.penned.app.ui.calendar.CalendarScreen
 import dev.penned.app.ui.budgets.BudgetScreen
 import dev.penned.app.ui.budgets.BudgetsViewModel
 import dev.penned.app.ui.categories.CategoriesScreen
@@ -451,7 +452,10 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable("calendar") { StubScreen("日历", "日历视图还没做，先在首页按日回看流水") }
+            // 日历视图（M3-17）：月网格 + 每日支/收 + 点选看当日流水 + 「今」
+            composable("calendar") {
+                CalendarScreen(onOpenDetail = { id -> navController.navigate("detail/$id") })
+            }
             composable("assets") {
                 AssetsScreen(
                     onAddAccount = { group, preset ->
