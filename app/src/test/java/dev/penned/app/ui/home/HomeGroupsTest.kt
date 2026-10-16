@@ -1,8 +1,10 @@
 package dev.penned.app.ui.home
 
 import dev.penned.app.data.db.dao.TxWithCategory
+import dev.penned.app.domain.CalendarMath
 import dev.penned.app.domain.TxType
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -210,5 +212,49 @@ class HomeGroupsTest {
         // 跨月：本月变成 11 月后，10 月回到"默认折叠"
         assertEquals(false, HomeGroups.monthExpanded(october, YearMonth.of(2026, 11), emptySet()))
         assertEquals(true, HomeGroups.monthExpanded(YearMonth.of(2026, 11), YearMonth.of(2026, 11), emptySet()))
+    }
+
+    /**
+     * 日历的月小字总结：**只算当月**——网格带出的上/下月日子（9/30、11/1）的流水不许算进来。
+     * 日合计仍走 groupByDay（转账不算、「不计入收支」不算），本函数只做归属过滤 + 相加。
+     */
+    @Test
+    fun `month totals only counts days inside the month`() {
+        val rows = listOf(
+            row("a", minute("2026-09-30T20:00"), TxType.EXPENSE, 9999),   // 上月最后一天（网格会带出）
+            row("b", minute("2026-11-01T09:00"), TxType.INCOME, 8888),    // 下月第一天（网格会带出）
+            row("c", minute("2026-10-01T09:00"), TxType.EXPENSE, 600),
+            row("d", minute("2026-10-04T09:00"), TxType.INCOME, 300_000),
+            row("e", minute("2026-10-04T10:00"), TxType.EXPENSE, 1600),
+            row("f", minute("2026-10-31T23:59"), TxType.EXPENSE, 400),
+            row("g", minute("2026-10-20T12:00"), TxType.EXPENSE, 700).copy(excludeFromStats = true),
+            row("h", minute("2026-10-21T12:00"), TxType.TRANSFER, 50_000),
+        )
+        val october = YearMonth.of(2026, 10)
+        val totals = HomeGroups.monthTotalsOf(HomeGroups.groupByDay(rows, zone), october)
+        assertEquals(300_000L, totals.incomeCents)   // 11/1 的 8,888 不算
+        assertEquals(600L + 1600L + 400L, totals.expenseCents)  // 9/30 的 9,999、D020 的 700、转账都不算
+        assertEquals(297_400L, HomeGroups.balanceOf(totals))
+
+        // 边界：网格窗口确实把邻月那两天包进来了（否则上面的断言等于没测到邻月）
+        val gridDays = CalendarMath.gridDays(october).toSet()
+        assertTrue(gridDays.contains(LocalDate.of(2026, 9, 30).toEpochDay()))
+        assertTrue(gridDays.contains(LocalDate.of(2026, 11, 1).toEpochDay()))
+    }
+
+    /** 空月：三项都是 0（日历仍渲染 0.00 三项，行高不跳）。 */
+    @Test
+    fun `month totals of an empty month are zero`() {
+        val totals = HomeGroups.monthTotalsOf(emptyList(), YearMonth.of(2026, 10))
+        assertEquals(0L, totals.incomeCents)
+        assertEquals(0L, totals.expenseCents)
+        assertEquals(0L, HomeGroups.balanceOf(totals))
+    }
+
+    /** 结余负数照带减号：口径就是"收 − 支"，不为颜色改数字。 */
+    @Test
+    fun `balance keeps the minus sign when expense exceeds income`() {
+        val totals = HomeGroups.MonthTotals(incomeCents = 100L, expenseCents = 1600L)
+        assertEquals(-1500L, HomeGroups.balanceOf(totals))
     }
 }

@@ -34,3 +34,6 @@ docs/local
 
 # agent 会话草稿（计划文件等，别进仓库）
 .zcode/
+# 测试 JVM 崩溃日志（内存吃紧时 Gradle/Kotlin 会吐在 app/ 下，别进仓库）
+hs_err_pid*.log
+replay_pid*.log

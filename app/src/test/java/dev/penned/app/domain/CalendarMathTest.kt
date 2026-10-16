@@ -95,4 +95,66 @@ class CalendarMathTest {
         val gFromDate = java.time.Instant.ofEpochSecond(gFrom * 60).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
         assertEquals(LocalDate.of(2026, 9, 28), gFromDate)
     }
+
+    /** 翻月时选中日跟着走：同号；该月没有这天就夹到月末（含闰年 2 月）。 */
+    @Test
+    fun `翻月跟随选中日：同号、月末夹取、闰年 2 月`() {
+        fun day(y: Int, m: Int, d: Int) = LocalDate.of(y, m, d).toEpochDay()
+        fun expect(y: Int, m: Int, d: Int) = LocalDate.of(y, m, d).toEpochDay()
+
+        val cases = listOf(
+            // 选中日、目标月、期望
+            Triple(day(2026, 10, 8), YearMonth.of(2026, 11), expect(2026, 11, 8)),     // 普通跨月
+            Triple(day(2026, 10, 31), YearMonth.of(2026, 11), expect(2026, 11, 30)),   // 31 天 → 30 天
+            Triple(day(2026, 1, 31), YearMonth.of(2026, 2), expect(2026, 2, 28)),      // 平年 2 月
+            Triple(day(2028, 1, 31), YearMonth.of(2028, 2), expect(2028, 2, 29)),      // 闰年 2 月
+            Triple(day(2026, 3, 31), YearMonth.of(2026, 4), expect(2026, 4, 30)),      // 30 天的月
+            Triple(day(2026, 12, 31), YearMonth.of(2027, 1), expect(2027, 1, 31)),     // 跨年
+            Triple(day(2026, 10, 8), YearMonth.of(2026, 10), expect(2026, 10, 8)),     // 同月不动
+        )
+        cases.forEach { (selected, target, want) ->
+            assertEquals("$selected → $target", want, CalendarMath.followDay(selected, target))
+        }
+
+        // 点到网格里上/下月的日子：目标月就是那天所在的月，跟随不该改写它
+        assertEquals(
+            day(2026, 11, 1),
+            CalendarMath.followDay(day(2026, 11, 1), YearMonth.of(2026, 11)),
+        )
+        assertEquals(
+            day(2026, 9, 28),
+            CalendarMath.followDay(day(2026, 9, 28), YearMonth.of(2026, 9)),
+        )
+        // 夹取之后再往回翻：号数已经变成被夹过的那天（2/28 → 3/28，不是 3/31）
+        val feb28 = CalendarMath.followDay(day(2026, 1, 31), YearMonth.of(2026, 2))
+        assertEquals(expect(2026, 3, 28), CalendarMath.followDay(feb28, YearMonth.of(2026, 3)))
+    }
+
+    /** 收起态的周视图：周一开头的七天，跨月/跨年照常排下去。 */
+    @Test
+    fun `周视图七天：周一起、跨月跨年不断`() {
+        fun day(y: Int, m: Int, d: Int) = LocalDate.of(y, m, d).toEpochDay()
+        // 2026-10-15 是周四 → 本周 = 10/12（周一）…10/18（周日）
+        val week = CalendarMath.weekDays(day(2026, 10, 15))
+        assertEquals(7, week.size)
+        assertEquals(day(2026, 10, 12), week.first())
+        assertEquals(day(2026, 10, 18), week.last())
+        // 依次是 周一…周日（与 WEEKDAY_LABELS 同口径）
+        week.forEachIndexed { index, epochDay ->
+            assertEquals(index, LocalDate.ofEpochDay(epochDay).dayOfWeek.value - 1)
+        }
+        // 周一那天自己就是首格
+        assertEquals(day(2026, 10, 12), CalendarMath.weekStart(day(2026, 10, 12)))
+        // 周日那天仍属于本周（最后一个）
+        assertEquals(day(2026, 10, 12), CalendarMath.weekStart(day(2026, 10, 18)))
+        // 跨月：10/31（周六）所在周 = 10/26…11/1
+        val monthEnd = CalendarMath.weekDays(day(2026, 10, 31))
+        assertEquals(day(2026, 10, 26), monthEnd.first())
+        assertEquals(day(2026, 11, 1), monthEnd.last())
+        // 跨年：2027-01-01（周五）所在周 = 2026-12-28…2027-01-03
+        val newYear = CalendarMath.weekDays(day(2027, 1, 1))
+        assertEquals(day(2026, 12, 28), newYear.first())
+        assertEquals(day(2027, 1, 3), newYear.last())
+        assertEquals(7, newYear.toSet().size)
+    }
 }

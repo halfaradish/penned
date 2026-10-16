@@ -2,6 +2,7 @@ package dev.penned.app.ui.home
 
 import dev.penned.app.data.db.dao.TxWithCategory
 import dev.penned.app.domain.AddDate
+import dev.penned.app.domain.CalendarMath
 import dev.penned.app.domain.TxType
 import java.time.Instant
 import java.time.LocalDate
@@ -69,6 +70,24 @@ object HomeGroups {
      */
     fun emptyMonth(yearMonth: YearMonth): MonthGroup =
         MonthGroup(yearMonth, days = emptyList(), totals = MonthTotals(0L, 0L))
+
+    /**
+     * 某月的收/支合计：**只算落在该月的天**（日历的月小字总结用它）。
+     *
+     * 日历网格会带出上/下月的日子（`CalendarMath.gridWindow`），直接对网格里的小计求和会把邻月
+     * 的流水算进本月——所以这里按 [CalendarMath.inMonth] 过滤。日合计仍是 [groupByDay] 那一份
+     * （转账不算、`excludeFromStats` 不算），本函数只做归属过滤 + 相加，不新开一套求和口径。
+     */
+    fun monthTotalsOf(days: Collection<DayGroup>, month: YearMonth): MonthTotals {
+        val inMonth = days.filter { CalendarMath.inMonth(it.epochDay, month) }
+        return MonthTotals(
+            incomeCents = inMonth.sumOf { it.incomeCents },
+            expenseCents = inMonth.sumOf { it.expenseCents },
+        )
+    }
+
+    /** 结余 = 收 − 支（**不为负而改口径**：负数照带减号，颜色由界面层定）。 */
+    fun balanceOf(totals: MonthTotals): Long = totals.incomeCents - totals.expenseCents
 
     /**
      * 月卡是否展开：**本月默认展开、其余默认折叠**，点标题行一次翻转。
