@@ -7,6 +7,21 @@ internal object CalendarCollapse {
 
     /** 累计上滑这么多才收起（与悬浮记账入口同档：太小会被惯性抖动反复触发）。 */
     val collapseAfter = 24.dp
+
+    /** 收起态横滑多少算一次"切月"（过 touchSlop 再走一段，别一蹭就翻）。 */
+    val shiftAfter = 48.dp
+}
+
+/**
+ * 收起态的横滑方向（纯函数，表驱动）：**与展开态 pager 同一套语义**——往右拉 = 看更早的月、
+ * 往左拉 = 看更新的月（未来月由 ViewModel 夹住）。收起态没有 pager 在树上，所以横滑由这里判定。
+ *
+ * @return -1 = 上一月、+1 = 下一月、null = 没到阈值（不算一次切月）
+ */
+internal fun shiftDirection(totalX: Float, thresholdPx: Float): Long? = when {
+    totalX >= thresholdPx -> -1L
+    totalX <= -thresholdPx -> 1L
+    else -> null
 }
 
 /**

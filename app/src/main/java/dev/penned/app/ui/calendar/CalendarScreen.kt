@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -265,6 +266,7 @@ fun CalendarContent(
     val animations = rememberAnimationsEnabled()
     val density = LocalDensity.current
     val collapseAfterPx = with(density) { CalendarCollapse.collapseAfter.toPx() }
+    val shiftAfterPx = with(density) { CalendarCollapse.shiftAfter.toPx() }
     val gate = remember(collapseAfterPx) { CalendarCollapseGate(collapseAfterPx) }
 
     // 横滑切月：页序 = 新→旧（第 0 页恒是本月），layout 反过来 → "往右拉 = 看更早的月"，
@@ -300,6 +302,23 @@ fun CalendarContent(
             change.consume()
             gate.onScroll(dragAmount, atTop = !listState.canScrollBackward)?.let { collapsed = !it }
         }
+    }
+
+    // 收起态没有 pager 在树上：横滑照样切月（与展开态同一套语义，周条跟着换成含选中日的那一周）
+    val weekSwipe = Modifier.pointerInput(month, shiftAfterPx) {
+        var totalX = 0f
+        detectHorizontalDragGestures(
+            onDragStart = { totalX = 0f },
+            onHorizontalDrag = { change, dragAmount ->
+                change.consume()
+                totalX += dragAmount
+            },
+            onDragEnd = {
+                shiftDirection(totalX, shiftAfterPx)?.let { delta ->
+                    onSelectMonth(CalendarMath.shiftMonth(month, delta))
+                }
+            },
+        )
     }
 
     val canGoNewer = state.months.firstOrNull() != month
@@ -411,7 +430,7 @@ fun CalendarContent(
                     // 收起态：选中日所在的那一周（周一开头），日子沿用同一枚格子
                     val weekHeat = remember(heatDays, month) { heatFor(heatDays, month) }
                     Row(
-                        Modifier.fillMaxWidth().testTag(CALENDAR_WEEK_STRIP_TAG),
+                        Modifier.fillMaxWidth().testTag(CALENDAR_WEEK_STRIP_TAG).then(weekSwipe),
                         verticalAlignment = Alignment.Top,
                     ) {
                         CalendarMath.weekDays(state.selectedDay).forEach { epochDay ->

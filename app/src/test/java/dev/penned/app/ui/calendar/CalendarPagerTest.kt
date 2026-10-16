@@ -220,6 +220,25 @@ class CalendarPagerTest {
         composeRule.onNodeWithTag(CALENDAR_PAGER_TAG).assertExists()
     }
 
+    /** 收起态横滑照样**切月**（不是按周翻页）：周条跟着换成含选中日的那一周。 */
+    @Test
+    fun swipeOnCollapsedWeekStripChangesMonth() {
+        host()
+        composeRule.onNodeWithContentDescription("收起日历").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag(CALENDAR_WEEK_STRIP_TAG).assertExists()
+        // 往右拉 = 上一月
+        composeRule.onNodeWithTag(CALENDAR_WEEK_STRIP_TAG).performTouchInput { swipeRight() }
+        composeRule.waitUntil(5_000) { countOf("2026年9月") >= 1 }
+        composeRule.onNodeWithText("2026年9月").assertIsDisplayed()
+        assertTrue("收起态没被弹开", countOfTag(CALENDAR_WEEK_STRIP_TAG) >= 1)
+        // 往左拉 = 回本月（"未来月不给"由 ViewModel 的 selectMonth 夹住——CalendarViewModelTest.上下界 覆盖；
+        //  这里的 host 是个笨 fixture，原样应用回调，不重复实现夹取）
+        composeRule.onNodeWithTag(CALENDAR_WEEK_STRIP_TAG).performTouchInput { swipeLeft() }
+        composeRule.waitUntil(5_000) { countOf("2026年10月") >= 1 }
+        composeRule.onNodeWithText("2026年10月").assertIsDisplayed()
+    }
+
     /** 可点入口也能收起/展开（手势之外的第二条路）。 */
     @Test
     fun toggleButtonCollapsesAndExpands() {

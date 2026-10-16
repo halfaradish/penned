@@ -39,6 +39,20 @@ class CalendarCollapseTest {
     }
 
     @Test
+    fun `收起态横滑方向：过阈值才切月，方向与展开态 pager 一致`() {
+        val threshold = 120f
+        // 往右拉 = 看更早的月（-1）；往左拉 = 看更新的月（+1，未来月由 ViewModel 夹住）
+        assertEquals(-1L, shiftDirection(threshold, threshold))
+        assertEquals(-1L, shiftDirection(threshold + 200f, threshold))
+        assertEquals(1L, shiftDirection(-threshold, threshold))
+        assertEquals(1L, shiftDirection(-400f, threshold))
+        // 没到阈值（一蹭）不算一次切月
+        assertNull(shiftDirection(0f, threshold))
+        assertNull(shiftDirection(threshold - 0.5f, threshold))
+        assertNull(shiftDirection(-threshold + 0.5f, threshold))
+    }
+
+    @Test
     fun `零位移与阈值边界`() {
         val gate = CalendarCollapseGate(threshold)
         assertNull(gate.onScroll(0f, atTop = false))
