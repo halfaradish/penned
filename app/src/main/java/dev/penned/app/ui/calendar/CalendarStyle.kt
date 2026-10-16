@@ -1,5 +1,6 @@
 package dev.penned.app.ui.calendar
 
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
@@ -21,6 +22,17 @@ internal object CalendarStyle {
 
     /** 格子之间的细缝（每格四周各 2dp，7 列摊在屏边距内）。 */
     val cellGap = 2.dp
+
+    /**
+     * 一行格子的实际高度：格子外宽 → 去掉四周细缝 → 按高宽比算内容高度 → 加回细缝。
+     *
+     * 收起/展开的高度动画与 pager 的容器高度都要这个数，而它是"格子里写了什么"的推论——
+     * 所以公式只写在这里一处（改格子几何时两边一起对）。
+     */
+    fun rowHeight(cellOuterWidth: Dp): Dp {
+        val inner = cellOuterWidth - cellGap * 2
+        return inner / cellAspect + cellGap * 2
+    }
 
     /**
      * 非本月（网格带出的上/下月日子、周条里邻月的日子）**统一变淡的因子**：

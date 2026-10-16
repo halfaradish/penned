@@ -46,7 +46,7 @@ private val CellHeight = 36.dp
  * 月统计的时间切换条（AK 轮，替代原来的「‹ 2026年10月 ›」箭头行）：
  * 左边一列常驻年份，右边是可横滑的月份格（新→旧，最前是本月）。
  * 年份列跟着**条上最左可见的月份**变——滑到去年，左边那句就从 2026 变 2025；
- * 点它开快速定位弹窗（[YearMonthPickerDialog]）。
+ * 点它开快速定位弹窗（`ui/components/YearMonthPickerDialog` 的共用滚轮）。
  */
 @Composable
 fun MonthStrip(

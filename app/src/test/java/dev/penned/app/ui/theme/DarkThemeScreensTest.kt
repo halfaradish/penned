@@ -8,6 +8,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
@@ -478,6 +480,41 @@ class DarkThemeScreensTest {
         composeRule.onNodeWithText("支 1,206.00").assertIsDisplayed()
         composeRule.onNodeWithText("余 1,794.00").assertIsDisplayed()
         capture("calendar")
+    }
+
+    /** 日历收起态的周视图（优化轮）：上滑收起后的一行，深色下的热力/今天圈/选中描边。 */
+    @Test
+    fun darkCalendarWeekStrip() {
+        val month = java.time.YearMonth.of(2026, 10)
+        val day8 = java.time.LocalDate.of(2026, 10, 8).toEpochDay()
+        val day4 = java.time.LocalDate.of(2026, 10, 4).toEpochDay()
+        dark {
+            dev.penned.app.ui.calendar.CalendarContent(
+                state = dev.penned.app.ui.calendar.CalendarViewModel.UiState(
+                    month = month,
+                    selectedDay = day8,
+                    dayTotals = mapOf(
+                        day8 to dev.penned.app.ui.home.HomeGroups.DayGroup(day8, 0L, 600L, emptyList()),
+                        day4 to dev.penned.app.ui.home.HomeGroups.DayGroup(day4, 0L, 120_000L, emptyList()),
+                    ),
+                    monthTotals = HomeGroups.MonthTotals(incomeCents = 0L, expenseCents = 120_600L),
+                    months = dev.penned.app.domain.CalendarPages.months(null, month),
+                    selectedItems = listOf(
+                        dev.penned.app.data.db.dao.TxWithCategory(
+                            id = "t1", type = dev.penned.app.domain.TxType.EXPENSE, amountCents = 600L,
+                            accountId = null, categoryId = null, dateEpochMinute = 30_000_000L, note = "饮料",
+                            categoryName = "食品餐饮", categoryParentName = null, categoryIconKey = null,
+                            targetAccountName = null, excludeFromStats = false, refundCents = 0, discountCents = 0,
+                        ),
+                    ),
+                ),
+                today = java.time.LocalDate.of(2026, 10, 15),
+            )
+        }
+        composeRule.onNodeWithContentDescription("收起日历").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag(dev.penned.app.ui.calendar.CALENDAR_WEEK_STRIP_TAG).assertExists()
+        capture("dark_calendar_week")
     }
 
     /** 愿望清单（M3-15）：进度条 + 已达成 chip + 跟随账户副标题在深色下的着色。 */

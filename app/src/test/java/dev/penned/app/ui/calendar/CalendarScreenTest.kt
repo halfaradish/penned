@@ -2,6 +2,8 @@ package dev.penned.app.ui.calendar
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -16,6 +18,7 @@ import dev.penned.app.data.db.dao.TxWithCategory
 import dev.penned.app.data.db.entity.BookEntity
 import dev.penned.app.data.db.entity.TransactionEntity
 import dev.penned.app.domain.CalendarMath
+import dev.penned.app.domain.CalendarPages
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.LocalApp
 import dev.penned.app.ui.home.HomeGroups
@@ -76,6 +79,7 @@ class CalendarScreenTest {
             HomeGroups.groupByDay(items).any { g -> g.epochDay == selected && g.items.contains(it) }
         },
         monthTotals = HomeGroups.monthTotalsOf(HomeGroups.groupByDay(items), month),
+        months = CalendarPages.months(earliest = null, today = month),
     )
 
     /** 月网格：标题、星期表头、当日小计（支/收）、月小字总结、选中那天的流水。 */
@@ -138,7 +142,10 @@ class CalendarScreenTest {
         composeRule.onNodeWithText("10月20日 周二 没有记录").assertIsDisplayed()
     }
 
-    /** 「今」回到本月 + 选中今天；翻月按钮换月（标题跟着变）。 */
+    /**
+     * 「今」回到本月 + 选中今天；翻月按钮换月（标题跟着变）。
+     * 优化轮起**不给未来月**：本月时「下个月」是禁用的（那里一定是空网格）。
+     */
     @Test
     fun todayAndMonthShift() {
         val monthState = androidx.compose.runtime.mutableStateOf(month)
@@ -146,7 +153,7 @@ class CalendarScreenTest {
         composeRule.setContent {
             PennedTheme {
                 CalendarContent(
-                    state = CalendarViewModel.UiState(month = monthState.value, selectedDay = selected.value),
+                    state = state(selected.value, emptyList()).copy(month = monthState.value),
                     onShiftMonth = { delta -> monthState.value = CalendarMath.shiftMonth(monthState.value, delta) },
                     onToday = {
                         monthState.value = YearMonth.from(today)
@@ -157,13 +164,19 @@ class CalendarScreenTest {
             }
         }
         composeRule.onNodeWithText("2026年10月").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("下个月").performClick()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithText("2026年11月").assertIsDisplayed()
+        // 本月（= 条的头）：未来月不给 →「下个月」不可点
+        composeRule.onNodeWithContentDescription("下个月").assertIsNotEnabled()
+        // 上个月能翻，翻完「下个月」就活了（回到本月）
         composeRule.onNodeWithContentDescription("上个月").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("2026年9月").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("下个月").assertIsEnabled()
+        composeRule.onNodeWithContentDescription("下个月").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithText("2026年10月").assertIsDisplayed()
         // 「今」：本月 + 今天（今天那格带圈，标题是本月）
+        composeRule.onNodeWithContentDescription("上个月").performClick()
+        composeRule.waitForIdle()
         composeRule.onNodeWithText("今").performClick()
         composeRule.waitForIdle()
         assertEquals(today.toEpochDay(), selected.value)

@@ -1,4 +1,4 @@
-package dev.penned.app.ui.stats
+package dev.penned.app.ui.components
 
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
@@ -15,6 +15,8 @@ import dev.penned.app.domain.StatsPeriod
 import dev.penned.app.domain.StatsPeriods
 import dev.penned.app.domain.StatsStrip
 import dev.penned.app.domain.StatsView
+import dev.penned.app.ui.stats.StatsContent
+import dev.penned.app.ui.stats.StatsPage
 import dev.penned.app.ui.theme.PennedTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

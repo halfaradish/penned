@@ -1,4 +1,4 @@
-package dev.penned.app.ui.stats
+package dev.penned.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -32,7 +33,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.penned.app.domain.StatsStrip
-import dev.penned.app.ui.components.PennedDialog
 import dev.penned.app.ui.theme.PennedSpacing
 import java.time.YearMonth
 import kotlin.math.abs
@@ -45,8 +45,13 @@ private val WheelItemHeight = 40.dp
 private const val WHEEL_ROWS = 5
 
 /**
- * 快速定位弹窗（AK 轮）：自绘「年 | 月」双列滚轮，两列都能滚、居中项放大加墨色，
- * 底部「取消 / 确定」——确定前不改统计期，取消就原样退回。
+ * 「年 | 月」双列滚轮弹窗（AK 轮）：处于 `ui/components/` 的共用件——统计页的快速定位
+ * （点切换条左边的年份）与日历的「点月份标题跳年月」用的是同一个（别各写一份滚轮）。
+ *
+ * 两列都能滚、居中项放大加墨色，底部「取消 / 确定」——确定前不改期，取消就原样退回。
+ * 年月列由调用方给（统计页与日历都走 `StatsStrip.pickerMonths` / `years`，同一套口径：
+ * "今年只到本月"）；[monthsForYear] 让调用方按"自己那边真能到的范围"再收窄一层
+ * （日历只列"能翻到的月"，免得选完被夹回来）。
  *
  * [years] 与切换条同序（新→旧）；滚轮里翻成"自上而下递增"（照参考图，2023 在上、2027 在下），
  * 月份列同理 1…12 自上而下。
@@ -58,12 +63,15 @@ fun YearMonthPickerDialog(
     initial: YearMonth,
     onDismiss: () -> Unit,
     onConfirm: (YearMonth) -> Unit,
+    monthsForYear: (Int) -> List<Int> = { StatsStrip.pickerMonths(it, today) },
 ) {
     var year by remember { mutableIntStateOf(initial.year) }
     var month by remember { mutableIntStateOf(initial.monthValue) }
-    val months = StatsStrip.pickerMonths(year, today)
-    // 滚回今年时月份列变短（只到本月）：把选中的月夹回可用范围
-    LaunchedEffect(year) { month = StatsStrip.clampMonth(month, year, today) }
+    val months = monthsForYear(year)
+    // 换年时月份列会变（今年只到本月、日历还要砍掉早于最早流水的月）：把选中的月夹回可用范围
+    LaunchedEffect(year, months) {
+        if (months.isNotEmpty()) month = month.coerceIn(months.first(), months.last())
+    }
 
     PennedDialog(
         onDismiss = onDismiss,
@@ -148,13 +156,21 @@ private fun WheelColumn(
     val centered by remember {
         derivedStateOf { centeredIndex(state) }
     }
+    // 首帧补一次**显式落位**（snap）：`initialFirstVisibleItemIndex` 在"窗口刚建/树很重"时可能还没量好就用上了，
+    // 滚轮会停在顶部、并把第一格当成"中间那格"报出去（优化轮在日历里撞到过：点标题开弹窗，确定却跳到 2 月）。
+    // 落位完成后才允许上报居中项（见下面的 [placedOnce]）。
+    var placedOnce by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (selectedIndex >= 0) state.scrollToItem(selectedIndex)
+        placedOnce = true
+    }
     // 居中即选中：滚轮停稳后报给外面（首帧的居中项就是传进来的选中项，不会自己跳）
-    LaunchedEffect(centered, items) {
-        if (items.isNotEmpty()) onSelectIndex(centered)
+    LaunchedEffect(centered, items, placedOnce) {
+        if (placedOnce && items.isNotEmpty()) onSelectIndex(centered)
     }
     // 外面改了选中（换年导致月份列变短、或弹窗刚打开）→ 滚到中间去
-    LaunchedEffect(selectedIndex, items) {
-        if (selectedIndex >= 0 && centered != selectedIndex) state.animateScrollToItem(selectedIndex)
+    LaunchedEffect(selectedIndex, items, placedOnce) {
+        if (placedOnce && selectedIndex >= 0 && centered != selectedIndex) state.animateScrollToItem(selectedIndex)
     }
 
     Box(modifier = modifier.height(WheelItemHeight * WHEEL_ROWS)) {
