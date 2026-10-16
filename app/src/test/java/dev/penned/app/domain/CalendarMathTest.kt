@@ -130,6 +130,40 @@ class CalendarMathTest {
         assertEquals(expect(2026, 3, 28), CalendarMath.followDay(feb28, YearMonth.of(2026, 3)))
     }
 
+    /** 周序号（收起态"本周行上移到视口顶"按它算位移）：行首/行尾、跨月带出的日子、条外夹取。 */
+    @Test
+    fun `周序号：本月每天落在哪一行、带出的日子归哪一行、网格外夹到两端`() {
+        fun day(y: Int, m: Int, d: Int) = LocalDate.of(y, m, d).toEpochDay()
+        // 2026-10：1 号周四（偏移 3）→ 网格 9/28 起、5 行（9/28~11/1）
+        val month = YearMonth.of(2026, 10)
+        assertEquals(5, CalendarMath.rowCount(month))
+        val cases = listOf(
+            day(2026, 9, 28) to 0,   // 网格首格（上月末，带出来的）
+            day(2026, 10, 1) to 0,   // 1 号与它同周
+            day(2026, 10, 4) to 0,   // 该行结尾（周日）
+            day(2026, 10, 5) to 1,   // 下一行开头（周一）
+            day(2026, 10, 11) to 1,
+            day(2026, 10, 12) to 2,
+            day(2026, 10, 16) to 2,  // 行中间
+            day(2026, 10, 31) to 4,  // 最后一行
+            day(2026, 11, 1) to 4,   // 网格末格（下月头一天，带出来的）
+        )
+        cases.forEach { (epochDay, want) ->
+            assertEquals("$epochDay", want, CalendarMath.weekIndexOf(epochDay, month))
+        }
+        // 网格外：比首格早 / 比末格晚 → 夹到两端（不会把内容推出视口）
+        assertEquals(0, CalendarMath.weekIndexOf(day(2026, 9, 1), month))
+        assertEquals(4, CalendarMath.weekIndexOf(day(2026, 12, 31), month))
+        // 5 行与 6 行月份都自洽：最后一天一定落在最后一行
+        listOf(YearMonth.of(2026, 2), YearMonth.of(2026, 8), YearMonth.of(2028, 2)).forEach { m ->
+            assertEquals(
+                "$m 最后一天该在最后一行",
+                CalendarMath.rowCount(m) - 1,
+                CalendarMath.weekIndexOf(m.atEndOfMonth().toEpochDay(), m),
+            )
+        }
+    }
+
     /** 收起态的周视图：周一开头的七天，跨月/跨年照常排下去。 */
     @Test
     fun `周视图七天：周一起、跨月跨年不断`() {

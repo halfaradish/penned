@@ -62,6 +62,17 @@ object CalendarMath {
         return target.atDay(minOf(dayOfMonth, daysInMonth(target))).toEpochDay()
     }
 
+    /**
+     * 该日在本月网格里的**周序号**（0 起）——收起态"本周行上移到视口顶"按它算位移。
+     *
+     * 落在网格外（比首格还早、比末格还晚）的日子夹到两端：收起态只画"有这一行"的那一周，
+     * 不会因为越界把内容推到视口外。
+     */
+    fun weekIndexOf(epochDay: Long, month: YearMonth): Int {
+        val raw = ((epochDay - gridStart(month)) / 7).toInt()
+        return raw.coerceIn(0, rowCount(month) - 1)
+    }
+
     /** 该日所在周的周一（收起态的周视图取它）。 */
     fun weekStart(epochDay: Long): Long {
         val date = LocalDate.ofEpochDay(epochDay)
