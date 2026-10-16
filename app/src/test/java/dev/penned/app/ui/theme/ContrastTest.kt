@@ -1,6 +1,8 @@
 package dev.penned.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import dev.penned.app.domain.CalendarHeat
+import dev.penned.app.ui.calendar.CalendarStyle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -191,6 +193,145 @@ class ContrastTest {
         assertTrue("以下配对的对比度不达标：\n$failures", failures.isEmpty())
     }
 
+    private fun heatBase(expense: Boolean, dark: Boolean): Color = when {
+        expense && dark -> ExpenseDark
+        expense -> ExpenseLight
+        dark -> IncomeDark
+        else -> IncomeLight
+    }
+
+    private fun heatInk(expense: Boolean, dark: Boolean): Color = when {
+        expense && dark -> PennedHeat.ExpenseInkDark
+        expense -> PennedHeat.ExpenseInkLight
+        dark -> PennedHeat.IncomeInkDark
+        else -> PennedHeat.IncomeInkLight
+    }
+
+    /** 某色相某主题下四档的热力底（叠在页面底 `background` 上）。 */
+    private fun heatBands(expense: Boolean, dark: Boolean): List<Color> {
+        val base = heatBase(expense, dark)
+        val bg = if (dark) BackgroundDark else BackgroundLight
+        return (1..CalendarHeat.LEVELS).map { level -> over(base, bg, PennedHeat.bandAlpha(level, dark)) }
+    }
+
+    /**
+     * 热力四档**成对**核（优化轮 D091）：每个档位上的字（支/收小字 + 日期字）都要 ≥4.5:1。
+     * 这条是"别用把红色调浅来分档压红字"的护栏——底和字必须成对看，不能只核字压在白底上。
+     */
+    @Test
+    fun `热力四档成对：每档上的字色与日期字都满足正文对比度`() {
+        val failures = mutableListOf<String>()
+        listOf(false, true).forEach { dark ->
+            val theme = if (dark) "深色" else "浅色"
+            val bg = if (dark) BackgroundDark else BackgroundLight
+            val onSurface = if (dark) OnSurfaceDark else OnSurfaceLight
+            listOf(true, false).forEach { expense ->
+                val kind = if (expense) "支出" else "收入"
+                val ink = heatInk(expense, dark)
+                heatBands(expense, dark).forEachIndexed { index, band ->
+                    val inkContrast = contrast(ink, band)
+                    if (inkContrast < body) {
+                        failures += "  $theme $kind 第${index + 1}档：金额字 %.2f（要 4.5）".format(inkContrast)
+                    }
+                    val dateContrast = contrast(onSurface, band)
+                    if (dateContrast < body) {
+                        failures += "  $theme $kind 第${index + 1}档：日期字 %.2f（要 4.5）".format(dateContrast)
+                    }
+                    val bandContrast = contrast(band, bg)
+                    if (bandContrast < groundVisible) {
+                        failures += "  $theme $kind 第${index + 1}档：底太淡 %.2f（要 %.2f）"
+                            .format(bandContrast, groundVisible)
+                    }
+                }
+            }
+        }
+        assertTrue("热力档位成对核算不达标：\n${failures.joinToString("\n")}", failures.isEmpty())
+    }
+
+    /**
+     * 热力档位本身要能看出"越深越多"：四档与页面底的对比度**逐档递增**，浅色顶档 ≥1.5、深色 ≥2.0。
+     * 淡底到不了 3:1（与图标底/图表细件同族的诚实记录，见 D048/D051），所以这里不套 3:1，
+     * 而是钉住"四档拉得开、顶档看得出来"。
+     */
+    @Test
+    fun `热力四档逐档递增且顶档看得出来`() {
+        val failures = mutableListOf<String>()
+        listOf(false, true).forEach { dark ->
+            val theme = if (dark) "深色" else "浅色"
+            val bg = if (dark) BackgroundDark else BackgroundLight
+            val topFloor = if (dark) 2.0 else 1.5
+            listOf(true, false).forEach { expense ->
+                val kind = if (expense) "支出" else "收入"
+                val ratios = heatBands(expense, dark).map { contrast(it, bg) }
+                ratios.zipWithNext().forEachIndexed { index, (a, b) ->
+                    if (b <= a) failures += "  $theme $kind 第${index + 2}档没有比第${index + 1}档深（%.2f ≤ %.2f）".format(b, a)
+                }
+                if (ratios.last() < topFloor) {
+                    failures += "  $theme $kind 顶档太淡：%.2f（要 %.1f）".format(ratios.last(), topFloor)
+                }
+                if (ratios.first() < groundVisible) {
+                    failures += "  $theme $kind 第 1 档看不见：%.2f（要 %.2f）".format(ratios.first(), groundVisible)
+                }
+            }
+        }
+        assertTrue("热力档位梯度不达标：\n${failures.joinToString("\n")}", failures.isEmpty())
+    }
+
+    /**
+     * 热力底上的**品牌色件**：选中的描边、（今天那格）实心圈按 3:1 守——四套色相 × 浅深都要成立。
+     * 热力是语义色（不随主题变），品牌色随色相变，两者会同时出现在一格上，所以这条必须逐色相跑。
+     */
+    @Test
+    fun `热力底上的选中描边与今天圈：四套色相都满足非文字 3 比 1`() {
+        val failures = ThemeAccent.entries.flatMap { accent ->
+            listOf(false, true).flatMap { dark ->
+                val theme = if (dark) "深色" else "浅色"
+                val brand = if (dark) PennedBrands.dark(accent) else PennedBrands.light(accent)
+                listOf(true, false).flatMap { expense ->
+                    val kind = if (expense) "支出" else "收入"
+                    heatBands(expense, dark).mapIndexedNotNull { index, band ->
+                        val value = contrast(brand.primaryInk, band)
+                        if (value < nonText) {
+                            "  ${accent.label} $theme $kind 第${index + 1}档：品牌描边/今天圈 %.2f（要 3.0）".format(value)
+                        } else {
+                            null
+                        }
+                    }
+                }
+            }
+        }
+        assertTrue("热力底上的品牌色件对比度不达标：\n${failures.joinToString("\n")}", failures.isEmpty())
+    }
+
+    /**
+     * 非本月统一变淡（优化轮）：**刻意低于 4.5:1** 的去强调，但要有"淡到看不见"的下限——
+     * 与 `groundVisible`/`markVisible` 同族的记录式下限，而不是把 4.5 放宽（理由见界面规范 §13·补二十八）。
+     */
+    @Test
+    fun `非本月变淡：淡但看得见（下限 2 比 1）`() {
+        val faintVisible = 2.0
+        val failures = mutableListOf<String>()
+        listOf(false, true).forEach { dark ->
+            val theme = if (dark) "深色" else "浅色"
+            val bg = if (dark) BackgroundDark else BackgroundLight
+            val onSurface = if (dark) OnSurfaceDark else OnSurfaceLight
+            val pairsToCheck = buildList {
+                add("日期字" to onSurface)
+                add("支出金额字" to heatInk(expense = true, dark = dark))
+                add("收入金额字" to heatInk(expense = false, dark = dark))
+            }
+            pairsToCheck.forEach { (label, fg) ->
+                val value = contrast(over(fg, bg, CalendarStyle.outOfMonthAlpha), bg)
+                if (value < faintVisible) {
+                    failures += "  $theme $label 变淡后 %.2f（要 %.1f）".format(value, faintVisible)
+                }
+            }
+        }
+        // 变淡因子自身也不许是 0（等于整格消失）
+        assertTrue("变淡因子必须大于 0", CalendarStyle.outOfMonthAlpha > 0f)
+        assertTrue("非本月太淡：\n${failures.joinToString("\n")}", failures.isEmpty())
+    }
+
     private fun hex(c: Color): String = "#%02X%02X%02X".format(
         (c.red * 255).roundToInt(),
         (c.green * 255).roundToInt(),
@@ -275,6 +416,11 @@ class ContrastTest {
             // AS 轮：全 App 统一的图标底（淡灰绿，与 2 号翠槽同值但独立成 token）
             hex(PennedPigment.iconHue) to "#0D8557",
             hex(PennedPigment.iconHueOnDark) to "#7AEBC0",
+            // 优化轮：日历热力四档上的成对字色（§13·补二十八）
+            hex(PennedHeat.ExpenseInkLight) to "#8E2A23",
+            hex(PennedHeat.IncomeInkLight) to "#084F49",
+            hex(PennedHeat.ExpenseInkDark) to "#FFC0B9",
+            hex(PennedHeat.IncomeInkDark) to "#8FE9DA",
             // M3-12 多主题：三套新色相的品牌一族（界面规范 §3·补二十二 的表）
             hex(PennedBrands.light(ThemeAccent.INDIGO).primary) to "#3B4CA8",
             hex(PennedBrands.light(ThemeAccent.INDIGO).primaryInk) to "#303E8E",

@@ -442,11 +442,13 @@ class DarkThemeScreensTest {
         capture("loan")
     }
 
-    /** 日历（M3-17）：网格的今天圈 / 选中底 / 支收小字在深色下的着色。 */
+    /** 日历（M3-17 优化轮）：网格的热力底 / 今天圈 / 选中描边 / 支收小字在深色下的着色。 */
     @Test
     fun darkCalendar() {
         val month = java.time.YearMonth.of(2026, 10)
         val day8 = java.time.LocalDate.of(2026, 10, 8).toEpochDay()
+        val day4 = java.time.LocalDate.of(2026, 10, 4).toEpochDay()
+        val day20 = java.time.LocalDate.of(2026, 10, 20).toEpochDay()
         dark {
             dev.penned.app.ui.calendar.CalendarContent(
                 state = dev.penned.app.ui.calendar.CalendarViewModel.UiState(
@@ -454,7 +456,10 @@ class DarkThemeScreensTest {
                     selectedDay = day8,
                     dayTotals = mapOf(
                         day8 to dev.penned.app.ui.home.HomeGroups.DayGroup(day8, 0L, 600L, emptyList()),
+                        day4 to dev.penned.app.ui.home.HomeGroups.DayGroup(day4, 300_000L, 0L, emptyList()),
+                        day20 to dev.penned.app.ui.home.HomeGroups.DayGroup(day20, 0L, 120_000L, emptyList()),
                     ),
+                    monthTotals = HomeGroups.MonthTotals(incomeCents = 300_000L, expenseCents = 120_600L),
                     selectedItems = listOf(
                         dev.penned.app.data.db.dao.TxWithCategory(
                             id = "t1", type = dev.penned.app.domain.TxType.EXPENSE, amountCents = 600L,
@@ -468,6 +473,10 @@ class DarkThemeScreensTest {
             )
         }
         composeRule.onNodeWithText("2026年10月").assertIsDisplayed()
+        // 深色同屏：9 号那格是热力档、4 号只有收入（绿底）、20 号是支出顶档
+        composeRule.onNodeWithText("收 3,000.00").assertIsDisplayed()
+        composeRule.onNodeWithText("支 1,206.00").assertIsDisplayed()
+        composeRule.onNodeWithText("余 1,794.00").assertIsDisplayed()
         capture("calendar")
     }
 
