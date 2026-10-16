@@ -168,6 +168,8 @@ obolectric-*`，其中两个 `robolectric-nativeruntime*` 各 40–200MB）：�
   - **滚轮首帧落位**：`LazyListState(initialFirstVisibleItemIndex = 选中项)` 在"窗口刚建/树很重"时可能还没量好就用上，滚轮停在顶部并把第一格当成"中间那格"报出去——日历里表现为"点标题开弹窗、确定却跳到 2 月"；修法 = 首帧显式 `scrollToItem` + 落位完成后才允许上报
   - **`input swipe` 的起点要落在节点真实 bounds 里**：周条上方一点点就是星期表头，落在那里等于没划（同一个手势换个起点就成功）；一律 `uiautomator dump` 取 bounds，别从截图估坐标
   - **`Modifier.aspectRatio` 是宽/高**、**窄格子文案按字宽算** 这两条 M3-17 的老坑继续有效（本轮把格子几何抽进 `CalendarStyle`：`cellAspect` / `cellGap` / `rowHeight(格子外宽)`，网格、周条、高度动画三处共用一份公式）
+- **收尾补的两处**（真机走查发现，不在三片的原始范围里）：**收起态横滑切月**（收起时 pager 不在树上，周条自己接一枚横滑判定 `shiftDirection`，方向与 pager 一致——不做"按周翻页"那套第二语义）、**空态区域也接竖滑**（当天没记录时列表整块不渲染、`nestedScroll` 没有挂点，空态那一整块单独接同一枚手势：上滑收起 / 在顶下滑展开）。两条都有单测（`swipeOnCollapsedWeekStripChangesMonth` / `emptyDayAreaAlsoCollapsesAndExpands`）与真机截图
+- **手势要覆盖"没数据时"的表面**：本轮真机走查才发现的坑——单测里列表总塞满 fixture，空态那条路只有手动划才看得出来
 - **遗留（明确没做，想清楚再做）**：见下方「提案区」的日历三条；`CalendarPagerTest` 里"收起后列表可滚"用的是 12 条 fixture（真实数据一天只有 1~3 条，列表根本滚不动——**可滚动性只在单测里覆盖**）
 
 ### M3-17 日历视图（2026-10-15，M3 收官）
