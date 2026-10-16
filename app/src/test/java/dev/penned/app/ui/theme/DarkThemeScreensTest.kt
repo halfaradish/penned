@@ -9,7 +9,6 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
@@ -513,7 +512,8 @@ class DarkThemeScreensTest {
         }
         composeRule.onNodeWithContentDescription("收起日历").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag(dev.penned.app.ui.calendar.CALENDAR_WEEK_STRIP_TAG).assertExists()
+        // 收起态：视口只剩一行（周视图），入口文案翻成"展开日历"
+        composeRule.onNodeWithContentDescription("展开日历").assertExists()
         capture("dark_calendar_week")
     }
 

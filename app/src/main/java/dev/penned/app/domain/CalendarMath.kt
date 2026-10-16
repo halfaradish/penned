@@ -46,9 +46,6 @@ object CalendarMath {
     fun inMonth(epochDay: Long, month: YearMonth): Boolean =
         LocalDate.ofEpochDay(epochDay).let { it.year == month.year && it.monthValue == month.monthValue }
 
-    /** 翻月（跨年自动处理）：delta 可正可负。 */
-    fun shiftMonth(month: YearMonth, delta: Long): YearMonth = month.plusMonths(delta)
-
     /**
      * 翻月时选中日怎么走（优化轮 D091）：**跟到新月的同一天号**，该月没有这天就夹到月末
      * （8/31 翻到 2 月 = 2/28，闰年 2/29）。
@@ -71,18 +68,6 @@ object CalendarMath {
     fun weekIndexOf(epochDay: Long, month: YearMonth): Int {
         val raw = ((epochDay - gridStart(month)) / 7).toInt()
         return raw.coerceIn(0, rowCount(month) - 1)
-    }
-
-    /** 该日所在周的周一（收起态的周视图取它）。 */
-    fun weekStart(epochDay: Long): Long {
-        val date = LocalDate.ofEpochDay(epochDay)
-        return date.minusDays((date.dayOfWeek.value - DayOfWeek.MONDAY.value).toLong()).toEpochDay()
-    }
-
-    /** 周一开头的七天（与 [WEEKDAY_LABELS] 同口径）；跨月/跨年照常排下去。 */
-    fun weekDays(epochDay: Long): List<Long> {
-        val start = weekStart(epochDay)
-        return (0L until 7L).map { start + it }
     }
 
     /** 标题：`2026年10月`。 */

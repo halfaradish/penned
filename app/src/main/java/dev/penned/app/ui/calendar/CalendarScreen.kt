@@ -1,11 +1,11 @@
 package dev.penned.app.ui.calendar
 
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -19,8 +19,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -34,12 +36,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.rotate
@@ -49,6 +53,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -56,6 +61,8 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -99,12 +106,16 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
+import kotlin.math.roundToInt
 
 /** 横滑切月的测试标记：往它上面划 = 切月（手势与统计页同款）。 */
 internal const val CALENDAR_PAGER_TAG = "calendar-pager"
 
-/** 收起态的周条（测试用它判断"收起了没有"）。 */
-internal const val CALENDAR_WEEK_STRIP_TAG = "calendar-week-strip"
+/** 网格视口（高度随收起进度收缩；收满只剩一行高——测试按几何断言"收满了没有"）。 */
+internal const val CALENDAR_GRID_TAG = "calendar-grid"
+
+/** 当日流水的白框面板（贴网格视口下缘；测试量它的顶边跟着视口上移）。 */
+internal const val CALENDAR_PANEL_TAG = "calendar-panel"
 
 /** 当日流水列表（收起后才轮到它滚动，测试往它上面划）。 */
 internal const val CALENDAR_DAY_LIST_TAG = "calendar-day-list"
@@ -245,7 +256,7 @@ fun CalendarScreen(onOpenDetail: (String) -> Unit) {
     )
 }
 
-/** 无状态入口：截图测试/预览用。 */
+/** 无状态入口：截图测试/预览用；[initialProgress] 给"收起到一半"的中间帧截图用。 */
 @Composable
 fun CalendarContent(
     state: CalendarViewModel.UiState,
@@ -254,6 +265,7 @@ fun CalendarContent(
     onSelectMonth: (YearMonth) -> Unit = {},
     onOpenDetail: (String) -> Unit = {},
     today: LocalDate = LocalDate.now(),
+    initialProgress: Float = 0f,
 ) {
     val month = state.month
     val todayEpochDay = today.toEpochDay()
@@ -261,19 +273,32 @@ fun CalendarContent(
     val heatDays = remember(state.dayTotals) { state.dayTotals.toHeatDays() }
 
     // —— 纯页面内状态（不落库、不加设置项，与首页月卡的 toggledMonths 同档）——
-    var collapsed by remember { mutableStateOf(false) }
+    // progress = 收起进度（0 = 整月、1 = 收成一周）：拖动时**每帧 1:1 跟手**，松手后补间吸附。
+    // 不是二值开关——面板与本周行都按它连续位移，"逐渐覆盖日期视图"就是它一个值的推论。
+    var progress by remember { mutableFloatStateOf(initialProgress.coerceIn(0f, 1f)) }
+    var settleTarget by remember { mutableStateOf<Float?>(null) }
     var picking by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val animations = rememberAnimationsEnabled()
     val density = LocalDensity.current
-    val collapseAfterPx = with(density) { CalendarCollapse.collapseAfter.toPx() }
-    val shiftAfterPx = with(density) { CalendarCollapse.shiftAfter.toPx() }
-    val gate = remember(collapseAfterPx) { CalendarCollapseGate(collapseAfterPx) }
+    // 速度阈值按 dp/s 记（见 CalendarCollapse.flingAfter）：这里换成 px/s
+    val flingPx = with(density) { CalendarCollapse.flingAfter.toPx() }
+
+    // 松手/点箭头后的补间（吸附到哪由 snapTarget 定）：动画缩放 0 时 tween(0) 直接落位
+    LaunchedEffect(settleTarget) {
+        val target = settleTarget ?: return@LaunchedEffect
+        animate(
+            initialValue = progress,
+            targetValue = target,
+            animationSpec = tween(if (animations) PennedMotion.base else 0, easing = PennedMotion.ease),
+        ) { value, _ -> progress = value }
+        settleTarget = null
+    }
 
     // 横滑切月：页序 = 新→旧（第 0 页恒是本月），layout 反过来 → "往右拉 = 看更早的月"，
     // 到头就是本月、往未来滑不动（账号里没有未来月的数据）。
     val pagerState = rememberPagerState(initialPage = state.monthPage) { state.months.size.coerceAtLeast(1) }
-    // 外部改了月份（‹ › /「今」/跳转/点邻月的日子）→ 翻到那一页；滑动中不动，免得跟手指抢
+    // 外部改了月份（「今」/跳转/点邻月的日子）→ 翻到那一页；滑动中不动，免得跟手指抢
     LaunchedEffect(month, state.months) {
         val target = CalendarPages.pageOf(month, state.months)
         if (pagerState.currentPage != target && !pagerState.isScrollInProgress) {
@@ -287,213 +312,244 @@ fun CalendarContent(
         }
     }
 
-    // 当日流水列表：展开态下把位移先给"收起日历"（先收起、再滚动），收起态放行给列表滚动
-    val scrollConnection = remember(listState, gate) {
-        object : NestedScrollConnection {
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (available.y == 0f) return Offset.Zero
-                gate.onScroll(available.y, atTop = !listState.canScrollBackward)?.let { collapsed = !it }
-                return if (collapsed) Offset.Zero else Offset(x = 0f, y = available.y)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // 一格的宽度 = 屏宽去掉网格两侧边距再分 7 列；行高与"收起行程"都由它推出来（公式只写在一处）
+        val rowHeight = CalendarStyle.rowHeight((maxWidth - PennedSpacing.sm * 2) / 7)
+        val expandedHeight by animateDpAsState(
+            targetValue = rowHeight * CalendarMath.rowCount(month),
+            animationSpec = tween(if (animations) PennedMotion.base else 0, easing = PennedMotion.ease),
+            label = "calendar-expanded-height",
+        )
+        // 收起行程 = 整月高 − 一行高：手指划多少、视口就缩多少（1:1）
+        val spanPx = with(density) { (expandedHeight - rowHeight).toPx() }
+
+        // 页级竖滑兜底：网格 / 星期表头 / 月份行 / 白卡里的空态都没有可滚动的东西，都从这里收
+        // （手势落在当日流水列表上时由列表赢走，走下面那条 nestedScroll——两条路喂的是同一根 progress）
+        val followDrag = Modifier.pointerInput(spanPx, listState) {
+            detectVerticalDragGestures(
+                onDragStart = { settleTarget = null },
+                onVerticalDrag = { change, dragAmount ->
+                    change.consume()
+                    progress = if (dragAmount < 0f) {
+                        // 上滑 = 收起：列表在不在顶都一样（"先收起、再滚动"）
+                        CalendarCollapse.consumeUp(progress, -dragAmount, spanPx).progress
+                    } else if (!listState.canScrollBackward) {
+                        // 下滑 = 展开：**回顶才展开**（列表滚到中部时往回滚不弹开）
+                        CalendarCollapse.consumeDown(progress, dragAmount, spanPx).progress
+                    } else {
+                        progress
+                    }
+                },
+            )
+        }
+
+        // 松手收尾：不论手势落在哪条路径，都从这里统一吸附（速度方向明确时以速度为准）。
+        // 只看不消费（不碰 change），所以不跟任何子级抢手势；只有"停在中间"才需要吸附——
+        // 0/1 是稳定态（列表在滚 / 面板已收），别乱动。
+        val releaseWatch = Modifier.pointerInput(flingPx) {
+            val tracker = VelocityTracker()
+            awaitPointerEventScope {
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull() ?: continue
+                    if (change.pressed) {
+                        tracker.addPosition(change.uptimeMillis, change.position)
+                    } else if (event.changes.none { it.pressed }) {
+                        val velocity = tracker.calculateVelocity().y
+                        tracker.resetTracking()
+                        if (settleTarget == null && progress > 0f && progress < 1f) {
+                            settleTarget = CalendarCollapse.snapTarget(progress, velocity, flingPx)
+                        }
+                    }
+                }
             }
         }
-    }
-    // 网格/周条上没有可滚动的东西 → 自己接竖滑（横向留给 pager）：上滑收起、列表在顶时下滑展开
-    val gridDrag = Modifier.pointerInput(gate, listState) {
-        detectVerticalDragGestures { change, dragAmount ->
-            change.consume()
-            gate.onScroll(dragAmount, atTop = !listState.canScrollBackward)?.let { collapsed = !it }
-        }
-    }
 
-    // 收起态没有 pager 在树上：横滑照样切月（与展开态同一套语义，周条跟着换成含选中日的那一周）
-    val weekSwipe = Modifier.pointerInput(month, shiftAfterPx) {
-        var totalX = 0f
-        detectHorizontalDragGestures(
-            onDragStart = { totalX = 0f },
-            onHorizontalDrag = { change, dragAmount ->
-                change.consume()
-                totalX += dragAmount
-            },
-            onDragEnd = {
-                shiftDirection(totalX, shiftAfterPx)?.let { delta ->
-                    onSelectMonth(CalendarMath.shiftMonth(month, delta))
+        // 当日流水列表：展开途中位移全归"收起"（面板内容不滚），收满之后才轮到列表滚
+        val scrollConnection = remember(listState, spanPx) {
+            object : NestedScrollConnection {
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    if (available.y == 0f) return Offset.Zero
+                    settleTarget = null
+                    return if (available.y < 0f) {
+                        val drag = CalendarCollapse.consumeUp(progress, -available.y, spanPx)
+                        progress = drag.progress
+                        Offset(x = 0f, y = -drag.consumed)
+                    } else if (listState.canScrollBackward) {
+                        // 离顶还远：让列表先滚回顶，面板不动
+                        Offset.Zero
+                    } else {
+                        val drag = CalendarCollapse.consumeDown(progress, available.y, spanPx)
+                        progress = drag.progress
+                        Offset(x = 0f, y = drag.consumed)
+                    }
                 }
-            },
-        )
-    }
 
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        // 月份行：[年月 ⌄ / 月小字总结] …… [收起/展开] 今（标题可点 = 精准跳年月；翻月靠横滑）
-        Row(
-            Modifier.fillMaxWidth().padding(start = PennedSpacing.md, end = PennedSpacing.sm, top = PennedSpacing.xs),
-            verticalAlignment = Alignment.CenterVertically,
+                override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                    // 这一帧列表刚滚到顶、位移还剩着 → 接着展开（"回顶才展开"的另一半）
+                    if (available.y <= 0f || listState.canScrollBackward) return Offset.Zero
+                    settleTarget = null
+                    val drag = CalendarCollapse.consumeDown(progress, available.y, spanPx)
+                    progress = drag.progress
+                    return Offset(x = 0f, y = drag.consumed)
+                }
+            }
+        }
+
+        Column(
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .then(followDrag)
+                .then(releaseWatch),
         ) {
-            // 左列：年月 + 紧贴其下的月小字总结（两者同一枚 xs 内边距 → 文字左边缘对齐，
-            // 也正好落在下方白卡的左边缘上：12dp 行边距 + 4dp = 16dp = PennedSpacing.lg）
-            Column(Modifier.weight(1f)) {
-                Row(
-                    Modifier
-                        .clip(MaterialTheme.shapes.small)
-                        .clickable(onClickLabel = "选择年月", onClick = { picking = true })
-                        .heightIn(min = PennedDimens.touchTarget)
-                        .padding(horizontal = PennedSpacing.xs),
-                    verticalAlignment = Alignment.CenterVertically,
+            // 月份行：[年月 ⌄ / 月小字总结] …… [收起/展开] 今（标题可点 = 精准跳年月；翻月靠横滑）
+            Row(
+                Modifier.fillMaxWidth().padding(start = PennedSpacing.md, end = PennedSpacing.sm, top = PennedSpacing.xs),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // 左列：年月 + 紧贴其下的月小字总结（两者同一枚 xs 内边距 → 文字左边缘对齐，
+                // 也正好落在下方白卡的左边缘上：12dp 行边距 + 4dp = 16dp = PennedSpacing.lg）
+                Column(Modifier.weight(1f)) {
+                    Row(
+                        Modifier
+                            .clip(MaterialTheme.shapes.small)
+                            .clickable(onClickLabel = "选择年月", onClick = { picking = true })
+                            .heightIn(min = PennedDimens.touchTarget)
+                            .padding(horizontal = PennedSpacing.xs),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(CalendarMath.monthTitle(month), style = MaterialTheme.typography.titleLarge)
+                        // 可点暗示：尾部一个小箭头（点它同"点标题"，都开选年月弹窗）
+                        Icon(
+                            PennedIcons.ChevronDown,
+                            contentDescription = null,
+                            tint = iconMutedColor(),
+                            modifier = Modifier.padding(start = PennedSpacing.xs).size(PennedDimens.iconSmall),
+                        )
+                    }
+                    // 月小字总结：收绿 / 支红 / 余灰（空月照渲染 0.00 三项）；只读
+                    MonthSummaryRow(state.monthTotals, Modifier.padding(horizontal = PennedSpacing.xs))
+                }
+                // 手势之外的可点入口（无障碍：收起/展开不能只靠上滑）；点击走同一根 progress 的补间
+                val settledCollapsed = progress >= CalendarCollapse.snapHalf
+                IconButton(
+                    onClick = { settleTarget = if (settledCollapsed) 0f else 1f },
+                    modifier = Modifier.size(PennedDimens.iconButton),
                 ) {
-                    Text(CalendarMath.monthTitle(month), style = MaterialTheme.typography.titleLarge)
-                    // 可点暗示：尾部一个小箭头（点它同"点标题"，都开选年月弹窗）
                     Icon(
                         PennedIcons.ChevronDown,
-                        contentDescription = null,
+                        contentDescription = if (settledCollapsed) "展开日历" else "收起日历",
                         tint = iconMutedColor(),
-                        modifier = Modifier.padding(start = PennedSpacing.xs).size(PennedDimens.iconSmall),
+                        modifier = Modifier
+                            .size(PennedDimens.iconInline)
+                            .rotate(if (settledCollapsed) 0f else 180f),
                     )
                 }
-                // 月小字总结：收绿 / 支红 / 余灰（空月照渲染 0.00 三项）；只读
-                MonthSummaryRow(state.monthTotals, Modifier.padding(horizontal = PennedSpacing.xs))
-            }
-            // 手势之外的可点入口（无障碍：收起/展开不能只靠上滑）
-            IconButton(onClick = { collapsed = !collapsed }, modifier = Modifier.size(PennedDimens.iconButton)) {
-                Icon(
-                    PennedIcons.ChevronDown,
-                    contentDescription = if (collapsed) "展开日历" else "收起日历",
-                    tint = iconMutedColor(),
-                    modifier = Modifier
-                        .size(PennedDimens.iconInline)
-                        .rotate(if (collapsed) 0f else 180f),
-                )
-            }
-            Text(
-                "今",
-                style = PennedTextStyles.rowTitle,
-                color = primaryInkColor(),
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .clickable(onClick = onToday)
-                    .padding(horizontal = PennedSpacing.md, vertical = PennedSpacing.xs),
-            )
-        }
-
-        // 星期表头（周一开头；两态都在——一行数字看不出周几）
-        Row(Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.sm, vertical = PennedSpacing.xs)) {
-            CalendarMath.WEEKDAY_LABELS.forEach { label ->
                 Text(
-                    label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f),
+                    "今",
+                    style = PennedTextStyles.rowTitle,
+                    color = primaryInkColor(),
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable(onClick = onToday)
+                        .padding(horizontal = PennedSpacing.md, vertical = PennedSpacing.xs),
                 )
             }
-        }
 
-        // 网格 / 收起态的周条：高度在"该月的行数"与"一行"之间过渡（收起后腾出的高度自动给列表）
-        BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.sm)) {
-            val rowHeight = CalendarStyle.rowHeight(maxWidth / 7)
-            val rows = if (collapsed) 1 else CalendarMath.rowCount(month)
-            val gridHeight by animateDpAsState(
-                targetValue = rowHeight * rows,
-                animationSpec = tween(if (animations) PennedMotion.base else 0, easing = PennedMotion.ease),
-                label = "calendar-grid-height",
-            )
+            // 星期表头（周一开头；两态都在——一行数字看不出周几）
+            Row(Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.sm, vertical = PennedSpacing.xs)) {
+                CalendarMath.WEEKDAY_LABELS.forEach { label ->
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+
+            // 网格视口：高度随 p 从"整月"收到"一行"（内容在视口里上移 + 裁剪，见 MonthGrid）；
+            // pager 常驻在树上——收起态照样横滑切月（与展开态同一套语义），不需要第二套"周条"
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .height(gridHeight)
+                    .padding(horizontal = PennedSpacing.sm)
+                    .height(CalendarCollapse.viewportHeight(expandedHeight, rowHeight, progress))
                     .clipToBounds()
-                    .then(gridDrag),
+                    .testTag(CALENDAR_GRID_TAG),
             ) {
-                if (collapsed) {
-                    // 收起态：选中日所在的那一周（周一开头），日子沿用同一枚格子
-                    val weekHeat = remember(heatDays, month) { CalendarHeat.monthHeat(heatDays, month) }
-                    Row(
-                        Modifier.fillMaxWidth().testTag(CALENDAR_WEEK_STRIP_TAG).then(weekSwipe),
-                        verticalAlignment = Alignment.Top,
-                    ) {
-                        CalendarMath.weekDays(state.selectedDay).forEach { epochDay ->
-                            if (!isReachable(epochDay, state.months)) {
-                                Spacer(Modifier.weight(1f).cellFrame())
-                            } else {
-                                DayCell(
-                                    epochDay = epochDay,
-                                    inMonth = CalendarMath.inMonth(epochDay, month),
-                                    isToday = epochDay == todayEpochDay,
-                                    isSelected = epochDay == state.selectedDay,
-                                    heat = weekHeat[epochDay],
-                                    totals = state.dayTotals[epochDay],
-                                    onClick = { onSelectDay(epochDay) },
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    HorizontalPager(
-                        state = pagerState,
-                        reverseLayout = true,
-                        modifier = Modifier.fillMaxSize().testTag(CALENDAR_PAGER_TAG),
-                    ) { page ->
-                        MonthGrid(
-                            month = CalendarPages.monthOf(page, state.months) ?: month,
-                            months = state.months,
-                            selectedDay = state.selectedDay,
-                            todayEpochDay = todayEpochDay,
-                            heatDays = heatDays,
-                            dayTotals = state.dayTotals,
-                            onSelectDay = onSelectDay,
-                        )
-                    }
-                }
-            }
-        }
-
-        // 当日流水面板：与首页卡片同款（surface 白底 / 16dp 圆角 / 左右 lg 边距 / 零阴影），
-        // 包住日头条 + 流水行 + 空态；贴住网格视口下缘、占满余下高度（收起时随着视口收缩自然"顶"上来）
-        val items = state.selectedItems
-        PennedCard(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg).weight(1f),
-            contentPadding = PaddingValues(0.dp),
-        ) {
-            if (items.isEmpty()) {
-                // 空态没有可滚动的东西（当天没记录时空态整块不渲染）→ 竖滑也接给同一个 gate：
-                // 上滑收起日历、在顶下滑展开（不然屏幕最大的一块区域划不动）
-                Box(
-                    Modifier.fillMaxWidth().weight(1f).testTag(CALENDAR_EMPTY_TAG).then(gridDrag),
-                    contentAlignment = Alignment.TopCenter,
-                ) {
-                    EmptyState(
-                        title = "${HomeGroups.dayLabel(state.selectedDay, ZoneId.systemDefault())} 没有记录",
-                        hint = "点上面别的日子看看",
-                        icon = PennedIcons.Calendar,
-                        modifier = Modifier.padding(top = PennedSpacing.lg),
+                HorizontalPager(
+                    state = pagerState,
+                    reverseLayout = true,
+                    modifier = Modifier.fillMaxSize().testTag(CALENDAR_PAGER_TAG),
+                ) { page ->
+                    MonthGrid(
+                        month = CalendarPages.monthOf(page, state.months) ?: month,
+                        months = state.months,
+                        selectedDay = state.selectedDay,
+                        todayEpochDay = todayEpochDay,
+                        heatDays = heatDays,
+                        dayTotals = state.dayTotals,
+                        progress = progress,
+                        rowHeight = rowHeight,
+                        onSelectDay = onSelectDay,
                     )
                 }
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .testTag(CALENDAR_DAY_LIST_TAG)
-                        .nestedScroll(scrollConnection),
-                    contentPadding = PaddingValues(bottom = PennedDimens.listBottomClearance),
-                ) {
-                    item(key = "day-header") {
-                        // 日头条复用首页那枚组件（支/收小字同口径）：小计取同一天的 DayGroup
-                        val day = state.dayTotals[state.selectedDay]
-                        DayHeaderRow(
-                            label = HomeGroups.dayLabel(state.selectedDay, ZoneId.systemDefault()),
-                            incomeCents = day?.incomeCents ?: 0L,
-                            expenseCents = day?.expenseCents ?: 0L,
+            }
+
+            // 当日流水面板：与首页卡片同款（surface 白底 / 16dp 圆角 / 左右 lg 边距 / 零阴影），
+            // 包住日头条 + 流水行 + 空态；贴住网格视口下缘、占满余下高度（收起时随着视口收缩自然"顶"上来）
+            val items = state.selectedItems
+            PennedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = PennedSpacing.lg)
+                    .weight(1f)
+                    .testTag(CALENDAR_PANEL_TAG),
+                contentPadding = PaddingValues(0.dp),
+            ) {
+                if (items.isEmpty()) {
+                    Box(
+                        Modifier.fillMaxWidth().weight(1f).testTag(CALENDAR_EMPTY_TAG),
+                        contentAlignment = Alignment.TopCenter,
+                    ) {
+                        EmptyState(
+                            title = "${HomeGroups.dayLabel(state.selectedDay, ZoneId.systemDefault())} 没有记录",
+                            hint = "点上面别的日子看看",
+                            icon = PennedIcons.Calendar,
+                            modifier = Modifier.padding(top = PennedSpacing.lg),
                         )
                     }
-                    items(items, key = { it.id }) { row ->
-                        TransactionRow(
-                            row = row,
-                            selectionMode = false,
-                            selected = false,
-                            onClick = { onOpenDetail(row.id) },
-                            onLongClick = {},
-                        )
+                } else {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .testTag(CALENDAR_DAY_LIST_TAG)
+                            .nestedScroll(scrollConnection),
+                        contentPadding = PaddingValues(bottom = PennedDimens.listBottomClearance),
+                    ) {
+                        item(key = "day-header") {
+                            // 日头条复用首页那枚组件（支/收小字同口径）：小计取同一天的 DayGroup
+                            val day = state.dayTotals[state.selectedDay]
+                            DayHeaderRow(
+                                label = HomeGroups.dayLabel(state.selectedDay, ZoneId.systemDefault()),
+                                incomeCents = day?.incomeCents ?: 0L,
+                                expenseCents = day?.expenseCents ?: 0L,
+                            )
+                        }
+                        items(items, key = { it.id }) { row ->
+                            TransactionRow(
+                                row = row,
+                                selectionMode = false,
+                                selected = false,
+                                onClick = { onOpenDetail(row.id) },
+                                onLongClick = {},
+                            )
+                        }
                     }
                 }
             }
@@ -520,6 +576,12 @@ fun CalendarContent(
  * 一个月的网格（pager 的每一页各画各的月）：**热力只按这一页自己那个月的尺算**
  * （非本月日子不参与热力、一律灰字，见 [DayCell]）。
  *
+ * **收起动画全部由 [progress] 一个值推导**（几何公式在 `CalendarCollapse`）：
+ * - 内容整体上移 `p × 本周行序号 × 行高`——本周（含"滑过去之后会选中的那天"那一周）p=1 时贴住视口顶
+ * - 非本周行随 p 渐隐到 0（本周行恒 1），视口的高度收缩在调用方（`CalendarCollapse.viewportHeight`）
+ * - 内容按**无界高度**量（`wrapContentHeight(unbounded = true)`）：视口收成一行时不许把整月压扁，
+ *   多出来的行由视口的 `clipToBounds` 裁掉
+ *
  * **条外的日子画空格**：本月那页会带出下月头几天、最老那页会带出上月尾几天，那些月不在"能翻到"的范围里——
  * 点它会翻到条外（格子与标题就错位了），所以干脆不给数字、不给热力、不给点击。
  */
@@ -531,12 +593,30 @@ private fun MonthGrid(
     todayEpochDay: Long,
     heatDays: List<CalendarHeat.Day>,
     dayTotals: Map<Long, HomeGroups.DayGroup>,
+    progress: Float,
+    rowHeight: Dp,
     onSelectDay: (Long) -> Unit,
 ) {
     val heat = remember(heatDays, month) { CalendarHeat.monthHeat(heatDays, month) }
-    Column(Modifier.fillMaxWidth()) {
-        CalendarMath.gridDays(month).chunked(7).forEach { week ->
-            Row(Modifier.fillMaxWidth()) {
+    // 本周 = 含"这一页的选中日"的那一行；邻页按 followDay 推（滑过去之后选中日会落在哪天）——
+    // 这样滑动过渡里两页的本周行在同一高度，不会跳
+    val weekIndex = CalendarMath.weekIndexOf(CalendarMath.followDay(selectedDay, month), month)
+    val shiftPx = with(LocalDensity.current) {
+        CalendarCollapse.weekShift(rowHeight, weekIndex, progress).roundToPx()
+    }
+    val otherRowAlpha = CalendarCollapse.otherRowAlpha(progress)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .wrapContentHeight(align = Alignment.Top, unbounded = true)
+            .offset { IntOffset(x = 0, y = -shiftPx) },
+    ) {
+        CalendarMath.gridDays(month).chunked(7).forEachIndexed { index, week ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .alpha(if (index == weekIndex) 1f else otherRowAlpha),
+            ) {
                 week.forEach { epochDay ->
                     if (!isReachable(epochDay, months)) {
                         Spacer(Modifier.weight(1f).cellFrame())

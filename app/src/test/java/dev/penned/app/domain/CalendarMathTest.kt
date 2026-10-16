@@ -74,10 +74,6 @@ class CalendarMathTest {
         val days = CalendarMath.gridDays(month)
         assertTrue(days.any { !CalendarMath.inMonth(it, month) })
 
-        assertEquals(YearMonth.of(2025, 12), CalendarMath.shiftMonth(month, -1))
-        assertEquals(YearMonth.of(2026, 2), CalendarMath.shiftMonth(month, 1))
-        assertEquals(YearMonth.of(2027, 1), CalendarMath.shiftMonth(month, 12))
-        assertEquals(YearMonth.of(2025, 1), CalendarMath.shiftMonth(month, -12))
         assertEquals("2026年10月", CalendarMath.monthTitle(YearMonth.of(2026, 10)))
     }
 
@@ -162,33 +158,5 @@ class CalendarMathTest {
                 CalendarMath.weekIndexOf(m.atEndOfMonth().toEpochDay(), m),
             )
         }
-    }
-
-    /** 收起态的周视图：周一开头的七天，跨月/跨年照常排下去。 */
-    @Test
-    fun `周视图七天：周一起、跨月跨年不断`() {
-        fun day(y: Int, m: Int, d: Int) = LocalDate.of(y, m, d).toEpochDay()
-        // 2026-10-15 是周四 → 本周 = 10/12（周一）…10/18（周日）
-        val week = CalendarMath.weekDays(day(2026, 10, 15))
-        assertEquals(7, week.size)
-        assertEquals(day(2026, 10, 12), week.first())
-        assertEquals(day(2026, 10, 18), week.last())
-        // 依次是 周一…周日（与 WEEKDAY_LABELS 同口径）
-        week.forEachIndexed { index, epochDay ->
-            assertEquals(index, LocalDate.ofEpochDay(epochDay).dayOfWeek.value - 1)
-        }
-        // 周一那天自己就是首格
-        assertEquals(day(2026, 10, 12), CalendarMath.weekStart(day(2026, 10, 12)))
-        // 周日那天仍属于本周（最后一个）
-        assertEquals(day(2026, 10, 12), CalendarMath.weekStart(day(2026, 10, 18)))
-        // 跨月：10/31（周六）所在周 = 10/26…11/1
-        val monthEnd = CalendarMath.weekDays(day(2026, 10, 31))
-        assertEquals(day(2026, 10, 26), monthEnd.first())
-        assertEquals(day(2026, 11, 1), monthEnd.last())
-        // 跨年：2027-01-01（周五）所在周 = 2026-12-28…2027-01-03
-        val newYear = CalendarMath.weekDays(day(2027, 1, 1))
-        assertEquals(day(2026, 12, 28), newYear.first())
-        assertEquals(day(2027, 1, 3), newYear.last())
-        assertEquals(7, newYear.toSet().size)
     }
 }
