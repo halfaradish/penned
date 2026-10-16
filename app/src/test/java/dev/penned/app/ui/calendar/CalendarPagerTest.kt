@@ -207,6 +207,19 @@ class CalendarPagerTest {
         composeRule.onNodeWithTag(CALENDAR_PAGER_TAG).assertExists()
     }
 
+    /** 收起态在**周条上往下滑**也能展开（列表为空时列表不可滚，只能靠周条这枚手势）。 */
+    @Test
+    fun swipeDownOnWeekStripExpands() {
+        host()
+        composeRule.onNodeWithContentDescription("收起日历").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag(CALENDAR_WEEK_STRIP_TAG).assertExists()
+        composeRule.onNodeWithTag(CALENDAR_WEEK_STRIP_TAG).performTouchInput { swipeDown() }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag(CALENDAR_WEEK_STRIP_TAG).assertDoesNotExist()
+        composeRule.onNodeWithTag(CALENDAR_PAGER_TAG).assertExists()
+    }
+
     /** 可点入口也能收起/展开（手势之外的第二条路）。 */
     @Test
     fun toggleButtonCollapsesAndExpands() {
