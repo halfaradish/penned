@@ -2,8 +2,6 @@ package dev.penned.app.ui.calendar
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -143,18 +141,16 @@ class CalendarScreenTest {
     }
 
     /**
-     * 「今」回到本月 + 选中今天；翻月按钮换月（标题跟着变）。
-     * 优化轮起**不给未来月**：本月时「下个月」是禁用的（那里一定是空网格）。
+     * 「今」回到本月 + 选中今天；**顶部的 ‹ › 翻月按钮已经删掉**（优化轮 2：翻月靠横滑/点标题跳转）。
      */
     @Test
-    fun todayAndMonthShift() {
-        val monthState = androidx.compose.runtime.mutableStateOf(month)
+    fun todayGoesBackToCurrentMonthAndNoShiftButtons() {
+        val monthState = androidx.compose.runtime.mutableStateOf(YearMonth.of(2026, 9))
         val selected = androidx.compose.runtime.mutableStateOf(day(8))
         composeRule.setContent {
             PennedTheme {
                 CalendarContent(
                     state = state(selected.value, emptyList()).copy(month = monthState.value),
-                    onShiftMonth = { delta -> monthState.value = CalendarMath.shiftMonth(monthState.value, delta) },
                     onToday = {
                         monthState.value = YearMonth.from(today)
                         selected.value = today.toEpochDay()
@@ -163,24 +159,48 @@ class CalendarScreenTest {
                 )
             }
         }
-        composeRule.onNodeWithText("2026年10月").assertIsDisplayed()
-        // 本月（= 条的头）：未来月不给 →「下个月」不可点
-        composeRule.onNodeWithContentDescription("下个月").assertIsNotEnabled()
-        // 上个月能翻，翻完「下个月」就活了（回到本月）
-        composeRule.onNodeWithContentDescription("上个月").performClick()
-        composeRule.waitForIdle()
         composeRule.onNodeWithText("2026年9月").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("下个月").assertIsEnabled()
-        composeRule.onNodeWithContentDescription("下个月").performClick()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithText("2026年10月").assertIsDisplayed()
-        // 「今」：本月 + 今天（今天那格带圈，标题是本月）
-        composeRule.onNodeWithContentDescription("上个月").performClick()
-        composeRule.waitForIdle()
+        // 翻月按钮没了（连端点禁用那套一起删）：手势与「点标题选年月」才是入口
+        composeRule.onNodeWithContentDescription("上个月").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("下个月").assertDoesNotExist()
+        // 「今」：回本月 + 选今天
         composeRule.onNodeWithText("今").performClick()
         composeRule.waitForIdle()
         assertEquals(today.toEpochDay(), selected.value)
         assertEquals(YearMonth.from(today), monthState.value)
+        composeRule.onNodeWithText("2026年10月").assertIsDisplayed()
+    }
+
+    /**
+     * 月份行的左列变窄后（右边要让出收起箭头 + 「今」），**长金额的退化规则仍然成立**：
+     * 带千分位放不下 → **三项一起去掉千分位**（同一视觉语言，不许混用）；再放不下交给省略号。
+     *
+     * 断言只钉"哪一级、齐不齐"（不钉具体落在哪一级——那由字体实测宽度决定），
+     * 观感由同名的截图 `m3_calendar_long_amounts` 过目。
+     */
+    @Test
+    fun longAmountsDegradeInsideNarrowMonthRow() {
+        val items = listOf(
+            row("t1", TxType.INCOME, 300_000L, 4, "工资"),        // 收 3,000.00
+            row("t2", TxType.EXPENSE, 1_234_567L, 8, "房租"),     // 支 12,345.67
+        )
+        // 选中一个没有记录的日子：这样"支/收/余"三个前缀串只出现在月总结里（日头条不会同时来一份）
+        val selected = day(9)
+        composeRule.setContent {
+            PennedTheme { CalendarContent(state = state(selected, items), today = today) }
+        }
+        // 三段各允许"带千分位"或"不带千分位"两种写法，但三段要么都带、要么都不带
+        val forms = listOf(
+            listOf("收 3,000.00", "收 3000.00"),
+            listOf("支 12,345.67", "支 12345.67"),
+            listOf("余 -9,345.67", "余 -9345.67"),
+        )
+        forms.forEachIndexed { index, pair ->
+            assertEquals("第 ${index + 1} 段该恰好出现一种写法", 1, pair.count { count(it) >= 1 })
+        }
+        val grouped = forms.count { count(it[0]) >= 1 }
+        assertTrue("三段写法必须一致（退化是整行一起退），实际 $grouped/3 段带千分位", grouped == 0 || grouped == 3)
+        capture("m3_calendar_long_amounts")
     }
 
     /**

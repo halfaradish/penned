@@ -2,7 +2,6 @@ package dev.penned.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 import dev.penned.app.domain.CalendarHeat
-import dev.penned.app.ui.calendar.CalendarStyle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -304,32 +303,28 @@ class ContrastTest {
     }
 
     /**
-     * 非本月统一变淡（优化轮）：**刻意低于 4.5:1** 的去强调，但要有"淡到看不见"的下限——
-     * 与 `groundVisible`/`markVisible` 同族的记录式下限，而不是把 4.5 放宽（理由见界面规范 §13·补二十八）。
+     * 非本月格子（优化轮 2，D093）：**不参与热力、日期与支/收小字一律灰字**（`onSurfaceVariant`）。
+     *
+     * 灰本身就是去强调，不再是"整格乘一个 alpha"：这是**刻意低于 4.5:1** 的一对，
+     * 所以只守"淡但看得见"的下限（与 `groundVisible`/`markVisible` 同族的记录式下限），
+     * 另外钉一条"确实比本月正文淡"（灰必须是灰，别哪天被改成跟正文一个墨色）。
      */
     @Test
-    fun `非本月变淡：淡但看得见（下限 2 比 1）`() {
+    fun `非本月灰字：淡但看得见（下限 2 比 1）且比本月正文淡`() {
         val faintVisible = 2.0
         val failures = mutableListOf<String>()
         listOf(false, true).forEach { dark ->
             val theme = if (dark) "深色" else "浅色"
             val bg = if (dark) BackgroundDark else BackgroundLight
-            val onSurface = if (dark) OnSurfaceDark else OnSurfaceLight
-            val pairsToCheck = buildList {
-                add("日期字" to onSurface)
-                add("支出金额字" to heatInk(expense = true, dark = dark))
-                add("收入金额字" to heatInk(expense = false, dark = dark))
-            }
-            pairsToCheck.forEach { (label, fg) ->
-                val value = contrast(over(fg, bg, CalendarStyle.outOfMonthAlpha), bg)
-                if (value < faintVisible) {
-                    failures += "  $theme $label 变淡后 %.2f（要 %.1f）".format(value, faintVisible)
-                }
+            val gray = if (dark) OnSurfaceVariantDark else OnSurfaceVariantLight
+            val ink = if (dark) OnSurfaceDark else OnSurfaceLight
+            val value = contrast(gray, bg)
+            if (value < faintVisible) failures += "  $theme 非本月灰字 %.2f（要 %.1f）".format(value, faintVisible)
+            if (value >= contrast(ink, bg)) {
+                failures += "  $theme 非本月灰字 %.2f 不比本月正文淡（正文 %.2f）".format(value, contrast(ink, bg))
             }
         }
-        // 变淡因子自身也不许是 0（等于整格消失）
-        assertTrue("变淡因子必须大于 0", CalendarStyle.outOfMonthAlpha > 0f)
-        assertTrue("非本月太淡：\n${failures.joinToString("\n")}", failures.isEmpty())
+        assertTrue("非本月灰字不达标：\n${failures.joinToString("\n")}", failures.isEmpty())
     }
 
     private fun hex(c: Color): String = "#%02X%02X%02X".format(

@@ -40,7 +40,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.rotate
@@ -57,6 +56,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -70,7 +70,7 @@ import dev.penned.app.domain.Money
 import dev.penned.app.ui.LocalApp
 import dev.penned.app.ui.components.DayHeaderRow
 import dev.penned.app.ui.components.EmptyState
-import dev.penned.app.ui.components.PennedDivider
+import dev.penned.app.ui.components.PennedCard
 import dev.penned.app.ui.components.YearMonthPickerDialog
 import dev.penned.app.ui.home.HomeGroups
 import dev.penned.app.ui.home.TransactionRow
@@ -238,7 +238,6 @@ fun CalendarScreen(onOpenDetail: (String) -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     CalendarContent(
         state = state,
-        onShiftMonth = { delta -> viewModel.selectMonth(CalendarMath.shiftMonth(state.month, delta)) },
         onToday = viewModel::goToday,
         onSelectDay = viewModel::selectDay,
         onSelectMonth = viewModel::selectMonth,
@@ -250,7 +249,6 @@ fun CalendarScreen(onOpenDetail: (String) -> Unit) {
 @Composable
 fun CalendarContent(
     state: CalendarViewModel.UiState,
-    onShiftMonth: (Long) -> Unit = {},
     onToday: () -> Unit = {},
     onSelectDay: (Long) -> Unit = {},
     onSelectMonth: (YearMonth) -> Unit = {},
@@ -324,57 +322,35 @@ fun CalendarContent(
         )
     }
 
-    val canGoNewer = state.months.firstOrNull() != month
-    val canGoOlder = state.months.lastOrNull() != month
-
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        // 月份行：‹ [2026年10月 ⌄] › …… [收起/展开] 今（标题可点 = 精准跳年月）
+        // 月份行：[年月 ⌄ / 月小字总结] …… [收起/展开] 今（标题可点 = 精准跳年月；翻月靠横滑）
         Row(
             Modifier.fillMaxWidth().padding(start = PennedSpacing.md, end = PennedSpacing.sm, top = PennedSpacing.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(
-                onClick = { onShiftMonth(-1) },
-                enabled = canGoOlder,
-                modifier = Modifier.size(PennedDimens.iconButton),
-            ) {
-                Icon(
-                    PennedIcons.Back,
-                    contentDescription = "上个月",
-                    tint = if (canGoOlder) MaterialTheme.colorScheme.onSurface else iconMutedColor(),
-                    modifier = Modifier.size(PennedDimens.iconInline),
-                )
+            // 左列：年月 + 紧贴其下的月小字总结（两者同一枚 xs 内边距 → 文字左边缘对齐，
+            // 也正好落在下方白卡的左边缘上：12dp 行边距 + 4dp = 16dp = PennedSpacing.lg）
+            Column(Modifier.weight(1f)) {
+                Row(
+                    Modifier
+                        .clip(MaterialTheme.shapes.small)
+                        .clickable(onClickLabel = "选择年月", onClick = { picking = true })
+                        .heightIn(min = PennedDimens.touchTarget)
+                        .padding(horizontal = PennedSpacing.xs),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(CalendarMath.monthTitle(month), style = MaterialTheme.typography.titleLarge)
+                    // 可点暗示：尾部一个小箭头（点它同"点标题"，都开选年月弹窗）
+                    Icon(
+                        PennedIcons.ChevronDown,
+                        contentDescription = null,
+                        tint = iconMutedColor(),
+                        modifier = Modifier.padding(start = PennedSpacing.xs).size(PennedDimens.iconSmall),
+                    )
+                }
+                // 月小字总结：收绿 / 支红 / 余灰（空月照渲染 0.00 三项）；只读
+                MonthSummaryRow(state.monthTotals, Modifier.padding(horizontal = PennedSpacing.xs))
             }
-            Row(
-                Modifier
-                    .clip(MaterialTheme.shapes.small)
-                    .clickable(onClickLabel = "选择年月", onClick = { picking = true })
-                    .heightIn(min = PennedDimens.touchTarget)
-                    .padding(horizontal = PennedSpacing.xs),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(CalendarMath.monthTitle(month), style = MaterialTheme.typography.titleLarge)
-                // 可点暗示：尾部一个小箭头（点它同"点标题"，都开选年月弹窗）
-                Icon(
-                    PennedIcons.ChevronDown,
-                    contentDescription = null,
-                    tint = iconMutedColor(),
-                    modifier = Modifier.padding(start = PennedSpacing.xs).size(PennedDimens.iconSmall),
-                )
-            }
-            IconButton(
-                onClick = { onShiftMonth(1) },
-                enabled = canGoNewer,
-                modifier = Modifier.size(PennedDimens.iconButton),
-            ) {
-                Icon(
-                    PennedIcons.ChevronRight,
-                    contentDescription = "下个月",
-                    tint = if (canGoNewer) MaterialTheme.colorScheme.onSurface else iconMutedColor(),
-                    modifier = Modifier.size(PennedDimens.iconInline),
-                )
-            }
-            Spacer(Modifier.weight(1f))
             // 手势之外的可点入口（无障碍：收起/展开不能只靠上滑）
             IconButton(onClick = { collapsed = !collapsed }, modifier = Modifier.size(PennedDimens.iconButton)) {
                 Icon(
@@ -396,9 +372,6 @@ fun CalendarContent(
                     .padding(horizontal = PennedSpacing.md, vertical = PennedSpacing.xs),
             )
         }
-
-        // 月小字总结：收绿 / 支红 / 余灰（空月照渲染 0.00 三项）
-        MonthSummaryRow(state.monthTotals)
 
         // 星期表头（周一开头；两态都在——一行数字看不出周几）
         Row(Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.sm, vertical = PennedSpacing.xs)) {
@@ -431,7 +404,7 @@ fun CalendarContent(
             ) {
                 if (collapsed) {
                     // 收起态：选中日所在的那一周（周一开头），日子沿用同一枚格子
-                    val weekHeat = remember(heatDays, month) { heatFor(heatDays, month) }
+                    val weekHeat = remember(heatDays, month) { CalendarHeat.monthHeat(heatDays, month) }
                     Row(
                         Modifier.fillMaxWidth().testTag(CALENDAR_WEEK_STRIP_TAG).then(weekSwipe),
                         verticalAlignment = Alignment.Top,
@@ -473,50 +446,55 @@ fun CalendarContent(
             }
         }
 
-        PennedDivider()
-        // 选中那天的流水（与首页同一行渲染）
+        // 当日流水面板：与首页卡片同款（surface 白底 / 16dp 圆角 / 左右 lg 边距 / 零阴影），
+        // 包住日头条 + 流水行 + 空态；贴住网格视口下缘、占满余下高度（收起时随着视口收缩自然"顶"上来）
         val items = state.selectedItems
-        if (items.isEmpty()) {
-            // 空态没有可滚动的东西（当天没记录时列表整块不渲染）→ 竖滑也接给同一个 gate：
-            // 上滑收起日历、在顶下滑展开（不然屏幕最大的一块区域划不动）
-            Box(
-                Modifier.fillMaxWidth().weight(1f).testTag(CALENDAR_EMPTY_TAG).then(gridDrag),
-                contentAlignment = Alignment.TopCenter,
-            ) {
-                EmptyState(
-                    title = "${HomeGroups.dayLabel(state.selectedDay, ZoneId.systemDefault())} 没有记录",
-                    hint = "点上面别的日子看看",
-                    icon = PennedIcons.Calendar,
-                    modifier = Modifier.padding(top = PennedSpacing.lg),
-                )
-            }
-        } else {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .testTag(CALENDAR_DAY_LIST_TAG)
-                    .nestedScroll(scrollConnection),
-                contentPadding = PaddingValues(bottom = PennedDimens.listBottomClearance),
-            ) {
-                item(key = "day-header") {
-                    // 日头条复用首页那枚组件（支/收小字同口径）：小计取同一天的 DayGroup
-                    val day = state.dayTotals[state.selectedDay]
-                    DayHeaderRow(
-                        label = HomeGroups.dayLabel(state.selectedDay, ZoneId.systemDefault()),
-                        incomeCents = day?.incomeCents ?: 0L,
-                        expenseCents = day?.expenseCents ?: 0L,
+        PennedCard(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg).weight(1f),
+            contentPadding = PaddingValues(0.dp),
+        ) {
+            if (items.isEmpty()) {
+                // 空态没有可滚动的东西（当天没记录时空态整块不渲染）→ 竖滑也接给同一个 gate：
+                // 上滑收起日历、在顶下滑展开（不然屏幕最大的一块区域划不动）
+                Box(
+                    Modifier.fillMaxWidth().weight(1f).testTag(CALENDAR_EMPTY_TAG).then(gridDrag),
+                    contentAlignment = Alignment.TopCenter,
+                ) {
+                    EmptyState(
+                        title = "${HomeGroups.dayLabel(state.selectedDay, ZoneId.systemDefault())} 没有记录",
+                        hint = "点上面别的日子看看",
+                        icon = PennedIcons.Calendar,
+                        modifier = Modifier.padding(top = PennedSpacing.lg),
                     )
                 }
-                items(items, key = { it.id }) { row ->
-                    TransactionRow(
-                        row = row,
-                        selectionMode = false,
-                        selected = false,
-                        onClick = { onOpenDetail(row.id) },
-                        onLongClick = {},
-                    )
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .testTag(CALENDAR_DAY_LIST_TAG)
+                        .nestedScroll(scrollConnection),
+                    contentPadding = PaddingValues(bottom = PennedDimens.listBottomClearance),
+                ) {
+                    item(key = "day-header") {
+                        // 日头条复用首页那枚组件（支/收小字同口径）：小计取同一天的 DayGroup
+                        val day = state.dayTotals[state.selectedDay]
+                        DayHeaderRow(
+                            label = HomeGroups.dayLabel(state.selectedDay, ZoneId.systemDefault()),
+                            incomeCents = day?.incomeCents ?: 0L,
+                            expenseCents = day?.expenseCents ?: 0L,
+                        )
+                    }
+                    items(items, key = { it.id }) { row ->
+                        TransactionRow(
+                            row = row,
+                            selectionMode = false,
+                            selected = false,
+                            onClick = { onOpenDetail(row.id) },
+                            onLongClick = {},
+                        )
+                    }
                 }
             }
         }
@@ -539,7 +517,8 @@ fun CalendarContent(
 }
 
 /**
- * 一个月的网格（pager 的每一页各画各的月；非本月日子按同一因子变淡）。
+ * 一个月的网格（pager 的每一页各画各的月）：**热力只按这一页自己那个月的尺算**
+ * （非本月日子不参与热力、一律灰字，见 [DayCell]）。
  *
  * **条外的日子画空格**：本月那页会带出下月头几天、最老那页会带出上月尾几天，那些月不在"能翻到"的范围里——
  * 点它会翻到条外（格子与标题就错位了），所以干脆不给数字、不给热力、不给点击。
@@ -554,7 +533,7 @@ private fun MonthGrid(
     dayTotals: Map<Long, HomeGroups.DayGroup>,
     onSelectDay: (Long) -> Unit,
 ) {
-    val heat = remember(heatDays, month) { heatFor(heatDays, month) }
+    val heat = remember(heatDays, month) { CalendarHeat.monthHeat(heatDays, month) }
     Column(Modifier.fillMaxWidth()) {
         CalendarMath.gridDays(month).chunked(7).forEach { week ->
             Row(Modifier.fillMaxWidth()) {
@@ -588,8 +567,9 @@ private fun Modifier.cellFrame(): Modifier =
     padding(CalendarStyle.cellGap).aspectRatio(CalendarStyle.cellAspect)
 
 /**
- * 月小字总结行：`收 3,000.00   支 6.00   余 2,994.00`（收绿 / 支红 / 余灰）。
- * 整行量不下时三项**一起去掉千分位**（退化规则见 [CalendarSummary]）。
+ * 月小字总结：`收 3,000.00   支 6.00   余 2,994.00`（收绿 / 支红 / 余灰），挂在年月正下方。
+ * 可用宽度 = 月份行左列（右边要让出收起箭头 + 「今」）；整行量不下时三项**一起去掉千分位**
+ * （退化规则见 [CalendarSummary]），再放不下交给省略号。
  */
 @Composable
 private fun MonthSummaryRow(totals: HomeGroups.MonthTotals, modifier: Modifier = Modifier) {
@@ -598,7 +578,7 @@ private fun MonthSummaryRow(totals: HomeGroups.MonthTotals, modifier: Modifier =
     val style = MaterialTheme.typography.labelMedium
     val gap = PennedSpacing.lg
     BoxWithConstraints(
-        modifier.fillMaxWidth().padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.xs),
+        modifier.fillMaxWidth().padding(vertical = PennedSpacing.xs),
     ) {
         val gapPx = with(density) { gap.roundToPx() }
         val availablePx = with(density) { maxWidth.toPx() }
@@ -642,7 +622,9 @@ private fun RowScope.SummaryText(text: String, color: Color) {
  * - **选中 = 品牌色描边**（不与热力抢底；再叠字重加粗——除颜色外还有形状差）
  * - **今天 = 品牌实心圈**（压在最上层，日期字反白）
  *
- * 非本月（网格带出的上/下月日子、周条里邻月的日子）整格乘同一个 [CalendarStyle.outOfMonthAlpha]。
+ * **非本月**（网格带出的上/下月日子、跨月周里邻月的日子）**不参与热力、也一律灰字**（D093）：
+ * 不画热力底（无色）、日期与支/收小字都走 `onSurfaceVariant`——灰本身就是去强调，
+ * 不再用整格 alpha 变淡（真数在选中那天的日头条里）。选中日恒在当月，所以"灰的选中格"不会出现。
  */
 @Composable
 private fun DayCell(
@@ -656,15 +638,15 @@ private fun DayCell(
     modifier: Modifier = Modifier,
 ) {
     val date = LocalDate.ofEpochDay(epochDay)
+    val outInk = MaterialTheme.colorScheme.onSurfaceVariant
+    val showToday = inMonth && isToday
     Column(
         modifier
             .cellFrame()
-            // 统一变淡：整格（日期字 + 支/收小字 + 热力底 + 今天圈）乘同一个因子，一处一处各写一个 alpha 会漂
-            .alpha(if (inMonth) 1f else CalendarStyle.outOfMonthAlpha)
             .clip(MaterialTheme.shapes.small)
-            .background(heat?.let { heatFillColor(it.expense, it.level) } ?: Color.Transparent)
+            .background(if (inMonth) heat?.let { heatFillColor(it.expense, it.level) } ?: Color.Transparent else Color.Transparent)
             .then(
-                if (isSelected) {
+                if (inMonth && isSelected) {
                     Modifier.border(CalendarStyle.selectStroke, primaryInkColor(), MaterialTheme.shapes.small)
                 } else {
                     Modifier
@@ -678,7 +660,7 @@ private fun DayCell(
             Modifier
                 .size(PennedDimens.avatarLarge)
                 .then(
-                    if (isToday) {
+                    if (showToday) {
                         Modifier.clip(CircleShape).background(primaryInkColor())
                     } else {
                         Modifier
@@ -689,20 +671,25 @@ private fun DayCell(
             Text(
                 "${date.dayOfMonth}",
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontWeight = if (isToday || isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                    fontWeight = if (showToday || (inMonth && isSelected)) FontWeight.SemiBold else FontWeight.Normal,
                 ),
-                color = if (isToday) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                color = when {
+                    showToday -> MaterialTheme.colorScheme.onPrimary
+                    inMonth -> MaterialTheme.colorScheme.onSurface
+                    else -> outInk
+                },
             )
         }
         if (totals != null) {
             // 两行小字：支出红 / 收入青绿（**不带"支/收"前缀**——格子只有 57dp 宽，带前缀会被截成"收 300…"；
             // 颜色就是全 App 的收支语言，选中那天下面还有日头条的「支 X 收 Y」把话说全）。
-            // 颜色走**热力成对的字色**：底越深字越深/越亮（ContrastTest 逐对核过），不是把底色调浅
+            // 颜色走**热力成对的字色**：底越深字越深/越亮（ContrastTest 逐对核过），不是把底色调浅；
+            // 非本月没有热力底，两行一律灰字。
             if (totals.expenseCents > 0L) {
                 Text(
                     Money.format(totals.expenseCents, grouped = false),
                     style = MaterialTheme.typography.labelSmall,
-                    color = heatInkColor(expense = true),
+                    color = if (inMonth) heatInkColor(expense = true) else outInk,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -711,7 +698,7 @@ private fun DayCell(
                 Text(
                     Money.format(totals.incomeCents, grouped = false),
                     style = MaterialTheme.typography.labelSmall,
-                    color = heatInkColor(expense = false),
+                    color = if (inMonth) heatInkColor(expense = false) else outInk,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -723,15 +710,6 @@ private fun DayCell(
 /** 网格里每天的额 → 热力分档的输入（`HomeGroups.DayGroup` 与 domain 之间的适配，一处写完）。 */
 private fun Map<Long, HomeGroups.DayGroup>.toHeatDays(): List<CalendarHeat.Day> =
     map { (epochDay, day) -> CalendarHeat.Day(epochDay, day.expenseCents, day.incomeCents) }
-
-/**
- * 每格的热力：**一天用"它自己所在月"的尺**（跨月周里邻月的日子也有热力、也有对比度）。
- * 网格会带出上/下月各几天、周条会跨月——所以三根尺都算一份再合起来（一天只属于一个月，不会互相覆盖）。
- */
-private fun heatFor(days: List<CalendarHeat.Day>, month: YearMonth): Map<Long, CalendarHeat.Cell> =
-    listOf(month.minusMonths(1), month, month.plusMonths(1)).fold(emptyMap()) { acc, m ->
-        acc + CalendarHeat.monthHeat(days, m)
-    }
 
 @Preview(showBackground = true, name = "日历", widthDp = 400, heightDp = 800)
 @Composable
