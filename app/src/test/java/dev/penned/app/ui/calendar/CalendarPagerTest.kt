@@ -220,6 +220,20 @@ class CalendarPagerTest {
         composeRule.onNodeWithTag(CALENDAR_PAGER_TAG).assertExists()
     }
 
+    /** 当天没记录（列表整块是空态）时，空态那块也能上滑收起 / 在顶下滑展开。 */
+    @Test
+    fun emptyDayAreaAlsoCollapsesAndExpands() {
+        host(items = emptyList())
+        // 空态区域上滑 → 收起（在整块空态上划，不是在那一行小字上）
+        composeRule.onNodeWithTag(CALENDAR_EMPTY_TAG).performTouchInput { swipeUp() }
+        composeRule.waitUntil(5_000) { countOfTag(CALENDAR_WEEK_STRIP_TAG) >= 1 }
+        composeRule.onNodeWithTag(CALENDAR_WEEK_STRIP_TAG).assertExists()
+        // 在顶下滑 → 展开
+        composeRule.onNodeWithTag(CALENDAR_WEEK_STRIP_TAG).performTouchInput { swipeDown() }
+        composeRule.waitUntil(5_000) { countOfTag(CALENDAR_WEEK_STRIP_TAG) == 0 }
+        composeRule.onNodeWithTag(CALENDAR_PAGER_TAG).assertExists()
+    }
+
     /** 收起态横滑照样**切月**（不是按周翻页）：周条跟着换成含选中日的那一周。 */
     @Test
     fun swipeOnCollapsedWeekStripChangesMonth() {

@@ -109,6 +109,9 @@ internal const val CALENDAR_WEEK_STRIP_TAG = "calendar-week-strip"
 /** 当日流水列表（收起后才轮到它滚动，测试往它上面划）。 */
 internal const val CALENDAR_DAY_LIST_TAG = "calendar-day-list"
 
+/** 当天没记录时的空态区（那里也要能上滑收起/下滑展开）。 */
+internal const val CALENDAR_EMPTY_TAG = "calendar-empty"
+
 /** 日历页（M3-17 + 优化轮）：热力月网格 + 左右滑切月 + 点标题选年月 + 上滑收起成周视图。 */
 class CalendarViewModel(private val app: PennedApplication) : ViewModel() {
 
@@ -474,7 +477,12 @@ fun CalendarContent(
         // 选中那天的流水（与首页同一行渲染）
         val items = state.selectedItems
         if (items.isEmpty()) {
-            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.TopCenter) {
+            // 空态没有可滚动的东西（当天没记录时列表整块不渲染）→ 竖滑也接给同一个 gate：
+            // 上滑收起日历、在顶下滑展开（不然屏幕最大的一块区域划不动）
+            Box(
+                Modifier.fillMaxWidth().weight(1f).testTag(CALENDAR_EMPTY_TAG).then(gridDrag),
+                contentAlignment = Alignment.TopCenter,
+            ) {
                 EmptyState(
                     title = "${HomeGroups.dayLabel(state.selectedDay, ZoneId.systemDefault())} 没有记录",
                     hint = "点上面别的日子看看",
