@@ -18,16 +18,16 @@ import java.time.ZonedDateTime
  */
 object AddDate {
 
-    /** chip 文案：今天显示"今天 M月d日"，其他天显示"M月d日"。 */
-    fun chipLabel(epochDay: Long?, today: LocalDate): String {
+    /** chip 文案：今天显示"今天 M月d日"，其他天显示"M月d日"；选了时分就在后面带上 `HH:mm`（没选 = 现在，不显示）。 */
+    fun chipLabel(epochDay: Long?, today: LocalDate, time: LocalTime? = null): String {
         val d = epochDay?.let { LocalDate.ofEpochDay(it) } ?: today
         val prefix = if (epochDay == null || d == today) "今天 " else ""
-        return "$prefix${d.monthValue}月${d.dayOfMonth}日"
+        val base = "$prefix${d.monthValue}月${d.dayOfMonth}日"
+        return if (time == null) base else "$base ${timeLabel(time)}"
     }
 
-    /** 「时间」chip 文案：没选 = "现在"（保存时取当前时刻）；选了 = `HH:mm`（24 小时制、补零，与列表行时段同写法）。 */
-    fun timeChipLabel(time: LocalTime?): String =
-        time?.let { "%02d:%02d".format(it.hour, it.minute) } ?: "现在"
+    /** 时刻文案：`HH:mm`（24 小时制、补零，与列表行时段同写法）。 */
+    fun timeLabel(time: LocalTime): String = "%02d:%02d".format(time.hour, time.minute)
 
     /**
      * 保存用的 epochMinute：[epochDay] 与 [time] 都没给 = 当前时刻；给哪头用哪头

@@ -471,7 +471,7 @@ class AddViewModel(
         dateEpochDay.value = day
     }
 
-    /** 「时间」chip：选定 时:分（精确到分；没选就是"现在"）。 */
+    /** 记账时刻（时分）：由「日期」弹窗里的时分滚轮写入（精确到分；没选就是"现在"——保存时取当前时刻）。 */
     fun setTime(time: LocalTime) {
         timeOfDay.value = time
     }

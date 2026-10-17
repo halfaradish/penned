@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -54,11 +55,12 @@ import dev.penned.app.ui.components.PennedButton
 import dev.penned.app.ui.components.PennedCard
 import dev.penned.app.ui.components.PennedChip
 import dev.penned.app.ui.components.PennedDialog
+import dev.penned.app.ui.components.PennedDivider
 import dev.penned.app.ui.components.PennedListRow
 import dev.penned.app.ui.components.PennedSegmentedTabs
 import dev.penned.app.ui.components.PennedSheet
 import dev.penned.app.ui.components.TagCreateDialog
-import dev.penned.app.ui.components.TimePickerDialog
+import dev.penned.app.ui.components.TimeWheel
 import dev.penned.app.ui.components.reimburseStateLabel
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.templates.TemplatePickerSheet
@@ -67,6 +69,7 @@ import dev.penned.app.ui.theme.PennedSpacing
 import dev.penned.app.ui.theme.PennedTheme
 import java.time.LocalDate
 import dev.penned.app.ui.theme.expenseColor
+import dev.penned.app.ui.theme.iconMutedColor
 import dev.penned.app.ui.theme.incomeColor
 
 /** 信息条 chips 行（优化轮 3 改单行横滑；测试用它把某一枚滚进视口再点——LazyRow 视口外不 compose）。 */
@@ -286,7 +289,6 @@ fun AddTransactionContent(
     var showToPicker by remember { mutableStateOf(false) }
     var showFee by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
-    var showTimePicker by remember { mutableStateOf(false) }
     var showAddCategory by remember { mutableStateOf(false) }
     var addCategoryParent by remember { mutableStateOf<String?>(null) }
     var showTagPicker by remember { mutableStateOf(false) }
@@ -445,21 +447,15 @@ fun AddTransactionContent(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     val today = java.time.LocalDate.now()
+                    // 「日期」chip = 记账时刻的**唯一入口**（用户反馈：不要再加一枚「时间」chip）：
+                    // 弹窗里日期 + 时分一起调；没动过时分就还是"现在"（保存时取当前时刻），
+                    // 在里面调过了才把 `HH:mm` 带在 chip 上（保存语义见 AddDate）
                     item {
                         PennedChip(
-                            label = dev.penned.app.domain.AddDate.chipLabel(dateEpochDay, today),
+                            label = dev.penned.app.domain.AddDate.chipLabel(dateEpochDay, today, timeOfDay),
                             icon = PennedIcons.Calendar,
-                            selected = dateEpochDay != null && dateEpochDay != today.toEpochDay(),
+                            selected = (dateEpochDay != null && dateEpochDay != today.toEpochDay()) || timeOfDay != null,
                             onClick = { showDatePicker = true },
-                        )
-                    }
-                    // 时间（优化轮 3）：默认「现在」＝保存时取当前时刻（老行为）；选了就精确到分
-                    item {
-                        PennedChip(
-                            label = dev.penned.app.domain.AddDate.timeChipLabel(timeOfDay),
-                            icon = PennedIcons.Clock,
-                            selected = timeOfDay != null,
-                            onClick = { showTimePicker = true },
                         )
                     }
                     if (debtTab) {
@@ -649,33 +645,70 @@ fun AddTransactionContent(
                 dateEpochDay ?: java.time.LocalDate.now().toEpochDay(),
             ),
         )
-        androidx.compose.material3.DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    pickerState.selectedDateMillis?.let { millis ->
-                        onPickDate(dev.penned.app.domain.AddDate.pickerMillisToDay(millis))
-                    }
-                    showDatePicker = false
-                }) { Text("确定") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("取消") }
+        // 时分与日期**同一个弹窗**里调（用户反馈：不要再单独加一枚「时间」chip，点「日期」一起调）。
+        // 开轮值 = 已选的时分，没选过就是此刻——"看到的就是记下的"：确定即把它落成显式时分；
+        // 只在弹窗里改日期、没碰滚轮时也一样（所见即所存），不想带时分就别开这个弹窗。
+        val initialTime = remember { timeOfDay ?: java.time.LocalTime.now() }
+        var hour by remember { mutableIntStateOf(initialTime.hour) }
+        var minute by remember { mutableIntStateOf(initialTime.minute) }
+        // 用自家 PennedDialog 而不是 M3 的 DatePickerDialog：标题/按钮与「选年月」「选时间」同一套语言，
+        // 且 M3 那个弹窗会把额外内容插在它自己的标题与日历中间（实测），套不进"日历 + 时间"的顺序
+        PennedDialog(
+            onDismiss = { showDatePicker = false },
+            title = "选择记账日期",
+            confirmLabel = "确定",
+            onConfirm = {
+                pickerState.selectedDateMillis?.let { millis ->
+                    onPickDate(dev.penned.app.domain.AddDate.pickerMillisToDay(millis))
+                }
+                onPickTime(java.time.LocalTime.of(hour, minute))
+                showDatePicker = false
             },
         ) {
-            androidx.compose.material3.DatePicker(state = pickerState, title = { Text("选择记账日期", modifier = Modifier.padding(PennedSpacing.lg)) })
+            // 日历只要网格：标题由弹窗给、大号日期与"切键盘输入"开关都不要（选中的日子网格里有圈）；
+            // 底色去掉（M3 默认那层灰面板在白弹窗里像嵌了块板子），直接落在弹窗面上
+            androidx.compose.material3.DatePicker(
+                state = pickerState,
+                title = null,
+                headline = null,
+                showModeToggle = false,
+                colors = androidx.compose.material3.DatePickerDefaults.colors(
+                    containerColor = Color.Transparent,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            // 下半段 = 时间：发丝线分隔 + 「时间」小标题 + 时/分两列滚轮（3 行高，别把弹窗撑太高）
+            Column(Modifier.fillMaxWidth()) {
+                PennedDivider(startIndent = PennedSpacing.lg)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = PennedSpacing.lg, top = PennedSpacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        PennedIcons.Clock,
+                        contentDescription = null,
+                        tint = iconMutedColor(),
+                        modifier = Modifier.size(PennedDimens.iconChevron),
+                    )
+                    Spacer(Modifier.width(PennedSpacing.xs))
+                    Text(
+                        "时间",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TimeWheel(
+                    selectedHour = hour,
+                    selectedMinute = minute,
+                    onHourChange = { hour = it },
+                    onMinuteChange = { minute = it },
+                    rows = 3,
+                    modifier = Modifier.padding(horizontal = PennedSpacing.sm),
+                )
+            }
         }
-    }
-    if (showTimePicker) {
-        TimePickerDialog(
-            // 没选过时分就从当前时刻开轮（与"保存时取现在"同一口径）
-            initial = timeOfDay ?: java.time.LocalTime.now(),
-            onDismiss = { showTimePicker = false },
-            onConfirm = { picked ->
-                onPickTime(picked)
-                showTimePicker = false
-            },
-        )
     }
     if (showTagPicker) {
         TagPickerSheet(

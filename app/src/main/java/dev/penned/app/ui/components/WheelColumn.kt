@@ -49,6 +49,8 @@ internal fun WheelColumn(
     selectedIndex: Int,
     onSelectIndex: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    /** 可见格数（奇数，中间那格居中）。挤在日期弹窗里时可以给 3（别把弹窗撑太高）。 */
+    rows: Int = WHEEL_ROWS,
     /** 测试用：给内部滚动列打 tag（`performScrollToNode` 要落在滚动节点上，不是外层 Box）。 */
     scrollTag: String? = null,
 ) {
@@ -78,7 +80,7 @@ internal fun WheelColumn(
         if (placedOnce && selectedIndex >= 0 && centered != selectedIndex) state.animateScrollToItem(selectedIndex)
     }
 
-    Box(modifier = modifier.height(WheelItemHeight * WHEEL_ROWS)) {
+    Box(modifier = modifier.height(WheelItemHeight * rows)) {
         Box(
             Modifier
                 .align(Alignment.Center)
@@ -91,7 +93,7 @@ internal fun WheelColumn(
             state = state,
             flingBehavior = fling,
             modifier = if (scrollTag != null) Modifier.testTag(scrollTag) else Modifier,
-            contentPadding = PaddingValues(vertical = WheelItemHeight * (WHEEL_ROWS / 2)),
+            contentPadding = PaddingValues(vertical = WheelItemHeight * (rows / 2)),
         ) {
             itemsIndexed(items) { index, label ->
                 WheelItem(

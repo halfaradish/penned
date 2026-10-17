@@ -21,12 +21,21 @@ class AddDateTest {
     }
 
     @Test
-    fun `time chip label shows now or zero padded clock`() {
-        assertEquals("现在", AddDate.timeChipLabel(null))
-        assertEquals("00:00", AddDate.timeChipLabel(LocalTime.MIDNIGHT))
-        assertEquals("09:05", AddDate.timeChipLabel(LocalTime.of(9, 5)))
-        assertEquals("16:38", AddDate.timeChipLabel(LocalTime.of(16, 38)))
-        assertEquals("23:59", AddDate.timeChipLabel(LocalTime.of(23, 59)))
+    fun `chip label carries the picked time only when one was picked`() {
+        val today = LocalDate.of(2026, 10, 17)
+        // 没选过时分 = "现在"：chip 只写日期（时间到分是弹窗里的滚轮，见 D094/D097）
+        assertEquals("今天 10月17日", AddDate.chipLabel(null, today, null))
+        // 选了时分就带在后面；非今天的日期同理
+        assertEquals("今天 10月17日 09:05", AddDate.chipLabel(null, today, LocalTime.of(9, 5)))
+        assertEquals("10月3日 16:38", AddDate.chipLabel(LocalDate.of(2026, 10, 3).toEpochDay(), today, LocalTime.of(16, 38)))
+    }
+
+    @Test
+    fun `time label is zero padded 24h clock`() {
+        assertEquals("00:00", AddDate.timeLabel(LocalTime.MIDNIGHT))
+        assertEquals("09:05", AddDate.timeLabel(LocalTime.of(9, 5)))
+        assertEquals("16:38", AddDate.timeLabel(LocalTime.of(16, 38)))
+        assertEquals("23:59", AddDate.timeLabel(LocalTime.of(23, 59)))
     }
 
     @Test

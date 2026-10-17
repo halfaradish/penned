@@ -16,24 +16,22 @@ import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.penned.app.ui.theme.PennedTheme
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import java.time.LocalTime
 
 /**
- * 记账时间到分（优化轮 3）：自绘「时 | 分」双列滚轮，与「年 | 月」共用同一枚 [WheelColumn]。
- * 滚轮本体单独测——弹窗窗口在 Robolectric 里不便截图，所以内容抽成 [TimeWheel]（同 YearMonthPickerTest）。
+ * 记账时刻的「时 | 分」双列滚轮（优化轮 3）：与「年 | 月」共用同一枚 [WheelColumn]。
+ * 它嵌在**日期弹窗**里用（D097：点「日期」一起调，不再有单独的「时间」chip），
+ * 弹窗窗口在 Robolectric 里不便截图，所以滚轮本体单独测（同 YearMonthPickerTest）。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w400dp-h800dp")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-class TimePickerTest {
+class TimeWheelTest {
 
     @get:Rule
     val composeRule = createComposeRule()
@@ -58,6 +56,26 @@ class TimePickerTest {
     }
 
     @Test
+    fun captureCompactWheel() {
+        // 日期弹窗里用的就是 3 行紧凑形态：居中那格 = 选中的时/分，上下各一格做渐隐
+        composeRule.setContent {
+            PennedTheme {
+                TimeWheel(
+                    selectedHour = 16,
+                    selectedMinute = 38,
+                    onHourChange = {},
+                    onMinuteChange = {},
+                    modifier = Modifier.width(240.dp),
+                    rows = 3,
+                )
+            }
+        }
+        composeRule.onNodeWithText("16").assertIsDisplayed()
+        composeRule.onNodeWithText("38").assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_add_time_wheel_compact.png")
+    }
+
+    @Test
     fun `wheel keeps the selection it was opened with`() {
         var hour = 16
         var minute = 38
@@ -69,6 +87,7 @@ class TimePickerTest {
                     onHourChange = { hour = it },
                     onMinuteChange = { minute = it },
                     modifier = Modifier.width(240.dp),
+                    rows = 3,
                 )
             }
         }
@@ -91,6 +110,7 @@ class TimePickerTest {
                     onHourChange = { hour = it },
                     onMinuteChange = { minute = it },
                     modifier = Modifier.width(240.dp),
+                    rows = 3,
                 )
             }
         }
@@ -112,6 +132,7 @@ class TimePickerTest {
                     onHourChange = { hour = it },
                     onMinuteChange = { minute = it },
                     modifier = Modifier.width(240.dp),
+                    rows = 3,
                 )
             }
         }
@@ -132,6 +153,7 @@ class TimePickerTest {
                     onHourChange = { hour = it },
                     onMinuteChange = { minute = it },
                     modifier = Modifier.width(240.dp),
+                    rows = 3,
                 )
             }
         }
@@ -146,45 +168,5 @@ class TimePickerTest {
         composeRule.onNode(hasText("45") and hasAnyAncestor(hasTestTag(TIME_WHEEL_MINUTE_TAG))).performClick()
         composeRule.waitForIdle()
         assertEquals(45, minute)
-    }
-
-    @Test
-    fun `dialog opens at the initial time and confirms it unchanged`() {
-        var confirmed: LocalTime? = null
-        var dismissed = false
-        composeRule.setContent {
-            PennedTheme {
-                TimePickerDialog(
-                    initial = LocalTime.of(16, 38),
-                    onDismiss = { dismissed = true },
-                    onConfirm = { confirmed = it },
-                )
-            }
-        }
-        composeRule.onNodeWithText("选择时间").assertIsDisplayed()
-        composeRule.onNodeWithText("16").assertIsDisplayed()
-        composeRule.onNodeWithText("38").assertIsDisplayed()
-        // 确定前不改值：直接确定就回原时刻
-        composeRule.onNodeWithText("确定").performClick()
-        assertEquals(LocalTime.of(16, 38), confirmed)
-        assertFalse("确定不该走 dismiss", dismissed)
-    }
-
-    @Test
-    fun `dialog cancel dismisses without confirming`() {
-        var confirmed: LocalTime? = null
-        var dismissed = false
-        composeRule.setContent {
-            PennedTheme {
-                TimePickerDialog(
-                    initial = LocalTime.of(9, 5),
-                    onDismiss = { dismissed = true },
-                    onConfirm = { confirmed = it },
-                )
-            }
-        }
-        composeRule.onNodeWithText("取消").performClick()
-        assertTrue(dismissed)
-        org.junit.Assert.assertNull(confirmed)
     }
 }

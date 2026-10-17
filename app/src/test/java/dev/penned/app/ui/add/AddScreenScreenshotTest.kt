@@ -1,20 +1,30 @@
 package dev.penned.app.ui.add
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.domain.AccountType
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.MoneyExpression
 import dev.penned.app.domain.TxType
+import dev.penned.app.ui.components.TIME_WHEEL_HOUR_TAG
+import dev.penned.app.ui.components.TIME_WHEEL_MINUTE_TAG
 import dev.penned.app.ui.theme.PennedTheme
 import org.junit.Rule
 import org.junit.Test
@@ -112,33 +122,59 @@ class AddScreenScreenshotTest {
         composeRule.setContent { PennedTheme { content(onPickDate = { picked = it }) } }
         composeRule.onNodeWithText("今天", substring = true).performClick()
         composeRule.onNodeWithText("选择记账日期").assertIsDisplayed()
+        // 时刻与日期同弹窗（D097）：下半段就是「时间」+ 时/分滚轮
+        composeRule.onNodeWithText("时间").assertIsDisplayed()
+        composeRule.onNodeWithTag(TIME_WHEEL_HOUR_TAG).assertExists()
+        composeRule.onNodeWithTag(TIME_WHEEL_MINUTE_TAG).assertExists()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_add_date_picker.png")
         // 确定：回传日期
         composeRule.onNodeWithText("确定").performClick()
         org.junit.Assert.assertNotNull(picked)
     }
 
-    // ---- 时间到分（优化轮 3）：chip 回显 + 时分滚轮弹窗 ----
+    // ---- 时间到分（优化轮 3，D094/D097）：chip 回显 + 日期弹窗里的时分滚轮 ----
 
     @Test
     fun captureAddScreenWithPickedTime() {
         composeRule.setContent { PennedTheme { content(timeOfDay = java.time.LocalTime.of(16, 38)) } }
-        // 选了时分：chip 显示 HH:mm 并进选中态；默认的「现在」不再出现
-        composeRule.onNodeWithText("16:38").assertIsDisplayed()
-        composeRule.onNodeWithText("现在").assertDoesNotExist()
+        // 调过时分：chip 在日期后带上 HH:mm 并进选中态；没调过就只有日期（默认"现在"）
+        val expected = dev.penned.app.domain.AddDate.chipLabel(
+            null, LocalDate.now(), java.time.LocalTime.of(16, 38),
+        )
+        composeRule.onNodeWithText(expected).assertIsDisplayed()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_add_time_chip.png")
     }
 
     @Test
-    fun captureTimePickerDialog() {
-        var picked: java.time.LocalTime? = null
-        composeRule.setContent { PennedTheme { content(onPickTime = { picked = it }) } }
-        composeRule.onNodeWithText("现在").performClick()
-        composeRule.onNodeWithText("选择时间").assertIsDisplayed()
-        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_add_time_dialog.png")
-        // 确定：回传时刻（开轮就落在当前时刻，直接确定也回值）
+    fun dateDialogAdjustsTimeToo() {
+        var pickedDay: Long? = null
+        var pickedTime: java.time.LocalTime? = null
+        composeRule.setContent {
+            PennedTheme {
+                // 无状态组件的宿主得把回传的时分喂回去，chip 才会带出 `HH:mm`（真机里是 ViewModel 干这事）
+                var time by remember { mutableStateOf<java.time.LocalTime?>(null) }
+                content(
+                    timeOfDay = time,
+                    onPickDate = { pickedDay = it },
+                    onPickTime = { pickedTime = it; time = it },
+                )
+            }
+        }
+        // 唯一入口就是「日期」chip：点它，日期与时分在同一个弹窗里调
+        composeRule.onNodeWithText("今天", substring = true).performClick()
+        composeRule.onNodeWithText("选择记账日期").assertIsDisplayed()
+        // 选 09 时：先滚到目标，点一下落位到正中；按列限定（时/分两列都是数字，可能撞名）
+        composeRule.onNodeWithTag(TIME_WHEEL_HOUR_TAG).performScrollToNode(hasText("09"))
+        composeRule.onNode(hasText("09") and hasAnyAncestor(hasTestTag(TIME_WHEEL_HOUR_TAG))).performClick()
         composeRule.onNodeWithText("确定").performClick()
-        org.junit.Assert.assertNotNull(picked)
+        org.junit.Assert.assertNotNull(pickedDay)
+        org.junit.Assert.assertEquals(9, pickedTime?.hour)
+        // 弹窗关掉后 chip 带上时分（Robolectric 里弹窗开着时主窗口的节点不算"显示"，得等它关）
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithText("选择记账日期").fetchSemanticsNodes().isEmpty()
+        }
+        val expected = dev.penned.app.domain.AddDate.chipLabel(null, LocalDate.now(), pickedTime!!)
+        composeRule.onNodeWithText(expected).assertIsDisplayed()
     }
 
     @Test
