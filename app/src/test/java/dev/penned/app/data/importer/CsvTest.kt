@@ -4,7 +4,9 @@ import dev.penned.app.data.db.entity.TransactionEntity
 import dev.penned.app.domain.TxSource
 import dev.penned.app.domain.TxType
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CsvCodecTest {
@@ -98,6 +100,28 @@ class PennedCsvTest {
         assertThrows(PennedCsv.CsvFormatException::class.java) {
             PennedCsv.import("foo,bar\n1,2", bookId = "b1")
         }
+    }
+
+    @Test
+    fun `externalId 往返并写在末尾列`() {
+        val csv = PennedCsv.export(listOf(tx("t1") { it.copy(externalId = "4200003225202610171528367827") }))
+        assertEquals("externalId", PennedCsv.COLUMNS.last())
+        assertTrue(csv.lines().first().endsWith(",externalId"))
+        val restored = PennedCsv.import(csv, bookId = "b1").single()
+        assertEquals("4200003225202610171528367827", restored.externalId)
+    }
+
+    @Test
+    fun `旧 24 列备份（没有 externalId）仍能导入`() {
+        // 模拟 M4 之前导出的文件：把表头与每行的最后一列去掉
+        val old = PennedCsv.export(listOf(tx("t1") { it.copy(note = "旧备份") }))
+            .lines()
+            .filter { it.isNotEmpty() }
+            .joinToString("\r\n") { line -> line.substringBeforeLast(",") } + "\r\n"
+        assertFalse(old.contains("externalId"))
+        val restored = PennedCsv.import(old, bookId = "b1").single()
+        assertEquals("旧备份", restored.note)
+        assertEquals(null, restored.externalId)
     }
 
     @Test

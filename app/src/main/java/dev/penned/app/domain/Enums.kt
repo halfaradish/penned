@@ -11,6 +11,18 @@ enum class ReimburseState { NONE, PENDING, DONE }
 /** 记录方式（D021）：流水来源 */
 enum class TxSource { MANUAL, VOICE, TEXT, SCREENSHOT, IMPORT, AUTO }
 
+/** 关键词规则的目标（M4-0，D100）：命中后填分类还是标签（双目标共用同一张规则表）。 */
+enum class RuleTargetType { CATEGORY, TAG }
+
+/** 候选池的收支方向（M4-0）：识别不出方向就是 UNKNOWN（**不猜**，留给用户确认时定）。 */
+enum class PendingType { EXPENSE, INCOME, TRANSFER, UNKNOWN }
+
+/** 候选池的来源（M4-0）：截图识别 / 通知监听。 */
+enum class PendingKind { SCREENSHOT, NOTIFICATION }
+
+/** 候选池状态（M4-0）：待确认 / 已入账 / 已丢弃（「清空已处理」清后两者，D104）。 */
+enum class PendingStatus { PENDING, ACCEPTED, DISCARDED }
+
 /** 周期记账的期次单位（M3-6）。 */
 enum class RecurringPeriod { DAILY, WEEKLY, MONTHLY, YEARLY }
 

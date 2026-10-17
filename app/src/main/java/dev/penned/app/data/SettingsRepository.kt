@@ -52,6 +52,65 @@ class SettingsRepository(private val context: Context) {
     /** 统计模块开关（M3-14）：逗号串；**没存过 = 全开**、空串 = 全关（统计页给空态，不兜底）。 */
     val statsEnabled: Flow<String?> = context.dataStore.data.map { it[KEY_STATS_ENABLED] }
 
+    // ---- M4 智能（M4-0：键一次到位；页面从 M4-2/M4-8 起接）----
+
+    /**
+     * AI 总开关（M4-2）。**默认 false**（规格 §二·19：AI 永远要用户显式开启、显式触发）。
+     * 关着时所有 AI 入口只给引导，不发任何请求。
+     */
+    val llmEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_LLM_ENABLED] ?: false }
+
+    /** BYOK 服务地址（OpenAI 兼容 base，如 `https://open.bigmodel.cn/api/paas/v4`）。**只接受 https**（C2）。 */
+    val llmBaseUrl: Flow<String?> = context.dataStore.data.map { it[KEY_LLM_BASE_URL] }
+
+    /** 用户的 API Key：**明文存本机 DataStore**（R5 裁决；引加密库 = 加依赖），页面明示风险。 */
+    val llmApiKey: Flow<String?> = context.dataStore.data.map { it[KEY_LLM_API_KEY] }
+
+    /** 文本模型名。 */
+    val llmModel: Flow<String?> = context.dataStore.data.map { it[KEY_LLM_MODEL] }
+
+    /** 视觉模型名；空 = 跟 [llmModel]（同一家的多模态型号常常就是同一个名字）。 */
+    val llmVisionModel: Flow<String?> = context.dataStore.data.map { it[KEY_LLM_VISION_MODEL] }
+
+    /** 自动记账总开关（M4-8）。**默认 false**：勾了 App 也还得开着这个才处理通知。 */
+    val autoEntryEnabled: Flow<Boolean> = context.dataStore.data.map { it[KEY_AUTO_ENTRY_ENABLED] ?: false }
+
+    /**
+     * 自动记账的 App 白名单（M4-8）：逗号分隔的包名；**没存过/空串 = 什么都不处理**
+     * （宁可漏，不可错记——不勾任何 App 时通知监听形同关闭）。
+     */
+    val autoEntryPackages: Flow<String?> = context.dataStore.data.map { it[KEY_AUTO_ENTRY_PACKAGES] }
+
+    suspend fun setLlmEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_LLM_ENABLED] = enabled }
+    }
+
+    suspend fun setLlmBaseUrl(url: String?) {
+        context.dataStore.edit { if (url == null) it.remove(KEY_LLM_BASE_URL) else it[KEY_LLM_BASE_URL] = url }
+    }
+
+    suspend fun setLlmApiKey(key: String?) {
+        context.dataStore.edit { if (key == null) it.remove(KEY_LLM_API_KEY) else it[KEY_LLM_API_KEY] = key }
+    }
+
+    suspend fun setLlmModel(model: String?) {
+        context.dataStore.edit { if (model == null) it.remove(KEY_LLM_MODEL) else it[KEY_LLM_MODEL] = model }
+    }
+
+    suspend fun setLlmVisionModel(model: String?) {
+        context.dataStore.edit {
+            if (model == null) it.remove(KEY_LLM_VISION_MODEL) else it[KEY_LLM_VISION_MODEL] = model
+        }
+    }
+
+    suspend fun setAutoEntryEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_AUTO_ENTRY_ENABLED] = enabled }
+    }
+
+    suspend fun setAutoEntryPackages(commaSeparated: String) {
+        context.dataStore.edit { it[KEY_AUTO_ENTRY_PACKAGES] = commaSeparated }
+    }
+
     suspend fun setThemeAccent(accentName: String) {
         context.dataStore.edit { it[KEY_THEME_ACCENT] = accentName }
     }
@@ -105,5 +164,13 @@ class SettingsRepository(private val context: Context) {
         private val KEY_HOME_STAT_ITEMS = stringPreferencesKey("home_stat_items")
         private val KEY_STATS_ORDER = stringPreferencesKey("stats_order")
         private val KEY_STATS_ENABLED = stringPreferencesKey("stats_enabled")
+        // M4 智能（M4-0）
+        private val KEY_LLM_ENABLED = booleanPreferencesKey("llm_enabled")
+        private val KEY_LLM_BASE_URL = stringPreferencesKey("llm_base_url")
+        private val KEY_LLM_API_KEY = stringPreferencesKey("llm_api_key")
+        private val KEY_LLM_MODEL = stringPreferencesKey("llm_model")
+        private val KEY_LLM_VISION_MODEL = stringPreferencesKey("llm_vision_model")
+        private val KEY_AUTO_ENTRY_ENABLED = booleanPreferencesKey("auto_entry_enabled")
+        private val KEY_AUTO_ENTRY_PACKAGES = stringPreferencesKey("auto_entry_packages")
     }
 }

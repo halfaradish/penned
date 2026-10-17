@@ -12,6 +12,8 @@ import dev.penned.app.data.db.dao.BudgetDao
 import dev.penned.app.data.db.dao.CategoryDao
 import dev.penned.app.data.db.dao.DebtDao
 import dev.penned.app.data.db.dao.ImportBatchDao
+import dev.penned.app.data.db.dao.KeywordRuleDao
+import dev.penned.app.data.db.dao.PendingEntryDao
 import dev.penned.app.data.db.dao.RecurringDao
 import dev.penned.app.data.db.dao.SnapshotDao
 import dev.penned.app.data.db.dao.TagDao
@@ -28,6 +30,8 @@ import dev.penned.app.data.db.entity.BudgetEntity
 import dev.penned.app.data.db.entity.CategoryEntity
 import dev.penned.app.data.db.entity.DebtEntity
 import dev.penned.app.data.db.entity.ImportBatchEntity
+import dev.penned.app.data.db.entity.KeywordRuleEntity
+import dev.penned.app.data.db.entity.PendingEntryEntity
 import dev.penned.app.data.db.entity.RecurringRuleEntity
 import dev.penned.app.data.db.entity.TagEntity
 import dev.penned.app.data.db.entity.TemplateTagRefEntity
@@ -55,8 +59,10 @@ import dev.penned.app.data.db.entity.WishlistItemEntity
         AssetSnapshotEntity::class,
         DebtEntity::class,
         WishlistItemEntity::class,
+        KeywordRuleEntity::class,
+        PendingEntryEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -74,12 +80,14 @@ abstract class PennedDatabase : RoomDatabase() {
     abstract fun billFilterDao(): BillFilterDao
     abstract fun snapshotDao(): SnapshotDao
     abstract fun wishlistDao(): WishlistDao
+    abstract fun keywordRuleDao(): KeywordRuleDao
+    abstract fun pendingEntryDao(): PendingEntryDao
 
     companion object {
         /** 全部迁移。生产构建与 migration 测试共用这一份，测试不会漏掉新迁移。 */
         val MIGRATIONS = arrayOf(
             MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
-            MIGRATION_7_8,
+            MIGRATION_7_8, MIGRATION_8_9,
         )
 
         fun build(context: Context): PennedDatabase =

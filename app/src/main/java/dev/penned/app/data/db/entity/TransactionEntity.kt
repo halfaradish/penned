@@ -17,6 +17,8 @@ import dev.penned.app.domain.TxType
     indices = [
         Index("bookId"), Index("dateEpochMinute"), Index("categoryId"), Index("accountId"),
         Index("importBatchId"), Index("recurringRuleId"), Index("debtId"),
+        // M4-0：账单文件导入的查重（非唯一——去重在导入侧做，唯一约束会让重导变成插入失败）
+        Index("bookId", "externalId"),
     ],
 )
 data class TransactionEntity(
@@ -55,6 +57,11 @@ data class TransactionEntity(
     val recurringRuleId: String? = null,
     /** 债务资金流水归属的债务（D068）；手动记账为 null。 */
     val debtId: String? = null,
+    /**
+     * 外部单号（M4-0，规格 §三 M4-0）：微信"交易单号" / 支付宝"交易订单号"（缺失时退商户单号）。
+     * 账单文件导入的**去重依据**——索引 `(bookId, externalId)` 是**非唯一**的（去重在导入侧做）。
+     */
+    val externalId: String? = null,
     val creatorDeviceId: String,
     val createdAt: Long,
     val updatedAt: Long,

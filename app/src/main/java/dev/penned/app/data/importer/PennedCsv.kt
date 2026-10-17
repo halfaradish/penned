@@ -21,6 +21,9 @@ object PennedCsv {
         "currencyCode", "rate", "address",
         "excludeFromStats", "excludeFromBudget", "source", "importBatchId",
         "creatorDeviceId", "createdAt", "updatedAt", "deviceId",
+        // M4-0（D100）：外部单号补在**末尾**——旧文件（24 列）没有这一列，导入时按表头名取不到 = 空，
+        // 老版本读新文件也只会多出一列被忽略（`idx` 是按名字对齐的，不认位置）。
+        "externalId",
     )
 
     class CsvFormatException(message: String) : IOException(message)
@@ -39,6 +42,7 @@ object PennedCsv {
                     if (t.excludeFromStats) "1" else "0", if (t.excludeFromBudget) "1" else "0",
                     t.source.name, t.importBatchId.orEmpty(),
                     t.creatorDeviceId, t.createdAt.toString(), t.updatedAt.toString(), t.deviceId,
+                    t.externalId.orEmpty(),
                 )
             )
         }
@@ -87,6 +91,7 @@ object PennedCsv {
                 excludeFromBudget = field("excludeFromBudget") == "1",
                 source = field("source").ifEmpty { "MANUAL" }.let { v -> enumOr(TxSource::class.java, v) ?: TxSource.MANUAL },
                 importBatchId = field("importBatchId").ifEmpty { null },
+                externalId = field("externalId").ifEmpty { null },
                 creatorDeviceId = field("creatorDeviceId").ifEmpty { "unknown" },
                 createdAt = field("createdAt").toLongOrNull() ?: 0,
                 updatedAt = field("updatedAt").toLongOrNull() ?: 0,

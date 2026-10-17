@@ -164,3 +164,43 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
         db.execSQL("CREATE INDEX IF NOT EXISTS `index_wishlist_items_accountId` ON `wishlist_items` (`accountId`)")
     }
 }
+
+/**
+ * v8→v9：M4-0 一次迁移到位（规格 M4 §二·1 / §三 M4-0）——建 `keyword_rules`（关键词规则）与
+ * `pending_entries`（机器识别候选池），给 `transactions` 补 `externalId`（账单去重）与
+ * `(bookId, externalId)` **非唯一**索引，给 `import_batches` 补来源与跳过/重复计数三列。
+ *
+ * 本迁移之后 M4 不再升版本（`TxSource.NOTIFICATION` 那类枚举加值不改 schema）。
+ */
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `keyword_rules` (`id` TEXT NOT NULL, `bookId` TEXT NOT NULL, " +
+                "`keyword` TEXT NOT NULL, `targetType` TEXT NOT NULL, `targetId` TEXT NOT NULL, " +
+                "`priority` INTEGER NOT NULL, `enabled` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, " +
+                "`updatedAt` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, `deviceId` TEXT NOT NULL, " +
+                "PRIMARY KEY(`id`))"
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_keyword_rules_bookId` ON `keyword_rules` (`bookId`)")
+
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `pending_entries` (`id` TEXT NOT NULL, `kind` TEXT NOT NULL, " +
+                "`sourceApp` TEXT, `rawText` TEXT, `type` TEXT NOT NULL, `amountCents` INTEGER, " +
+                "`occurredAtEpochMinute` INTEGER, `merchant` TEXT, `note` TEXT, `categoryId` TEXT, " +
+                "`status` TEXT NOT NULL, `txId` TEXT, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, " +
+                "`deleted` INTEGER NOT NULL, `deviceId` TEXT NOT NULL, PRIMARY KEY(`id`))"
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_pending_entries_status` ON `pending_entries` (`status`)")
+
+        db.execSQL("ALTER TABLE transactions ADD COLUMN externalId TEXT")
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_transactions_bookId_externalId` " +
+                "ON `transactions` (`bookId`, `externalId`)"
+        )
+
+        // 旧批次都是"一木 xls 导入"，默认值 = YIMU，语义不变（规格 §三 M4-0）
+        db.execSQL("ALTER TABLE import_batches ADD COLUMN sourceKind TEXT NOT NULL DEFAULT 'YIMU'")
+        db.execSQL("ALTER TABLE import_batches ADD COLUMN skippedCount INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE import_batches ADD COLUMN duplicateCount INTEGER NOT NULL DEFAULT 0")
+    }
+}

@@ -326,8 +326,85 @@ class MigrationTest {
                 assertEquals(1, rows.size)
                 assertEquals("换电脑", rows[0].item.name)
                 assertEquals(800_000L, rows[0].item.targetCents)
-                // 升级后的库版本 = 8
-                assertEquals(8, real.openHelper.readableDatabase.version)
+                // 升级后的库版本 = 当前最新（MIGRATIONS 是整条链，M4-0 起是 9）
+                assertEquals(9, real.openHelper.readableDatabase.version)
+            }
+        } finally {
+            real.close()
+        }
+    }
+
+    @Test
+    fun `migrate 8 to 9 creates intelligence tables and import columns and keeps data`() {
+        createLegacyDatabase(8) { db ->
+            db.execSQL(
+                "INSERT INTO books (id, name, sortOrder, createdAt, updatedAt, deleted, deviceId) " +
+                    "VALUES ('b1', '测试账本', 0, 1, 1, 0, 'd')"
+            )
+            db.execSQL(
+                "INSERT INTO transactions (id, bookId, type, amountCents, accountId, targetAccountId, categoryId, " +
+                    "dateEpochMinute, note, refundCents, discountCents, reimburseState, reimburseAccountId, " +
+                    "currencyCode, rate, address, feeCents, excludeFromStats, excludeFromBudget, source, " +
+                    "importBatchId, reimburseCents, recurringRuleId, debtId, creatorDeviceId, createdAt, " +
+                    "updatedAt, deleted, deviceId) " +
+                    "VALUES ('t1', 'b1', 'EXPENSE', 1600, NULL, NULL, NULL, 100, '旧流水', 0, 0, 'NONE', NULL, " +
+                    "NULL, NULL, NULL, 0, 0, 0, 'MANUAL', NULL, 0, NULL, NULL, 'd', 1, 1, 0, 'd')"
+            )
+            // 迁移前唯一的批量导入路径是"一木 xls"，旧批次没有来源列
+            db.execSQL(
+                "INSERT INTO import_batches (id, bookId, fileName, count, importedAt, createdAt, updatedAt, " +
+                    "deleted, deviceId) VALUES ('batch-old', 'b1', '一木导出.xls', 3, 1, 1, 1, 0, 'd')"
+            )
+        }
+        val real = Room.databaseBuilder(context, PennedDatabase::class.java, dbName)
+            .addMigrations(*PennedDatabase.MIGRATIONS)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            runTest {
+                // 旧数据零变化
+                val old = real.transactionDao().all().single()
+                assertEquals("旧流水", old.note)
+                assertEquals(1600L, old.amountCents)
+                assertNull(old.externalId)
+
+                // 旧批次语义不变：默认来源 = YIMU、跳过/重复计数为 0
+                val batch = real.importBatchDao().get("batch-old")!!
+                assertEquals("YIMU", batch.sourceKind)
+                assertEquals(3, batch.count)
+                assertEquals(0, batch.skippedCount)
+                assertEquals(0, batch.duplicateCount)
+
+                // 新表可用：关键词规则
+                real.keywordRuleDao().upsert(
+                    dev.penned.app.data.db.entity.KeywordRuleEntity(
+                        id = "k1", bookId = "b1", keyword = "肯打鸡",
+                        targetType = dev.penned.app.domain.RuleTargetType.CATEGORY, targetId = "cat-1",
+                        priority = 0, enabled = true, createdAt = 1L, updatedAt = 1L, deviceId = "d",
+                    )
+                )
+                assertEquals(1, real.keywordRuleDao().countInBook("b1"))
+
+                // 新表可用：候选池（金额与时间可空）
+                real.pendingEntryDao().upsert(
+                    dev.penned.app.data.db.entity.PendingEntryEntity(
+                        id = "p1", kind = dev.penned.app.domain.PendingKind.NOTIFICATION,
+                        sourceApp = "com.tencent.mm", rawText = "微信支付 12.50",
+                        type = dev.penned.app.domain.PendingType.UNKNOWN,
+                        amountCents = null, occurredAtEpochMinute = null,
+                        createdAt = 1L, updatedAt = 1L, deviceId = "d",
+                    )
+                )
+                assertEquals(1, real.pendingEntryDao().countPending())
+
+                // 新列可用：externalId 写读一致 + 查重命中
+                real.transactionDao().upsert(
+                    old.copy(id = "t2", externalId = "WX-1", createdAt = 2L, updatedAt = 2L)
+                )
+                assertEquals(listOf("WX-1"), real.transactionDao().externalIdsInBook("b1", listOf("WX-1")))
+
+                // 升级后的库版本 = 9
+                assertEquals(9, real.openHelper.readableDatabase.version)
             }
         } finally {
             real.close()

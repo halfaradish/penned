@@ -1,5 +1,6 @@
 package dev.penned.app.data.db.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -30,8 +31,28 @@ data class ImportBatchEntity(
     val fileName: String,
     val count: Int,
     val importedAt: Long,
+    /**
+     * 批次来源（M4-0）：YIMU | PENNED_CSV | WECHAT | ALIPAY | GENERIC。
+     * **旧批次默认全是 YIMU**（迁移前只有"一木 xls"这一条批量导入路径），语义不变。
+     */
+    @ColumnInfo(defaultValue = "YIMU") val sourceKind: String = SOURCE_YIMU,
+    /**
+     * 跳过的行数（M4-0 / 规格 §二·16）：交易关闭 / 已退款 / 不计收支 / 坏行——预览页分列计数，
+     * 落库只存总数（分列口径见 `BillRowCounts`，预览页当场展示）。
+     */
+    @ColumnInfo(defaultValue = "0") val skippedCount: Int = 0,
+    /** 判定为重复而跳过的行数（M4-0：单号命中 / 疑似重复 / 文件内自身重复）。 */
+    @ColumnInfo(defaultValue = "0") val duplicateCount: Int = 0,
     val createdAt: Long,
     val updatedAt: Long,
     val deleted: Boolean = false,
     val deviceId: String,
-)
+) {
+    companion object {
+        const val SOURCE_YIMU = "YIMU"
+        const val SOURCE_PENNED_CSV = "PENNED_CSV"
+        const val SOURCE_WECHAT = "WECHAT"
+        const val SOURCE_ALIPAY = "ALIPAY"
+        const val SOURCE_GENERIC = "GENERIC"
+    }
+}

@@ -416,4 +416,17 @@ interface TransactionDao {
 
     @Query("UPDATE transactions SET deleted = 1, updatedAt = :now WHERE bookId = :bookId")
     suspend fun softDeleteByBook(bookId: String, now: Long)
+
+    /**
+     * 导入前的批量查重（M4-0 / 规格 §三 M4-4）：返回本账本里**已存在**的这些外部单号。
+     *
+     * 调用方按 ≤500 一批分块传（SQLite 的变量上限是 999，账单文件动辄几百行；M4-5 分块写库时顺带分块查）。
+     */
+    @Query(
+        """
+        SELECT externalId FROM transactions
+        WHERE deleted = 0 AND bookId = :bookId AND externalId IS NOT NULL AND externalId IN (:ids)
+        """
+    )
+    suspend fun externalIdsInBook(bookId: String, ids: List<String>): List<String>
 }
