@@ -1,10 +1,13 @@
 package dev.penned.app.ui.add
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.domain.AccountType
@@ -69,13 +72,19 @@ class AddReimburseScreenshotTest {
         onEvaluate = {}, onSave = {}, onSaveAgain = {}, onBack = {}, onEdit = {},
     )
 
+    /** 信息条 chips 单行横滑（优化轮 3）：把目标滚进视口再点/断（LazyRow 视口外的 chip 还没 compose）。 */
+    private fun revealChip(text: String) =
+        composeRule.onNodeWithTag(ADD_CHIP_ROW_TAG).performScrollToNode(hasText(text))
+
     @Test
     fun captureChipStates() {
         // 待报销（选中态）+ 自定金额：chip 只回显状态，金额在抽屉/详情里看
         composeRule.setContent {
             PennedTheme { content(state = ReimburseState.PENDING, accountId = "acc-1", claimLabel = "40.00") }
         }
+        revealChip("待报销")
         composeRule.onNodeWithText("待报销").assertIsDisplayed()
+        revealChip("优惠")
         composeRule.onNodeWithText("优惠").assertIsDisplayed()   // 信息条顺序没被挤乱
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m3_add_reimburse_chip.png")
     }
@@ -85,6 +94,7 @@ class AddReimburseScreenshotTest {
         composeRule.setContent {
             PennedTheme { content(state = ReimburseState.PENDING, accountId = "acc-1") }
         }
+        revealChip("待报销")
         composeRule.onNodeWithText("待报销").performClick()
         // 三态都在（就地改、抽屉不关），账户/金额两行 + 说明
         composeRule.onNodeWithText("不报销").assertIsDisplayed()
@@ -100,6 +110,7 @@ class AddReimburseScreenshotTest {
     @Test
     fun noneStateSheetHasNoRows() {
         composeRule.setContent { PennedTheme { content() } }
+        revealChip("不报销")
         composeRule.onNodeWithText("不报销").performClick()
         composeRule.onNodeWithText("选好了").assertIsDisplayed()
         // 不报销 = 没有账户/金额可言：两行不出现
@@ -116,6 +127,7 @@ class AddReimburseScreenshotTest {
                 content(state = ReimburseState.PENDING, reimburseText = "40", onFocusField = { focused = it })
             }
         }
+        revealChip("待报销")
         composeRule.onNodeWithText("待报销").performClick()
         composeRule.onNodeWithText("报销金额").performClick()
         assertEquals(AmountField.REIMBURSE, focused)

@@ -2,7 +2,9 @@ package dev.penned.app.ui.add
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -107,7 +109,8 @@ class AddTimeFlowTest {
     /** 滚轮列上选一个值：先滚到目标（performScrollToNode 只保证可见），点一下才落位到正中。 */
     private fun pickInWheel(tag: String, value: String) {
         composeRule.onNodeWithTag(tag).performScrollToNode(hasText(value))
-        composeRule.onNodeWithText(value).performClick()
+        // 按列限定：时/分两列都是数字，值可能重名（比如现在 08:16，两列各有一个「16」）
+        composeRule.onNode(hasText(value) and hasAnyAncestor(hasTestTag(tag))).performClick()
         composeRule.waitForIdle()
     }
 

@@ -4,13 +4,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.core.app.ApplicationProvider
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.penned.app.PennedApplication
@@ -20,6 +23,7 @@ import dev.penned.app.domain.ReimburseState
 import dev.penned.app.domain.StatsMath
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.add.AddTransactionContent
+import dev.penned.app.ui.add.ADD_CHIP_ROW_TAG
 import dev.penned.app.ui.add.AmountField
 import dev.penned.app.ui.add.CategoryUi
 import dev.penned.app.ui.budgets.BudgetsViewModel
@@ -79,6 +83,10 @@ class DarkThemeScreensTest {
     private fun capture(name: String) {
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/dark_$name.png")
     }
+
+    /** 信息条 chips 单行横滑（优化轮 3）：把目标滚进视口再点（LazyRow 视口外的 chip 还没 compose）。 */
+    private fun revealChip(text: String) =
+        composeRule.onNodeWithTag(ADD_CHIP_ROW_TAG).performScrollToNode(hasText(text))
 
     @Test
     fun darkHome() {
@@ -256,6 +264,7 @@ class DarkThemeScreensTest {
                 onSave = {}, onSaveAgain = {}, onBack = {}, onEdit = {},
             )
         }
+        revealChip("待报销")
         composeRule.onNodeWithText("待报销").performClick()
         composeRule.onNodeWithText("报销金额").assertIsDisplayed()
         composeRule.onNodeWithText("选好了").assertIsDisplayed()

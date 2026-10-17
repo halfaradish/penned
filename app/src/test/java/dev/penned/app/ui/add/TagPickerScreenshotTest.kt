@@ -1,10 +1,13 @@
 package dev.penned.app.ui.add
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.penned.app.data.db.entity.TagEntity
 import dev.penned.app.domain.TxType
@@ -56,10 +59,15 @@ class TagPickerScreenshotTest {
         onBack = {}, onEdit = {},
     )
 
+    /** 信息条 chips 单行横滑（优化轮 3）：把目标滚进视口再点/断（LazyRow 视口外的 chip 还没 compose）。 */
+    private fun revealChip(text: String) =
+        composeRule.onNodeWithTag(ADD_CHIP_ROW_TAG).performScrollToNode(hasText(text))
+
     @Test
     fun captureChipWithTagsSelected() {
         composeRule.setContent { PennedTheme { content(setOf("t1", "t2")) } }
         // 信息条只回显数量（明细在抽屉里）
+        revealChip("标签 · 2")
         composeRule.onNodeWithText("标签 · 2").assertIsDisplayed()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m3_add_tag_chip.png")
     }
@@ -67,6 +75,7 @@ class TagPickerScreenshotTest {
     @Test
     fun captureTagPickerSheet() {
         composeRule.setContent { PennedTheme { content(emptySet()) } }
+        revealChip("标签")
         composeRule.onNodeWithText("标签").performClick()
         composeRule.onNodeWithText("选择标签").assertIsDisplayed()
         // 两级：一级「出差」与它的二级（交通/住宿）都在；多选抽屉有明确的收尾动作
@@ -104,6 +113,7 @@ class TagPickerScreenshotTest {
                 )
             }
         }
+        revealChip("标签")
         composeRule.onNodeWithText("标签").performClick()
         // 空态给出路（D044 六态审查）：告诉用户去哪儿建
         composeRule.onNodeWithText("还没有标签——下面「新建标签」建一个").assertIsDisplayed()

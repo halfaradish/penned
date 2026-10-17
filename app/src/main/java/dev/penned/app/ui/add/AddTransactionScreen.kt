@@ -5,8 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -68,6 +68,9 @@ import dev.penned.app.ui.theme.PennedTheme
 import java.time.LocalDate
 import dev.penned.app.ui.theme.expenseColor
 import dev.penned.app.ui.theme.incomeColor
+
+/** 信息条 chips 行（优化轮 3 改单行横滑；测试用它把某一枚滚进视口再点——LazyRow 视口外不 compose）。 */
+internal const val ADD_CHIP_ROW_TAG = "add-chip-row"
 
 @Composable
 fun AddTransactionScreen(
@@ -204,7 +207,6 @@ fun AddTransactionScreen(
 data class AccountUi(val id: String, val name: String, val typeName: String)
 
 @Composable
-@OptIn(ExperimentalLayoutApi::class)
 fun AddTransactionContent(
     type: TxType,
     amountText: String,
@@ -435,82 +437,100 @@ fun AddTransactionContent(
                     )
                 }
                 Spacer(Modifier.height(PennedSpacing.sm))
-                // FlowRow 而不是 Row：字体放大到 1.5× 时 chip 会放不下，Row 会把最后一个挤成竖排单字，
-                // FlowRow 让它换行（D044 字体缩放检查）
-                FlowRow(
+                // 信息条 chips：**单行平铺、横向滑动**（优化轮 3）——字体放大到 1.5× 时靠滑动看后面的，
+                // 不再换行（取代 D044 那版"FlowRow 换行"；chip 的视觉尺寸与热区分层不变）
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth().testTag(ADD_CHIP_ROW_TAG),
                     horizontalArrangement = Arrangement.spacedBy(PennedSpacing.sm),
-                    verticalArrangement = Arrangement.spacedBy(PennedSpacing.xs),
-                    itemVerticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     val today = java.time.LocalDate.now()
-                    PennedChip(
-                        label = dev.penned.app.domain.AddDate.chipLabel(dateEpochDay, today),
-                        icon = PennedIcons.Calendar,
-                        selected = dateEpochDay != null && dateEpochDay != today.toEpochDay(),
-                        onClick = { showDatePicker = true },
-                    )
+                    item {
+                        PennedChip(
+                            label = dev.penned.app.domain.AddDate.chipLabel(dateEpochDay, today),
+                            icon = PennedIcons.Calendar,
+                            selected = dateEpochDay != null && dateEpochDay != today.toEpochDay(),
+                            onClick = { showDatePicker = true },
+                        )
+                    }
                     // 时间（优化轮 3）：默认「现在」＝保存时取当前时刻（老行为）；选了就精确到分
-                    PennedChip(
-                        label = dev.penned.app.domain.AddDate.timeChipLabel(timeOfDay),
-                        icon = PennedIcons.Clock,
-                        selected = timeOfDay != null,
-                        onClick = { showTimePicker = true },
-                    )
+                    item {
+                        PennedChip(
+                            label = dev.penned.app.domain.AddDate.timeChipLabel(timeOfDay),
+                            icon = PennedIcons.Clock,
+                            selected = timeOfDay != null,
+                            onClick = { showTimePicker = true },
+                        )
+                    }
                     if (debtTab) {
                         // 债务 Tab：资金账户在面板上选，备注在左边，没有分类/标签/退优惠/报销
                     } else {
                         // 模板（M3-5）：点开抽屉选一个，字段预填进本页（确认后才入库）
-                        PennedChip(
-                            label = "模板",
-                            icon = PennedIcons.Receipt,
-                            selected = false,
-                            onClick = { showTemplatePicker = true },
-                        )
+                        item {
+                            PennedChip(
+                                label = "模板",
+                                icon = PennedIcons.Receipt,
+                                selected = false,
+                                onClick = { showTemplatePicker = true },
+                            )
+                        }
                     }
                     if (debtTab) {
                     } else if (type == TxType.TRANSFER) {
-                        PennedChip(
-                            label = if (feeText.isBlank()) "手续费" else "手续费 $feeText",
-                            icon = PennedIcons.Tag,
-                            selected = feeText.isNotBlank(),
-                            onClick = { showFee = true },
-                        )
+                        item {
+                            PennedChip(
+                                label = if (feeText.isBlank()) "手续费" else "手续费 $feeText",
+                                icon = PennedIcons.Tag,
+                                selected = feeText.isNotBlank(),
+                                onClick = { showFee = true },
+                            )
+                        }
                     } else {
-                        PennedChip(
-                            label = accounts.firstOrNull { it.id == accountId }?.name ?: "无账户",
-                            icon = PennedIcons.Wallet,
-                            selected = accountId != null,
-                            onClick = { showAccountPicker = true },
-                        )
+                        item {
+                            PennedChip(
+                                label = accounts.firstOrNull { it.id == accountId }?.name ?: "无账户",
+                                icon = PennedIcons.Wallet,
+                                selected = accountId != null,
+                                onClick = { showAccountPicker = true },
+                            )
+                        }
                     }
                     if (!debtTab && type != TxType.TRANSFER) {
                         // 标签（M3-1）：多选；信息条只回显数量，明细在抽屉里
-                        PennedChip(
-                            label = if (selectedTagIds.isEmpty()) "标签" else "标签 · ${selectedTagIds.size}",
-                            icon = PennedIcons.Tag,
-                            selected = selectedTagIds.isNotEmpty(),
-                            onClick = { showTagPicker = true },
-                        )
+                        item {
+                            PennedChip(
+                                label = if (selectedTagIds.isEmpty()) "标签" else "标签 · ${selectedTagIds.size}",
+                                icon = PennedIcons.Tag,
+                                selected = selectedTagIds.isNotEmpty(),
+                                onClick = { showTagPicker = true },
+                            )
+                        }
                         // 退款 / 优惠（M3-2）：点开把键盘指过去，值就地回显在这两个 chip 上
-                        PennedChip(
-                            label = if (refundText.isBlank()) "退款" else "退款 $refundText",
-                            icon = PennedIcons.Refund,
-                            selected = refundText.isNotBlank() || amountField == AmountField.REFUND,
-                            onClick = { onFocusField(AmountField.REFUND) },
-                        )
-                        PennedChip(
-                            label = if (discountText.isBlank()) "优惠" else "优惠 $discountText",
-                            icon = PennedIcons.Discount,
-                            selected = discountText.isNotBlank() || amountField == AmountField.DISCOUNT,
-                            onClick = { onFocusField(AmountField.DISCOUNT) },
-                        )
+                        item {
+                            PennedChip(
+                                label = if (refundText.isBlank()) "退款" else "退款 $refundText",
+                                icon = PennedIcons.Refund,
+                                selected = refundText.isNotBlank() || amountField == AmountField.REFUND,
+                                onClick = { onFocusField(AmountField.REFUND) },
+                            )
+                        }
+                        item {
+                            PennedChip(
+                                label = if (discountText.isBlank()) "优惠" else "优惠 $discountText",
+                                icon = PennedIcons.Discount,
+                                selected = discountText.isNotBlank() || amountField == AmountField.DISCOUNT,
+                                onClick = { onFocusField(AmountField.DISCOUNT) },
+                            )
+                        }
                         // 报销（M3-3）：chip 只回显状态，三态 + 报销账户/金额在抽屉里选
-                        PennedChip(
-                            label = reimburseStateLabel(reimburseState),
-                            icon = PennedIcons.Receipt,
-                            selected = reimburseState != ReimburseState.NONE,
-                            onClick = { showReimburse = true },
-                        )
+                        item {
+                            PennedChip(
+                                label = reimburseStateLabel(reimburseState),
+                                icon = PennedIcons.Receipt,
+                                selected = reimburseState != ReimburseState.NONE,
+                                onClick = { showReimburse = true },
+                            )
+                        }
                     }
                 }
                 // 实付 = 原价 − 退款 − 优惠（只回显，落库在 saveInternal 一次算清）；

@@ -4,13 +4,16 @@ import android.os.Looper
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import dev.penned.app.PennedApplication
@@ -19,6 +22,7 @@ import dev.penned.app.data.db.entity.CategoryEntity
 import dev.penned.app.data.db.entity.TagEntity
 import dev.penned.app.domain.CategoryType
 import dev.penned.app.ui.LocalApp
+import dev.penned.app.ui.add.ADD_CHIP_ROW_TAG
 import dev.penned.app.ui.add.AddViewModel
 import dev.penned.app.ui.nav.PennedApp
 import dev.penned.app.ui.theme.PennedTheme
@@ -87,6 +91,21 @@ class TagsFlowTest {
     private fun count(text: String): Int =
         composeRule.onAllNodesWithText(text).fetchSemanticsNodes().size
 
+    /** 信息条 chips 单行横滑（优化轮 3）：把目标滚进视口再点/断（LazyRow 视口外的 chip 还没 compose）。 */
+    private fun revealChip(text: String) =
+        composeRule.onNodeWithTag(ADD_CHIP_ROW_TAG).performScrollToNode(hasText(text))
+
+    /** 等目标 chip 就位再滚出来：编辑页是新组合，chip 文案要等 `loadForEdit` 写完才出现。 */
+    private fun awaitChip(text: String, timeoutMs: Long = 5_000) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (runCatching { revealChip(text) }.isSuccess) return
+            composeRule.waitForIdle()
+            Thread.sleep(20)
+        }
+        error("等 chip「$text」超时")
+    }
+
     @Test
     fun `选标签保存后详情页可见_编辑页回填`() {
         val app = ApplicationProvider.getApplicationContext<PennedApplication>()
@@ -100,6 +119,7 @@ class TagsFlowTest {
         composeRule.onNodeWithText("1").performClick()
 
         // 标签抽屉：一级 + 二级多选，隐藏的「旧标签」不出现
+        revealChip("标签")
         composeRule.onNodeWithText("标签").performClick()
         composeRule.waitUntil(5_000) { count("选择标签") == 1 }
         composeRule.onNodeWithText("出差").assertIsDisplayed()
@@ -135,7 +155,7 @@ class TagsFlowTest {
 
         // 编辑回填：信息条 chip 回显数量（标签引用是到库里查的，不靠异步列表）
         composeRule.onNodeWithText("编辑").performScrollTo().performClick()
-        awaitUi { count("标签 · 2") == 1 }
+        awaitChip("标签 · 2")
     }
 
     /** 真时间轮询界面条件（Room 的查询在后台线程上，虚拟时钟推不出结果）。 */
@@ -240,6 +260,7 @@ class TagsFlowTest {
         renderApp(app)
         openAddScreen()
 
+        revealChip("标签")
         composeRule.onNodeWithText("标签").performClick()
         composeRule.waitUntil(5_000) { count("选择标签") == 1 }
         composeRule.onNodeWithText("出差").performClick()

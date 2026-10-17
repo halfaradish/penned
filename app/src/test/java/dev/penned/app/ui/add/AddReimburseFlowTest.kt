@@ -3,6 +3,7 @@ package dev.penned.app.ui.add
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -10,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import dev.penned.app.PennedApplication
@@ -116,6 +118,21 @@ class AddReimburseFlowTest {
         press("1"); press("0"); press("0")
     }
 
+    /** 信息条 chips 单行横滑（优化轮 3）：把目标滚进视口再点/断（LazyRow 视口外的 chip 还没 compose）。 */
+    private fun revealChip(text: String) =
+        composeRule.onNodeWithTag(ADD_CHIP_ROW_TAG).performScrollToNode(hasText(text))
+
+    /** 等目标 chip 就位再滚出来：编辑页是新组合，chip 文案要等 `loadForEdit` 写完才出现。 */
+    private fun awaitChip(text: String, timeoutMs: Long = 5_000) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (runCatching { revealChip(text) }.isSuccess) return
+            composeRule.waitForIdle()
+            Thread.sleep(20)
+        }
+        error("等 chip「$text」超时")
+    }
+
     @Test
     fun `待报销加账户_落库与详情行都对`() {
         val app = ApplicationProvider.getApplicationContext<PennedApplication>()
@@ -124,6 +141,7 @@ class AddReimburseFlowTest {
         fillBasicForm("差旅打车")
 
         // 报销抽屉：默认不报销 → 选待报销 → 账户/金额两行出现
+        revealChip("不报销")
         composeRule.onNodeWithText("不报销").performClick()
         composeRule.waitUntil(5_000) { count("选好了") == 1 }
         composeRule.onNodeWithText("待报销").performClick()
@@ -168,6 +186,7 @@ class AddReimburseFlowTest {
         fillBasicForm("住酒店")
 
         // 待报销 → 报销金额行把键盘指过去
+        revealChip("不报销")
         composeRule.onNodeWithText("不报销").performClick()
         composeRule.waitUntil(5_000) { count("选好了") == 1 }
         composeRule.onNodeWithText("待报销").performClick()
@@ -194,7 +213,7 @@ class AddReimburseFlowTest {
         // 详情页先画顶栏占位、数据到了才出明细——等**备注行**，别等只在占位帧也有的「账单详情」
         awaitUi { count("住酒店") == 1 }
         composeRule.onNodeWithText("编辑").performScrollTo().performClick()
-        awaitUi { count("待报销") == 1 }
+        awaitChip("待报销")
         composeRule.onNodeWithText("待报销").performClick()
         composeRule.waitUntil(5_000) { count("已报销") == 1 }
         composeRule.onNodeWithText("已报销").performClick()

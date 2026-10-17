@@ -3,6 +3,7 @@ package dev.penned.app.ui.add
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -10,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import dev.penned.app.PennedApplication
@@ -72,6 +74,21 @@ class AddRefundFlowTest {
     /** 按键盘键（tag 定位，避开与宫格重名的文本）。 */
     private fun press(key: String) = composeRule.onNodeWithTag("amount-key-$key").performClick()
 
+    /** 信息条 chips 单行横滑（优化轮 3）：把目标滚进视口再点（LazyRow 视口外的 chip 还没 compose）。 */
+    private fun revealChip(text: String) =
+        composeRule.onNodeWithTag(ADD_CHIP_ROW_TAG).performScrollToNode(hasText(text))
+
+    /** 等目标 chip 就位再滚出来：编辑页是新组合，chip 文案要等 `loadForEdit` 写完才出现。 */
+    private fun awaitChip(text: String, timeoutMs: Long = 5_000) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (runCatching { revealChip(text) }.isSuccess) return
+            composeRule.waitForIdle()
+            Thread.sleep(20)
+        }
+        error("等 chip「$text」超时")
+    }
+
     private fun awaitDb(timeoutMs: Long = 5_000, block: suspend () -> LongArray?): LongArray {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
@@ -114,6 +131,7 @@ class AddRefundFlowTest {
         press("1"); press("0"); press("0")
 
         // 点「退款」chip：键盘指到退款格，接着打的 30 进退款而不是主金额
+        revealChip("退款")
         composeRule.onNodeWithText("退款").performClick()
         composeRule.waitUntil(5_000) { count("正在输入：退款") == 1 }
         press("3"); press("0")
@@ -147,7 +165,7 @@ class AddRefundFlowTest {
         composeRule.onNodeWithText("退款").performScrollTo().performClick()
 
         // 编辑页：金额框反推回原价 100.00，退款 chip 回填 30.00
-        awaitUi { count("退款 30.00") == 1 }
+        awaitChip("退款 30.00")
         composeRule.onNodeWithText("100.00").assertIsDisplayed()
 
         // 再存一次：净额与退款都不变（往返幂等——表驱动那套的端到端版）。

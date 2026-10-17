@@ -1,10 +1,13 @@
 package dev.penned.app.ui.add
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import com.github.takahirom.roborazzi.captureRoboImage
 import dev.penned.app.domain.RefundMath
 import dev.penned.app.domain.TxType
@@ -61,6 +64,10 @@ class AddRefundScreenshotTest {
         onEvaluate = {}, onSave = {}, onSaveAgain = {}, onBack = {}, onEdit = {},
     )
 
+    /** 信息条 chips 单行横滑（优化轮 3）：把目标滚进视口再点/断（LazyRow 视口外的 chip 还没 compose）。 */
+    private fun revealChip(text: String) =
+        composeRule.onNodeWithTag(ADD_CHIP_ROW_TAG).performScrollToNode(hasText(text))
+
     @Test
     fun captureRefundState() {
         composeRule.setContent {
@@ -73,7 +80,9 @@ class AddRefundScreenshotTest {
             }
         }
         // 规格断言：两个 chip 在、退款 chip 回显金额、实付行写成算式、键盘提示条指在退款格
+        revealChip("退款 3.00")
         composeRule.onNodeWithText("退款 3.00").assertIsDisplayed()
+        revealChip("优惠")
         composeRule.onNodeWithText("优惠").assertIsDisplayed()
         composeRule.onNodeWithText("实付 17.00（20.00 − 退款 3.00）").assertIsDisplayed()
         composeRule.onNodeWithText("正在输入：退款").assertIsDisplayed()
@@ -103,8 +112,10 @@ class AddRefundScreenshotTest {
         // 无状态组件只上报"键盘该指哪一格"；主金额态没有提示条
         var focused: AmountField? = null
         composeRule.setContent { PennedTheme { content(onFocusField = { focused = it }) } }
+        revealChip("退款")
         composeRule.onNodeWithText("退款").performClick()
         assertEquals(AmountField.REFUND, focused)
+        revealChip("优惠")
         composeRule.onNodeWithText("优惠").performClick()
         assertEquals(AmountField.DISCOUNT, focused)
         // 键盘在主金额格时两样都不出现：没有提示条、也没有实付行（chip 就是默认文案）

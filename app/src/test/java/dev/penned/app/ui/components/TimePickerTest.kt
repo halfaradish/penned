@@ -3,6 +3,8 @@ package dev.penned.app.ui.components
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -133,14 +135,15 @@ class TimePickerTest {
                 )
             }
         }
-        // 先滚到目标（performScrollToNode 只保证可见），点一下才落位到正中
+        // 先滚到目标（performScrollToNode 只保证可见），点一下才落位到正中。
+        // 按列限定：时/分两列都是数字，值可能重名（比如选 10:12 时两列各有一个「12」）
         composeRule.onNodeWithTag(TIME_WHEEL_HOUR_TAG).performScrollToNode(hasText("12"))
-        composeRule.onNodeWithText("12").performClick()
+        composeRule.onNode(hasText("12") and hasAnyAncestor(hasTestTag(TIME_WHEEL_HOUR_TAG))).performClick()
         composeRule.waitForIdle()
         assertEquals(12, hour)
 
         composeRule.onNodeWithTag(TIME_WHEEL_MINUTE_TAG).performScrollToNode(hasText("45"))
-        composeRule.onNodeWithText("45").performClick()
+        composeRule.onNode(hasText("45") and hasAnyAncestor(hasTestTag(TIME_WHEEL_MINUTE_TAG))).performClick()
         composeRule.waitForIdle()
         assertEquals(45, minute)
     }
