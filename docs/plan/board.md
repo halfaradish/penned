@@ -5,11 +5,12 @@
 ## 进行中
 
 **M4 智能 · 交付进度（每轮开工先读这一段）** —— 规格 `docs/specs/M4.md` **v1.0 已冻结**，按批次串行落地（批次内可换序，批次间不许跳批）。
-- **批次一**：`M4-0` ✅ 已交付（提交 `8a23c67`）｜`M4-1` ✅ 已交付（提交 `fc340bb`）｜`M4-2` ✅ 已交付（提交见下）——**批次一收官**
-- **批次二**：`M4-3` ✅ 已交付（提交 `7595559`）｜`M4-4` ✅ 已交付（提交见下）——**批次二收官**
+- **批次一**：`M4-0` ✅ 已交付（提交 `8a23c67`）｜`M4-1` ✅ 已交付（提交 `fc340bb`）｜`M4-2` ✅ 已交付（提交 `9fd1ed1`）——**批次一收官**
+- **批次二**：`M4-3` ✅ 已交付（提交 `7595559`）｜`M4-4` ✅ 已交付（提交 `5ffb5b6`）——**批次二收官**
 - **批次三**：`M4-5` ✅ 已交付（提交 `be81a2a`）｜`M4-6` ✅ 已交付（提交 `b1a4a17`）——**批次三收官**
-- **批次四**：`M4-7` ✅ 已交付（提交见下）｜`M4-8` ✅ 已交付（提交见下）——**批次四收官 = M4 九片全部交付**
-- **测试基线**：M4 开工前 **723 条 / 0 失败**；`M4-0` 后 767；`M4-1` 后 785；`M4-2` 后 826；`M4-3` 后 850；`M4-4` 后 882；`M4-5` 后 906；`M4-6` 后 920；`M4-7` 后 **939 条 / 0 失败 / lint 0 error**（34 warnings 全是既有的 GradleDependency/NewerVersionAvailable/UseKtx 类，无新品类；`ImagePrep` 里那处 `createScaledBitmap` 已换成 `core-ktx` 的 `Bitmap.scale`，保持在 34）。
+- **批次四**：`M4-7` ✅ 已交付（提交 `6b05383`）｜`M4-8` ✅ 已交付（提交 `7128d0a`）——**批次四收官 = M4 九片全部交付（2026-10-17～10-18）**
+- **里程碑终态**：`./gradlew build test lint` **975 测试 / 0 失败 / 0 error / 34 warnings**（无新品类）；**零新增依赖**（`libs.versions.toml` 与 `app/build.gradle.kts` 依赖清单自 M4 起点零变化）；Manifest 只多四处（`POST_NOTIFICATIONS` + 通知监听 `<service>` + M4-7 的 `ACTION_SEND` filter）；外发只有 AI（只收 https、默认关、拒绝时一个包都不出）与 M2 的更新检查两条；库 **v9**（`9.json` 入库）；**全部软删 + 唯一硬删例外**（候选池 `clearProcessed`，D104）；金额一律 Long 分。**未 push、未打 tag、未发版**。
+- **测试基线**：M4 开工前 **723 条 / 0 失败**；`M4-0` 后 767；`M4-1` 后 785；`M4-2` 后 826；`M4-3` 后 850；`M4-4` 后 882；`M4-5` 后 906；`M4-6` 后 920；`M4-7` 后 939；`M4-8` 后 **975 条 / 0 失败 / lint 0 error（34 warnings 无新品类）**。
 - **M4-8 产出**（UI 片 + 系统接线）：`domain/NotifyParse.kt`（**代码内常量规则表**，不落库不热更新：微信/支付宝特征词 + 金额正则 `¥?([\d,]+\.\d{2})` 交 `MoneyParse` + 方向判定 + 关键词规则带分类；**解析不出金额或方向直接丢弃**；`alertText` 固定文案「识别到一笔 12.50 的支出，点这里确认」；`whitelist` 解析逗号串。**DEBUG 包里多一条 `com.android.shell` 规则**，专为 `adb` 造通知那条验收——release 不含）；`data/notify/AutoEntryService.kt`（读 `EXTRA_TITLE/TEXT/**BIG_TEXT**/SUB_TEXT/SUMMARY_TEXT`——`cmd notification post -S bigtext` 与很多支付通知把正文放在 BIG_TEXT，只读 TEXT 会读不到金额；门：`auto_entry_enabled` + 白名单；去重同 App+同分钟+同原文；落候选池带 `occurredAtEpochMinute`/`note`/`categoryId`（命中规则）；发本 App 提醒（渠道 `auto_entry`），小图标用新加的 `res/drawable/ic_notify_pending.xml`——**状态栏按 alpha 做单色遮罩，拿 `ic_launcher` 会渲染成一块白方块**；`PendingIntent` 带 `EXTRA_OPEN_PENDING`）；`ui/intelligence/AutoEntryScreen.kt`（状态卡两态 +「去开启」跳 `Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS` + 总开关默认关 + 白名单只列**已安装**的常见支付类 + 待确认入口带条数 + 隐私说明；33+ 开开关时顺手申请 `POST_NOTIFICATIONS`——**只服务提醒，拒绝不拦落库**）；`ui/intelligence/PendingScreen.kt`（候选行 = 来源 + 方向 + **时间** + 金额 + 原文一行 + 左滑「丢弃」；「全部丢弃」；页脚「清空已处理」= **全库唯一硬删**（D104）；空态给"去开自动记账"）；`ui/intelligence/NotificationOpenRequest.kt`（intent 标记 + 通知使用权判定）；`TxSource.NOTIFICATION` + 详情页「通知记账」；我的页「智能」卡第四行 + 路由 `auto-entry`/`pending` + 通知点击补跳。测试 **+36**（939 → **975**）：`NotifyParseTest` 8（**含微信 6 / 支付宝 6 两张表**，脱敏样张）/`AutoEntryServiceTest` 7（白名单、总开关、去重、解析不出不落库、ACCEPTED 回写、硬删）/`AutoEntryScreensTest` 10 + 截图浅 4 张 + 深 2 张（`dark_auto_entry`/`dark_pending`）/`NotificationOpenRequestTest` 2/`NotificationWiringTest` 4（服务真被系统"通知使用权"列表按 action + 权限 + 显示名收进去、`POST_NOTIFICATIONS` 在清单里、33+ 未授权才申请）/`CsvTest` +1（`NOTIFICATION` 往返、旧值不受影响）/`DetailScreenScreenshotTest` +2（「通知记账」vs「自动记账」两条标签）/`DarkThemeScreensTest` +2。规范 **§13·补三十七** 已写。
 - **M4-8 走查与修正（本片自己抓到三处）**：① 隐私说明把 `**不进 AI**` **直接印在页面上**（Markdown 星辰号没被解释）——改成真正加重（`buildAnnotatedString` + `SemiBold`），同页测试文案随之更新；② 候选行**漏了「时间」**（规格行 = 来源 + 金额 + 方向 + **时间** + 原文）——补行尾 `MM-dd HH:mm`（有发生时刻用它、没有才退到入池时刻，跨时区表驱动测）；③ 提醒小图标原用 `ic_launcher`（108dp 实心方块）→ 新增单色 `ic_notify_pending.xml`。**深色截图逐张过目**（`dark_auto_entry`/`dark_pending` 与浅色同口径；像素扫描排除"看起来有边框"的误判——只有 `SwipeActionRow` 卡片右缘那条 1px 红发丝是真件，见提案区）。
 - **M4-8 真机走查（GxuDev）**：装包后**通知使用权**授予 → 我的 → 智能 → 自动记账：状态卡转「已获得通知使用权」、白名单出现「Shell」「微信」「支付宝」等已安装项、开关与条数正常；设置项落盘核对（`auto_entry_enabled`/`auto_entry_packages`）。**库内基线原样**（760 活跃 / 15 软删 / 3 账户 / 2 账本 / 1 批次 / user_version 9）。**deferred**：`adb shell cmd notification post -S bigtext -t '微信支付' …` 在我们这个模拟机镜像上**没送达已绑定的监听服务**（`dumpsys notification` 显示服务已绑定、logcat 无回调）→ 「造 3 条通知 → 待确认 3 条 → 入账 1 条 → 首页该行详情显示『通知记账』」这半步真机没验成，留给真机；**解析/落库/提醒/去重这半边由 `AutoEntryServiceTest` 用 `StatusBarNotification` 直接喂**（不依赖系统投递），清单侧由 `NotificationWiringTest` 断。
@@ -224,6 +225,29 @@ obolectric-*`，其中两个 `robolectric-nativeruntime*` 各 40–200MB）：�
 - **动效候选（AP 轮明确不做）**：预测性返回手势（`PredictiveBackHandler`，返回手势拖到一半能看见下页跟着走）、共享元素转场（分类头像/标题从列表 morph 到详情页）、**记一笔改从底部升起的模态**（现在是和别的下钻页一样的右推入）、**Tab 之间跟手横滑**（现在固定淡入淡出）；另有"转场时长/视差比例做成可调设置项"这一档（现在写死在 `MotionSpec`）
 
 ## 已完成
+
+### M4 智能（9 片 / 4 批，2026-10-17~10-18）—— 规格 v1.0 冻结后全量交付
+
+- **一句话**：从"记一笔只能手打"到"文本 / 账单文件 / 截图 / 通知四条来源都能进账"，**AI 全程只做辅助**（分类永远本地映射、金额/时间/单号不出设备、默认关、只收 https），敏感面收在"候选池 + 人工确认"里。
+
+| 片 | 交付内容 | 提交 | 测试（累计） | 走查 | deferred |
+|---|---|---|---|---|---|
+| `M4-0` | 库 v8→v9（`keyword_rules` / `pending_entries` / `transactions.externalId` 非唯一索引 / 批次三列）+ `KeywordRules.match` + `MoneyParse` + 7 个设置键 + CSV 补 `externalId` | `8a23c67` | 767 | GxuDev 装包验迁移：user_version 8→9、760 活跃 / 15 软删一字不变 | — |
+| `M4-1` | 分类关键词规则：我的页「智能」卡 + 规则页（增删启停上移/删除、分类或标签双目标）+ 四处接入 | `fc340bb` | 785 | GxuDev 真机走查（含"肯打鸡"链路）；**顺手修 `SwipeActionRow` 隐藏动作可被点到** | — |
+| `M4-2` | BYOK：`LlmClient`（只 https）+ 出参强校验 + AI 设置页（Key 密文 / 测试连接三态 / 隐私文案一处） | `9fd1ed1` | 826 | GxuDev 验"未配置 / 非 https / 连不上"三条路径 | **真机 AI 链路**（无 Key；https-only 挡本机假服务器） |
+| `M4-3` | 一句话记账：本地解析器 + 结果卡五行逐行可改 + 首页长按快捷入口 + 已记账/撤销 | `7595559` | 850 | GxuDev 走查（软键盘盖保存键的坑已记） | AI 兜底按钮的真机链路（同上无 Key） |
+| `M4-4` | 账单读取层：四容器（CSV 编码探测 / xlsx / xls / zip）+ 两家规则表 + 字段口径 + 去重（无 UI、不落库） | `5ffb5b6` | 882 | 真实两份账单跑临时探针核对（微信逐分对上；**支付宝头部与明细不一致 → 口径勘误 D110**） | — |
+| `M4-5` | 账单导入预览与落库：第三入口 + 预览七段 + 账户映射/新建 + 分块落库 + 批次计数 | `be81a2a` | 906 | **GxuDev 两份真实账单全链路**：微信 42 行对账通过；支付宝 507 行导入、再导 0 重复；修两个真 bug（分批查全 / 去重后计数） | — |
+| `M4-6` | LLM 辅助导入：列映射建议 + 商户分类建议 + 存为关键词规则（只发表头 / 掩码样例） | `b1a4a17` | 920 | 假服务器端到端（含**外发边界**断言） | 真机 AI 链路（无 Key） |
+| `M4-7` | 截图导入：压缩 1280/JPEG85 + 相册多选/拍照/系统分享三入口 + 失败卡 + 候选池与预填回写 | `6b05383` | 939 | GxuDev 验入口与"未配置 → 引导"路径；假服务器 + 现场生成 PNG 覆盖识别链路 | **真机真图 ≥6 张**（`docs/local/` 没有支付类截图） |
+| `M4-8` | 自动记账：通知监听 + 解析规则表 + 候选池 + 提醒 + 待确认页 + `TxSource.NOTIFICATION` | `7128d0a` | 975 | GxuDev 授权/白名单/开关/条数 + 设置落盘；库内基线原样 | **`adb` 造通知的全链**（本模拟机镜像不投递；解析/落库/提醒由单测直喂 `StatusBarNotification` 覆盖） |
+
+- **跨片核验（里程碑级）**：① **零新增依赖**（`gradle/libs.versions.toml` + `app/build.gradle.kts` 依赖清单自 M4 起点零变化，实测 `git diff` 为空）；② **Manifest 只多四处**：`POST_NOTIFICATIONS`、通知监听 `<service>`（带 `BIND_NOTIFICATION_LISTENER_SERVICE` + label）、M4-7 的 `ACTION_SEND` filter——没有存储/相机/短信/无障碍权限；③ **外发只有两条**：AI（`LlmClient`，只 https、默认关、未配置或非 https 时**一个包都不出**）与 M2 的更新检查（`OkHttpFetcher`）；④ **AI 默认关**（`llm_enabled` / `auto_entry_enabled` 默认 false，有测试钉）；⑤ **金额一律 Long 分**（新加的 `MoneyParse` 走 BigDecimal，全仓无 `toDouble` 存钱）；⑥ **库 v9 + `9.json` 入库** + `MIGRATION_8_9` + migration 测试；⑦ **全表软删 + 唯一硬删例外**（`pending_entries.clearProcessed`，D104 记明）。
+- **规范**：`docs/界面规范.md` **§13·补三十一 ~ 补三十七** 七节（分类关键词 / AI 设置 / 一句话 / 账单导入预览 / 通用列映射 + AI 辅助 / 截图导入 / 自动记账与待确认）。
+- **决策**：**D100~D110**（D100 冻结、D101 xlsx+GB18030、D102 分类不新建、D103 MoneyParse 分家、D104 硬删例外、D105 NOTIFICATION/https/密码锁、**D106 DataStore 缓存 + SwipeActionRow 关闭态**、**D107 Excel 序列日期折分**、**D108 LLM 两条出口**、**D109 通知监听口径**、**D110 对账口径修正**）。
+- **体量**：release APK **2.46 MB**（2,581,175 B，本地 `assembleRelease`，R8 通过）；与线上 0.1.0 的对比待有网/CI 时核。
+- **移交 M5 的三件事**：① **`M4-7` 真机真图验收**（6 张支付类截图，缺料）；② **真机 AI 链路验收**（要一个可用 Key + https 端点）；③ **`adb` 造通知全链**（换真机或别的模拟机镜像）。另有两处**非阻塞**的视觉小件记在提案区（`SwipeActionRow` 卡片右缘 1px 红发丝；几个页面把 Markdown `**` 印在脸上）。
+- **未做的事（按规格）**：不 bumpVersion、不打 tag、不 push、不发 Release；不动 `AGENTS.md`、不动已冻结规格；不做跨片偷跑。真实账单**只读、只对账**，原始行不入库不入屏不进测试。
 
 ### 记一笔与提示条（时间入口合并 + 提示条顶部重设，2026-10-17，用户反馈两条）
 
