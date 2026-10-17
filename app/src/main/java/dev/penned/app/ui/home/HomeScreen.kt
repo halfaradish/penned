@@ -109,7 +109,6 @@ internal const val HOME_MONTH_TITLE_TAG = "home-month-title"
 /** 保存提示条（带「存为模板」的那条）的停留时长：比 M3 的 10s 短、给 4s 加一点抬手余量（D099）。 */
 internal const val HOME_FLASH_MILLIS = 5_000L
 
-
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
@@ -120,10 +119,17 @@ fun HomeScreen(
     onSearch: () -> Unit = {},
     /** 行左滑动作区的「编辑」：进编辑页（与详情页的编辑同一条路由）。 */
     onEditRow: (String) -> Unit = {},
+    /** 长按悬浮入口给的快捷入口（M4-3）：进一句话记账页。 */
+    onQuickEntry: () -> Unit = {},
     /** 一次性提示（如"已记账"）：由记一笔页写进本页的 savedStateHandle，展示后回调 [onFlashShown]。 */
     flashMessage: String? = null,
     /** 刚保存的流水 id（M3-5）：非空时提示条给「存为模板」动作。 */
     flashTxId: String? = null,
+    /**
+     * 这次入账来自"机器解析的草稿"（M4-3 一句话）：提示条的动作给**「撤销」**而不是「存为模板」
+     * ——解析出来的账最需要的是一个"记错了"的出口（规格 §三 M4-3）。
+     */
+    flashUndoable: Boolean = false,
     /** 周期记账本次打开补记的条数（M3-6）：>0 时给一条可关闭的提示。 */
     recurringNotice: Int? = null,
     onRecurringNoticeShown: () -> Unit = {},
@@ -153,39 +159,6 @@ fun HomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // 保存完成后的反馈（跨页）：此前保存完静默返回，用户不知道成没成。
-    // M3-5 起新建的那一笔还带一个「存为模板」动作（D059 一律可取消）。
-    // **停留时长（D099）**：M3 只有 4s / 10s 两档——10s 在顶部太占地方（用户反馈"停留太长"），
-    // 4s 又来不及点「存为模板」；所以带动作这条走 Indefinite 挂住、到点由这里 dismiss（撤销条仍是 10s）
-    LaunchedEffect(flashMessage, flashTxId) {
-        val message = flashMessage ?: return@LaunchedEffect
-        val txId = flashTxId
-        if (txId == null) {
-            // 编辑保存（无动作）：M3 的 Short（4s）就够
-            snackbarHostState.showSnackbar(message)
-        } else {
-            val showing = async {
-                snackbarHostState.showSnackbar(
-                    message = message,
-                    actionLabel = "存为模板",
-                    duration = SnackbarDuration.Indefinite,
-                )
-            }
-            val result = withTimeoutOrNull(HOME_FLASH_MILLIS) { showing.await() } ?: run {
-                // 到点自己走：先收起（等动画走完）再让 onFlashShown 清消息，别在动画中把条拔掉
-                snackbarHostState.currentSnackbarData?.dismiss()
-                showing.await()
-            }
-            if (result == SnackbarResult.ActionPerformed) onSaveAsTemplate(txId)
-        }
-        onFlashShown()
-    }
-    // 周期记账补记提示（M3-6）：一条短提示，自己会走（也可划掉）——不拦任何操作
-    LaunchedEffect(recurringNotice) {
-        val count = recurringNotice ?: return@LaunchedEffect
-        snackbarHostState.showSnackbar("周期记账已补记 $count 笔")
-        onRecurringNoticeShown()
-    }
     var undoJob by remember { mutableStateOf<Job?>(null) }
 
     // 删除后给一次「撤销」机会（D024 交互范式二）；连续删除时后一条顶掉前一条
@@ -202,6 +175,48 @@ fun HomeScreen(
         }
     }
 
+    // 保存完成后的反馈（跨页）：此前保存完静默返回，用户不知道成没成。
+    // M3-5 起新建的那一笔还带一个「存为模板」动作（D059 一律可取消）。
+    // **停留时长（D099）**：M3 只有 4s / 10s 两档——10s 在顶部太占地方（用户反馈"停留太长"），
+    // 4s 又来不及点「存为模板」；所以带动作这条走 Indefinite 挂住、到点由这里 dismiss（撤销条仍是 10s）
+    LaunchedEffect(flashMessage, flashTxId, flashUndoable) {
+        val message = flashMessage ?: return@LaunchedEffect
+        val txId = flashTxId
+        if (txId == null) {
+            // 编辑保存（无动作）：M3 的 Short（4s）就够
+            snackbarHostState.showSnackbar(message)
+        } else {
+            val showing = async {
+                snackbarHostState.showSnackbar(
+                    message = message,
+                    actionLabel = if (flashUndoable) "撤销" else "存为模板",
+                    duration = SnackbarDuration.Indefinite,
+                )
+            }
+            val result = withTimeoutOrNull(HOME_FLASH_MILLIS) { showing.await() } ?: run {
+                // 到点自己走：先收起（等动画走完）再让 onFlashShown 清消息，别在动画中把条拔掉
+                snackbarHostState.currentSnackbarData?.dismiss()
+                showing.await()
+            }
+            if (result == SnackbarResult.ActionPerformed) {
+                if (flashUndoable) {
+                    // 「撤销」= 把刚入的这笔删掉（删除后还有一次「撤销」，D024 范式二）
+                    viewModel.deleteRow(txId)
+                    showUndo("已撤销这笔记账")
+                } else {
+                    onSaveAsTemplate(txId)
+                }
+            }
+        }
+        onFlashShown()
+    }
+    // 周期记账补记提示（M3-6）：一条短提示，自己会走（也可划掉）——不拦任何操作
+    LaunchedEffect(recurringNotice) {
+        val count = recurringNotice ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar("周期记账已补记 $count 笔")
+        onRecurringNoticeShown()
+    }
+
     HomeContent(
         bookName = currentBook?.name ?: "账本",
         rows = rows.orEmpty(),
@@ -210,6 +225,7 @@ fun HomeScreen(
         budgetSummary = budgetSummary,
         onOpenBudgets = onManageBudgets,
         onSearch = onSearch,
+        onQuickEntry = onQuickEntry,
         onBookClick = { showBookMenu = true },
         bookMenu = {
             DropdownMenu(expanded = showBookMenu, onDismissRequest = { showBookMenu = false }) {
@@ -320,6 +336,8 @@ fun HomeContent(
     onLongPressRow: (String) -> Unit = {},
     onOpenRow: (String) -> Unit = {},
     onEditRow: (String) -> Unit = {},
+    /** 长按悬浮入口给的快捷入口（M4-3）：进一句话记账页。 */
+    onQuickEntry: () -> Unit = {},
     /** 当前左滑展开动作区的行 id（null = 都收起）；只留一行为开。 */
     revealedRowId: String? = null,
     onRevealedRowChange: (String?) -> Unit = {},
@@ -334,6 +352,7 @@ fun HomeContent(
     modifier: Modifier = Modifier,
     zone: ZoneId = ZoneId.systemDefault(),
 ) {
+    var showQuickMenu by rememberSaveable { mutableStateOf(false) }
     // 不透明页面：下钻推入时父子两页同屏，透明根会让下层页透出来（AP-2）
     Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Column(Modifier.fillMaxSize()) {
@@ -563,6 +582,27 @@ fun HomeContent(
                     expanded = entryExpanded,
                     onClick = onAdd,
                     modifier = Modifier.align(Alignment.BottomEnd),
+                    // 长按 = 快捷入口（单击仍是记一笔，形变几何一字不动）
+                    onLongClick = { showQuickMenu = true },
+                )
+            }
+        }
+
+        if (showQuickMenu) {
+            // 长按悬浮入口的快捷入口（M4-3）：先只放「一句话记账」——截图导入在 M4-7 加，
+            // **不放点了没反应的行**（死 UI 是硬禁）
+            dev.penned.app.ui.components.PennedSheet(
+                onDismiss = { showQuickMenu = false },
+                title = "快捷记账",
+            ) {
+                dev.penned.app.ui.components.PennedListRow(
+                    title = "一句话记账",
+                    subtitle = "说一句「昨天打车 32.5」，解析成草稿再确认",
+                    leadingIcon = dev.penned.app.ui.icons.PennedIcons.Edit,
+                    onClick = {
+                        showQuickMenu = false
+                        onQuickEntry()
+                    },
                 )
             }
         }

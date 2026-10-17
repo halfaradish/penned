@@ -64,12 +64,16 @@ object TxEdit {
         deviceId = deviceId,
     )
 
-    /** 新建：手记流水默认 source=MANUAL。 */
+    /**
+     * 新建：默认 `source = MANUAL`（记一笔页）；[source] 让别的入口带上自己的来源——
+     * M4 起一句话是 `TEXT`、截图是 `SCREENSHOT`、通知是 `NOTIFICATION`（详情页按它显示"记录方式"）。
+     */
     fun newTransaction(
         bookId: String,
         editable: Editable,
         now: Long,
         deviceId: String,
+        source: TxSource = TxSource.MANUAL,
     ): TransactionEntity = TransactionEntity(
         id = UUID.randomUUID().toString(),
         bookId = bookId,
@@ -87,7 +91,7 @@ object TxEdit {
         reimburseAccountId = editable.reimburseAccountId,
         reimburseCents = editable.reimburseCents,
         debtId = editable.debtId,
-        source = TxSource.MANUAL,
+        source = source,
         creatorDeviceId = deviceId,
         createdAt = now,
         updatedAt = now,

@@ -15,32 +15,50 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.io.File
-import java.util.WeakHashMap
 
 /**
- * 设置用的 DataStore：**每个 Application Context 一份**（文件名与历史一致，老用户的设置照旧读到）。
+ * 设置用的 DataStore：**同一个文件路径一份实例**（文件名与历史一致，老用户的设置照旧读到）。
  *
  * 为什么不用 `by preferencesDataStore(name)`：那个委托是**进程级单例**，一旦创建就绑死第一个
- * Context 的目录。生产里只有一个 Application 所以没差别，但 **Robolectric 每个测试类是独立沙箱**
- * （各自的 filesDir）：单例会让后续测试类继续往**已被回收的目录**里写，抛
- * `IOException: Unable to rename …preferences_pb.tmp`（M4-2 排查了两轮，实证是它）。
- * 换成按 applicationContext 缓存后：单进程仍是一份（并发写同一文件的问题不存在），测试各写各的。
+ * Context 的目录，后续（被回收的目录上）再写就抛 `IOException: Unable to rename …preferences_pb.tmp`。
+ *
+ * 为什么按 **文件路径** 判新鲜、而不是只按 Context 缓存：Robolectric 同一个 Application 会换来换去
+ * 地给不同 `filesDir`（测试方法之间），只认 Context 会把旧目录的实例一直用下去（M4-2/M4-3 各踩一次）。
+ * 生产里 Application 唯一、filesDir 唯一 → 与"进程一份"完全等价，不会出现两个实例写同一个文件。
  */
-private val stores = WeakHashMap<Context, DataStore<Preferences>>()
-
-private fun Context.settingsDataStore(): DataStore<Preferences> = synchronized(stores) {
-    stores.getOrPut(applicationContext) {
-        PreferenceDataStoreFactory.create(
-            scope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
-            produceFile = { File(applicationContext.filesDir, DATASTORE_DIR + DATASTORE_NAME) },
-        )
-    }
-}
-
 private const val DATASTORE_DIR = "datastore/"
 private const val DATASTORE_NAME = "penned_settings.preferences_pb"
 
-/** 轻量设置仓库：当前账本 id、密码锁哈希、更新检查节流等（D023 / M2 S2）。 */
+/**
+ * **一个文件路径一个实例，且从不驱逐**。
+ *
+ * 两条硬约束来自 DataStore 自己（M4-3 把两条都试过、踩明白的）：
+ * ① 同一个文件**同时只能有一个活动实例**——多建一个就抛
+ *    `IllegalStateException: There are multiple DataStores active for the same file`，
+ *    所以"换新丢掉旧的"那种写法是错的；缓存键用**绝对路径**，同一路径永远复用同一份。
+ * ② 目录可能已经被干掉（Robolectric 回收沙箱 / 用户清了数据），写入前先补目录，
+ *    否则在 rename 那步抛 `IOException: Unable to rename …preferences_pb.tmp`。
+ *
+ * 生产里 Application 唯一、filesDir 唯一 → 永远只有一个实例，与"进程单例"完全等价
+ * （原来的 `by preferencesDataStore(name)` 唯一的问题就是目录被干掉后不会自救）。
+ */
+private val stores = HashMap<String, DataStore<Preferences>>()
+private val storeLock = Any()
+
+private fun Context.settingsDataStore(): DataStore<Preferences> {
+    val dir = File(applicationContext.filesDir, DATASTORE_DIR)
+    if (!dir.exists()) dir.mkdirs()
+    val file = File(dir, DATASTORE_NAME)
+    return synchronized(storeLock) {
+        stores.getOrPut(file.absolutePath) {
+            PreferenceDataStoreFactory.create(
+                scope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
+                produceFile = { file },
+            )
+        }
+    }
+}
+
 class SettingsRepository(private val context: Context) {
 
     val currentBookId: Flow<String?> = context.settingsDataStore().data.map { it[KEY_CURRENT_BOOK] }

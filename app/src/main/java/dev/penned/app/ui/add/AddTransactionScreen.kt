@@ -50,6 +50,7 @@ import dev.penned.app.domain.DebtMath
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.ReimburseState
 import dev.penned.app.domain.TxType
+import dev.penned.app.ui.components.AddDateTimeDialog
 import dev.penned.app.ui.components.CategoryAvatar
 import dev.penned.app.ui.components.EmptyState
 import dev.penned.app.ui.components.PennedButton
@@ -641,79 +642,16 @@ fun AddTransactionContent(
         )
     }
     if (showDatePicker) {
-        val pickerState = androidx.compose.material3.rememberDatePickerState(
-            initialSelectedDateMillis = dev.penned.app.domain.AddDate.dayToPickerMillis(
-                dateEpochDay ?: java.time.LocalDate.now().toEpochDay(),
-            ),
-        )
-        // 时分与日期**同一个弹窗**里调（用户反馈：不要再单独加一枚「时间」chip，点「日期」一起调）。
-        // 开轮值 = 已选的时分，没选过就是此刻——"看到的就是记下的"：确定即把它落成显式时分；
-        // 只在弹窗里改日期、没碰滚轮时也一样（所见即所存），不想带时分就别开这个弹窗。
-        val initialTime = remember { timeOfDay ?: java.time.LocalTime.now() }
-        var hour by remember { mutableIntStateOf(initialTime.hour) }
-        var minute by remember { mutableIntStateOf(initialTime.minute) }
-        // 用自家 PennedDialog 而不是 M3 的 DatePickerDialog：标题/按钮与「选年月」「选时间」同一套语言，
-        // 且 M3 那个弹窗会把额外内容插在它自己的标题与日历中间（实测），套不进"日历 + 时间"的顺序
-        PennedDialog(
-            onDismiss = { showDatePicker = false },
-            title = "选择记账日期",
-            confirmLabel = "确定",
-            // M3 日历网格最窄 336dp（7 × 48dp），弹窗走平台默认宽度只有 280~320dp——真机上会把周六那列裁掉。
-            // 交给窗口满宽 + 限 400dp（与测试视口同宽，D016）：内容 336 + 弹窗内边距 48 就放得下了
-            modifier = Modifier.widthIn(max = 400.dp).fillMaxWidth(), // token-ok：M3 网格 336 + 内边距 48 = 384，400 是弹窗一次性宽度上限
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-            onConfirm = {
-                pickerState.selectedDateMillis?.let { millis ->
-                    onPickDate(dev.penned.app.domain.AddDate.pickerMillisToDay(millis))
-                }
-                onPickTime(java.time.LocalTime.of(hour, minute))
-                showDatePicker = false
+        // 日历 + 时分同一个弹窗（D097）——抽成共用件，一句话记账页用的是同一个（M4-3）
+        AddDateTimeDialog(
+            selectedDay = dateEpochDay,
+            selectedTime = timeOfDay,
+            onConfirm = { day, time ->
+                onPickDate(day)
+                onPickTime(time)
             },
-        ) {
-            // 日历只要网格：标题由弹窗给、大号日期与"切键盘输入"开关都不要（选中的日子网格里有圈）；
-            // 底色去掉（M3 默认那层灰面板在白弹窗里像嵌了块板子），直接落在弹窗面上
-            androidx.compose.material3.DatePicker(
-                state = pickerState,
-                title = null,
-                headline = null,
-                showModeToggle = false,
-                colors = androidx.compose.material3.DatePickerDefaults.colors(
-                    containerColor = Color.Transparent,
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            // 下半段 = 时间：发丝线分隔 + 「时间」小标题 + 时/分两列滚轮（3 行高，别把弹窗撑太高）
-            Column(Modifier.fillMaxWidth()) {
-                PennedDivider(startIndent = PennedSpacing.lg)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = PennedSpacing.lg, top = PennedSpacing.sm),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        PennedIcons.Clock,
-                        contentDescription = null,
-                        tint = iconMutedColor(),
-                        modifier = Modifier.size(PennedDimens.iconChevron),
-                    )
-                    Spacer(Modifier.width(PennedSpacing.xs))
-                    Text(
-                        "时间",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                TimeWheel(
-                    selectedHour = hour,
-                    selectedMinute = minute,
-                    onHourChange = { hour = it },
-                    onMinuteChange = { minute = it },
-                    rows = 3,
-                    modifier = Modifier.padding(horizontal = PennedSpacing.sm),
-                )
-            }
-        }
+            onDismiss = { showDatePicker = false },
+        )
     }
     if (showTagPicker) {
         TagPickerSheet(

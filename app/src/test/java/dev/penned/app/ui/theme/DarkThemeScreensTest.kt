@@ -249,6 +249,40 @@ class DarkThemeScreensTest {
         capture("ai_settings")
     }
 
+    /** 一句话记账（M4-3）：结果卡五行的深色观感。 */
+    @Test
+    fun darkQuickEntry() {
+        dark {
+            dev.penned.app.ui.intelligence.QuickEntryContent(
+                text = "昨天打车 32.5",
+                outcome = dev.penned.app.ui.intelligence.QuickParseOutcome(
+                    dev.penned.app.domain.QuickParseResult.Ok(
+                        dev.penned.app.domain.QuickDraft(
+                            type = dev.penned.app.domain.TxType.EXPENSE,
+                            amountCents = 3250,
+                            note = "打车",
+                            epochDay = java.time.LocalDate.now().minusDays(1).toEpochDay(),
+                            dayWord = "昨天",
+                        )
+                    ),
+                    categoryId = "c1", fromRule = true,
+                ),
+                type = dev.penned.app.domain.TxType.EXPENSE,
+                amountCents = 3250,
+                categoryName = "出行交通",
+                categoryFromRule = true,
+                dayLabel = "10月16日",
+                note = "打车",
+                saving = false,
+                onTextChange = {}, onPaste = {}, onParse = {}, onToggleType = {},
+                onPickCategory = {}, onPickDate = {}, onEditNote = {}, onSave = {}, onBack = {},
+            )
+        }
+        composeRule.onNodeWithText("一句话记账").assertIsDisplayed()
+        composeRule.onNodeWithText("来自关键词规则").assertIsDisplayed()
+        capture("quick_entry")
+    }
+
     @Test
     fun darkDataManagement() {
         val app = ApplicationProvider.getApplicationContext<PennedApplication>()

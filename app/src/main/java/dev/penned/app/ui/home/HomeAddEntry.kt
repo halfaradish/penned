@@ -7,7 +7,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
@@ -48,12 +49,15 @@ internal const val HOME_ADD_LABEL_TAG = "home-add-label"
  * 不自绘阴影（原则二：全局不用阴影，层级靠表面色）。系统「动画时长缩放 = 0」时
  * `animateFloatAsState` 会直接落位。
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun HomeAddEntry(
     visible: Boolean,
     expanded: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /** 长按给快捷入口（M4-3：一句话记账；M4-7 再补截图导入）。单击行为与形变几何都不变。 */
+    onLongClick: (() -> Unit)? = null,
 ) {
     AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut(), modifier = modifier) {
         BoxWithConstraints(Modifier.padding(PennedSpacing.lg)) {
@@ -69,7 +73,7 @@ internal fun HomeAddEntry(
                     .size(width = width, height = AddEntryMotion.collapsedSize)
                     .clip(RoundedCornerShape(AddEntryMotion.collapsedSize / 2))
                     .background(MaterialTheme.colorScheme.primary)
-                    .clickable(onClick = onClick)
+                    .combinedClickable(onClick = onClick, onLongClick = onLongClick)
                     .testTag(HOME_ADD_TAG),
                 contentAlignment = Alignment.Center,
             ) {

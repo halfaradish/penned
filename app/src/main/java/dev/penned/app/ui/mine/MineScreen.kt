@@ -46,6 +46,8 @@ fun MineScreen(
     onOpenKeywordRules: () -> Unit = {},
     /** AI 设置（M4-2，BYOK：自带 Key 直连模型）。 */
     onOpenAiSettings: () -> Unit = {},
+    /** 一句话记账（M4-3）。 */
+    onOpenQuickEntry: () -> Unit = {},
     modifier: Modifier = Modifier,
     versionName: String = dev.penned.app.BuildConfig.VERSION_NAME,
 ) {
@@ -155,6 +157,14 @@ fun MineScreen(
                 subtitle = "关键词指向分类或标签：识别到它时先把分类填好，确认后才入账",
                 leadingIcon = PennedIcons.Tag,
                 onClick = onOpenKeywordRules,
+            )
+            PennedDivider(startIndent = ROW_DIVIDER_INDENT)
+            // M4-3：一句话记账（本地解析就够用，AI 兜底是可选的那一步）
+            PennedListRow(
+                title = "一句话记账",
+                subtitle = "说一句「昨天打车 32.5」，解析成草稿再确认",
+                leadingIcon = PennedIcons.Edit,
+                onClick = onOpenQuickEntry,
             )
             PennedDivider(startIndent = ROW_DIVIDER_INDENT)
             // M4-2：BYOK 设置（默认关；只接受 https；Key 只存本机）

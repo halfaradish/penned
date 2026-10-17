@@ -101,6 +101,9 @@ private const val HOME_FLASH_KEY = "home-flash"
 /** 刚保存的流水 id（M3-5）：首页提示条上的「存为模板」用它跳到模板新建页。 */
 private const val HOME_FLASH_TX_KEY = "home-flash-tx"
 
+/** 本次 flash 是不是"机器解析入账"（M4-3）：是的话动作给「撤销」而不是「存为模板」。 */
+private const val HOME_FLASH_UNDO_KEY = "home-flash-undo"
+
 private data class TabSpec(val route: String, val label: String, val icon: ImageVector)
 
 private val TABS = listOf(
@@ -239,10 +242,14 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                 val flashTxId: String? by entry?.savedStateHandle
                     ?.getStateFlow<String?>(HOME_FLASH_TX_KEY, null)
                     ?.collectAsStateWithLifecycle() ?: remember { mutableStateOf<String?>(null) }
+                val flashUndoable: Boolean? by entry?.savedStateHandle
+                    ?.getStateFlow<Boolean?>(HOME_FLASH_UNDO_KEY, null)
+                    ?.collectAsStateWithLifecycle() ?: remember { mutableStateOf<Boolean?>(null) }
                 HomeScreen(
                     viewModel = vm,
                     flashMessage = flash,
                     flashTxId = flashTxId,
+                    flashUndoable = flashUndoable == true,
                     recurringNotice = recurringNotice,
                     onRecurringNoticeShown = { recurringNotice = null },
                     // 「存为模板」（M3-5）：带着刚保存的流水去模板新建页预填
@@ -250,12 +257,14 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onFlashShown = {
                         entry?.savedStateHandle?.set<String?>(HOME_FLASH_KEY, null)
                         entry?.savedStateHandle?.set<String?>(HOME_FLASH_TX_KEY, null)
+                        entry?.savedStateHandle?.set<Boolean?>(HOME_FLASH_UNDO_KEY, null)
                     },
                     onAdd = { navController.navigate("add") },
                     onOpenDetail = { id -> navController.navigate("detail/$id") },
                     onManageBooks = { navController.navigate("books") },
                     onManageBudgets = { navController.navigate("budgets") },
                     onSearch = { navController.navigate("search") },
+                    onQuickEntry = { navController.navigate("quick") },
                     // 行左滑动作区的「编辑」：与详情页同一条编辑路由
                     onEditRow = { id -> navController.navigate("add?editId=$id") },
                 )
@@ -384,6 +393,7 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onOpenWishlist = { navController.navigate("wishlist") },
                     onOpenKeywordRules = { navController.navigate("keywords") },
                     onOpenAiSettings = { navController.navigate("ai-settings") },
+                    onOpenQuickEntry = { navController.navigate("quick") },
                 )
             }
             // 分类关键词规则（M4-1）：关键词 → 分类 / 标签（只是建议值的源头，不改已入库的账）
@@ -393,6 +403,21 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
             // AI 设置（M4-2）：BYOK 的总开关与配置（不填不联网；地址只接受 https）
             composable("ai-settings") {
                 dev.penned.app.ui.intelligence.AiSettingsScreen(onBack = { navController.popBackStack() })
+            }
+            // 一句话记账（M4-3）：解析成草稿 → 结果卡逐行可改 → 保存才入账（source = TEXT）
+            composable("quick") {
+                dev.penned.app.ui.intelligence.QuickEntryScreen(
+                    onBack = { navController.popBackStack() },
+                    onSaved = { savedId ->
+                        // 存完回**首页**给「已记账 + 撤销」：无论从首页长按进来还是从「我的」进来，
+                        // flash 都写到首页那条 back stack entry 上（撤销条要 txId）
+                        val home = navController.getBackStackEntry("home")
+                        home.savedStateHandle.set(HOME_FLASH_KEY, "已记账")
+                        home.savedStateHandle.set(HOME_FLASH_TX_KEY, savedId)
+                        home.savedStateHandle.set(HOME_FLASH_UNDO_KEY, true)
+                        navController.popBackStack("home", inclusive = false)
+                    },
+                )
             }
             // 愿望清单（M3-15）：攒钱目标列表 + 新建/编辑（不生成流水）
             composable("wishlist") {
