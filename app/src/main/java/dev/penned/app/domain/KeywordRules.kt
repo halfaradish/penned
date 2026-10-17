@@ -1,6 +1,8 @@
 package dev.penned.app.domain
 
+import dev.penned.app.data.db.entity.CategoryEntity
 import dev.penned.app.data.db.entity.KeywordRuleEntity
+import dev.penned.app.data.db.entity.TagEntity
 
 /** 一条关键词规则的命中结果（M4-0）：命中的规则 + 它要填的目标。 */
 data class RuleHit(
@@ -37,5 +39,26 @@ object KeywordRules {
             }
         }
         return null
+    }
+
+    /**
+     * 规则目标的显示名（规则页那行「→ 分类：食品餐饮 / 午餐」用）。
+     *
+     * 分类给**含父级的路径**——二级分类只写"午餐"看不出是哪一支；标签直接给名字。
+     * 目标被软删/找不到时返回 null：页面显示「目标已删除」并让用户自己重选，
+     * **不静默清空规则**（清空的规则看着像没建过，用户会以为规则丢了）。
+     */
+    fun targetName(
+        targetType: RuleTargetType,
+        targetId: String,
+        categories: List<CategoryEntity>,
+        tags: List<TagEntity>,
+    ): String? = when (targetType) {
+        RuleTargetType.CATEGORY -> categories.firstOrNull { it.id == targetId }?.let { category ->
+            categories.firstOrNull { it.id == category.parentId }
+                ?.let { parent -> "${parent.name} / ${category.name}" }
+                ?: category.name
+        }
+        RuleTargetType.TAG -> tags.firstOrNull { it.id == targetId }?.name
     }
 }

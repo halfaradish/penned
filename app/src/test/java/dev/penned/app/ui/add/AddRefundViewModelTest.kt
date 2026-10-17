@@ -181,7 +181,10 @@ class AddRefundViewModelTest {
         assertEquals(2000L, row[2])
 
         // 再记：金额/备注/退款/优惠都清空，键盘回到主金额（下一笔从零开始）
-        idle()
+        // 注意：`awaitDb` 看到行 ≠ 保存协程已经跑到"清空"那几行（清空发生在落库**之后**，
+        // 中间隔着 IO 上的挂起）——只 idle() 一次会在机器忙时读到还没清的空以外的值（实踩过一次），
+        // 所以这里等清空真的发生。
+        awaitVm { vm.amountText.value.isEmpty() }
         assertEquals("", vm.amountText.value)
         assertEquals("", vm.refundText.value)
         assertEquals("", vm.discountText.value)

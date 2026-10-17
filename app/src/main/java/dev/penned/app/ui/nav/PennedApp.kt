@@ -382,7 +382,12 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onOpenLoan = { navController.navigate("loan") },
                     onOpenAppearance = { navController.navigate("appearance") },
                     onOpenWishlist = { navController.navigate("wishlist") },
+                    onOpenKeywordRules = { navController.navigate("keywords") },
                 )
+            }
+            // 分类关键词规则（M4-1）：关键词 → 分类 / 标签（只是建议值的源头，不改已入库的账）
+            composable("keywords") {
+                dev.penned.app.ui.intelligence.KeywordRulesScreen(onBack = { navController.popBackStack() })
             }
             // 愿望清单（M3-15）：攒钱目标列表 + 新建/编辑（不生成流水）
             composable("wishlist") {

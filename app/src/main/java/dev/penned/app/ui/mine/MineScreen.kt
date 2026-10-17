@@ -42,6 +42,8 @@ fun MineScreen(
     onOpenAppearance: () -> Unit = {},
     /** 愿望清单（M3-15）。 */
     onOpenWishlist: () -> Unit = {},
+    /** 分类关键词规则（M4-1，「智能」分组卡的第一行）。 */
+    onOpenKeywordRules: () -> Unit = {},
     modifier: Modifier = Modifier,
     versionName: String = dev.penned.app.BuildConfig.VERSION_NAME,
 ) {
@@ -139,6 +141,18 @@ fun MineScreen(
                 subtitle = "品牌色相 4 套 · 跟随系统 / 浅色 / 深色",
                 leadingIcon = PennedIcons.Pen,
                 onClick = onOpenAppearance,
+            )
+        }
+
+        Spacer(Modifier.height(PennedSpacing.sm))
+        // M4-1（C5 裁决）：智能分组卡——后续片各往这张卡里加自己的行
+        // （M4-2「AI 设置」/ M4-3「一句话记账」/ M4-7「截图导入」/ M4-8「自动记账」），不另开二级页。
+        SectionCard(title = "智能") {
+            PennedListRow(
+                title = "分类关键词",
+                subtitle = "关键词指向分类或标签：识别到它时先把分类填好，确认后才入账",
+                leadingIcon = PennedIcons.Tag,
+                onClick = onOpenKeywordRules,
             )
         }
 

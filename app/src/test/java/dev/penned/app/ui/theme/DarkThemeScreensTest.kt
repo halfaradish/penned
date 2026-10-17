@@ -46,6 +46,10 @@ import dev.penned.app.ui.home.HomeGroups
 import dev.penned.app.ui.stats.StatsContent
 import dev.penned.app.ui.lock.LockScreen
 import dev.penned.app.ui.mine.MineScreen
+import dev.penned.app.ui.intelligence.KeywordRuleRow
+import dev.penned.app.ui.intelligence.KeywordRulesContent
+import dev.penned.app.ui.intelligence.KeywordRulesUiState
+import dev.penned.app.domain.RuleTargetType
 import dev.penned.app.ui.tags.TagsScreen
 import dev.penned.app.ui.tags.TagsViewModel
 import org.junit.Rule
@@ -203,6 +207,26 @@ class DarkThemeScreensTest {
         }
         composeRule.onNodeWithText("数据管理").assertIsDisplayed()
         capture("mine")
+    }
+
+    /** 分类关键词规则页（M4-1）：关键词 + 「→ 目标」+ 启停开关的深色观感。 */
+    @Test
+    fun darkKeywordRules() {
+        dark {
+            KeywordRulesContent(
+                state = KeywordRulesUiState(
+                    rows = listOf(
+                        KeywordRuleRow("k1", "肯打鸡", true, RuleTargetType.CATEGORY, "食品餐饮"),
+                        KeywordRuleRow("k2", "午饭", true, RuleTargetType.CATEGORY, "食品餐饮 / 午餐"),
+                        KeywordRuleRow("k3", "出差", false, RuleTargetType.TAG, "出差"),
+                    ),
+                ),
+                onBack = {}, onAdd = {},
+            )
+        }
+        composeRule.onNodeWithText("分类关键词").assertIsDisplayed()
+        composeRule.onNodeWithText("→ 分类：食品餐饮 / 午餐").assertIsDisplayed()
+        capture("keyword_rules")
     }
 
     @Test

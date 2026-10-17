@@ -1,6 +1,8 @@
 package dev.penned.app.domain
 
+import dev.penned.app.data.db.entity.CategoryEntity
 import dev.penned.app.data.db.entity.KeywordRuleEntity
+import dev.penned.app.data.db.entity.TagEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -123,5 +125,44 @@ class KeywordRulesTest {
     @Test
     fun `规则列表为空返回 null`() {
         assertNull(KeywordRules.match("肯打鸡花了15", emptyList()))
+    }
+
+    // ---- 目标名解析（M4-1 规则页那行「→ 分类：食品餐饮 / 午餐」）----
+
+    private fun category(id: String, name: String, parentId: String? = null) = CategoryEntity(
+        id = id, bookId = "b1", parentId = parentId, name = name,
+        type = CategoryType.EXPENSE, sortOrder = 0, createdAt = 1L, updatedAt = 1L, deviceId = "d",
+    )
+
+    private fun tag(id: String, name: String) = TagEntity(
+        id = id, bookId = "b1", parentId = null, name = name, sortOrder = 0,
+        createdAt = 1L, updatedAt = 1L, deviceId = "d",
+    )
+
+    @Test
+    fun `目标名解析 - 一级分类给名字 二级给父级路径`() {
+        val categories = listOf(category("c1", "食品餐饮"), category("c2", "午餐", parentId = "c1"))
+        assertEquals(
+            "食品餐饮",
+            KeywordRules.targetName(RuleTargetType.CATEGORY, "c1", categories, emptyList()),
+        )
+        assertEquals(
+            "食品餐饮 / 午餐",
+            KeywordRules.targetName(RuleTargetType.CATEGORY, "c2", categories, emptyList()),
+        )
+    }
+
+    @Test
+    fun `目标名解析 - 标签给名字`() {
+        assertEquals(
+            "出差",
+            KeywordRules.targetName(RuleTargetType.TAG, "tag-1", emptyList(), listOf(tag("tag-1", "出差"))),
+        )
+    }
+
+    @Test
+    fun `目标名解析 - 目标被删返回 null 而不是空串`() {
+        assertNull(KeywordRules.targetName(RuleTargetType.CATEGORY, "gone", emptyList(), emptyList()))
+        assertNull(KeywordRules.targetName(RuleTargetType.TAG, "gone", emptyList(), emptyList()))
     }
 }

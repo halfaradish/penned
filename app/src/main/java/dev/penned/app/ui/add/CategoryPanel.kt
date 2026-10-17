@@ -59,6 +59,11 @@ fun CategoryPanel(
     onSelectSub: (CategoryUi) -> Unit,
     onAddParent: () -> Unit = {},
     onAddSub: (String) -> Unit = {},
+    /**
+     * 尾部「新增」格。默认画（记一笔的宫格）；**分类关键词规则的目标选择器不画**——
+     * 那里只选已有分类，不该出现一个点了没反应（或越权建分类）的格子。
+     */
+    showAddCell: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     // 宫格是"一屏里同时出现的一组分类"，跟统计图表同口径走一次槽位分配（D040）：
@@ -97,6 +102,7 @@ fun CategoryPanel(
             }
         }
         // 宫格尾部「新增」格（M1 第二批：宫格内新增分类入口）
+        if (!showAddCell) return@Column
         Row(modifier = Modifier.fillMaxWidth()) {
             Column(
                 modifier = Modifier

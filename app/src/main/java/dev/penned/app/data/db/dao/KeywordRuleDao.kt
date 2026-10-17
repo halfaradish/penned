@@ -56,6 +56,17 @@ interface KeywordRuleDao {
     @Query("SELECT IFNULL(MAX(priority), -1) + 1 FROM keyword_rules WHERE bookId = :bookId")
     suspend fun nextPriority(bookId: String): Int
 
+    /**
+     * 新增一条规则（排在最后）。
+     *
+     * **优先级必须在这一个事务里算**：先 `nextPriority()` 再 `upsert()` 的两步写法在连续新增时
+     * 会交错（第一条还没落库，第二条已经读到同样的 `MAX`），三条规则全拿 0 分——本片实踩。
+     */
+    @Transaction
+    suspend fun insertAtEnd(rule: KeywordRuleEntity) {
+        upsert(rule.copy(priority = nextPriority(rule.bookId)))
+    }
+
     @Query("SELECT COUNT(*) FROM keyword_rules WHERE deleted = 0 AND bookId = :bookId")
     suspend fun countInBook(bookId: String): Int
 }

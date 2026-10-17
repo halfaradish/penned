@@ -160,6 +160,8 @@ fun SwipeActionRow(
             },
     ) {
         // 动作面板：与行同框、内容贴右，压在内容层底下（关闭态被内容层完全盖住）
+        // `enabled = isOpen` 不是装饰：内容层若**没有自己的点击处理**（如"开关行"），
+        // 点击会穿过它落在底下这排按钮上——关闭态点行右侧就会**悄悄上移/删除**（M4-1 实踩）。
         Row(
             Modifier
                 .matchParentSize()
@@ -167,7 +169,7 @@ fun SwipeActionRow(
             horizontalArrangement = Arrangement.End,
         ) {
             Row(Modifier.fillMaxHeight().onSizeChanged { panelWidth = it.width }) {
-                actions.forEach { ActionBlock(it) }
+                actions.forEach { ActionBlock(it, enabled = isOpen) }
             }
         }
         // 内容层：跟手平移；自带行底，不然没滑动时会透出按钮
@@ -182,15 +184,20 @@ fun SwipeActionRow(
     }
 }
 
-/** 动作块：直角、与行同高（QQ 同款是实心块，不是圆角按钮）。 */
+/**
+ * 动作块：直角、与行同高（QQ 同款是实心块，不是圆角按钮）。
+ *
+ * [enabled] = 行是否已滑开：关闭态必须**不可点**，否则内容层没有点击处理的行（开关行）会把
+ * 点击透到藏在底下的按钮上。
+ */
 @Composable
-private fun ActionBlock(action: RowAction) {
+private fun ActionBlock(action: RowAction, enabled: Boolean) {
     Box(
         Modifier
             .fillMaxHeight()
             .widthIn(min = PennedDimens.rowActionWidth)
             .background(action.container)
-            .clickable(onClick = action.onClick)
+            .clickable(enabled = enabled, onClick = action.onClick)
             .padding(horizontal = PennedSpacing.sm),
         contentAlignment = Alignment.Center,
     ) {

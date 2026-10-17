@@ -109,6 +109,17 @@ class IntelligenceDaoTest {
     }
 
     @Test
+    fun `insertAtEnd 在事务里定优先级_连续新增不会撞车`() = runTest {
+        val dao = db.keywordRuleDao()
+        // 三条连着插（不等前一条落库）：优先级必须依次是 0/1/2 —— 两步写法会全拿 0（本片实踩）
+        dao.insertAtEnd(rule("a", "肯打鸡", priority = 0))
+        dao.insertAtEnd(rule("b", "午饭", priority = 0))
+        dao.insertAtEnd(rule("c", "晚饭", priority = 0))
+        assertEquals(listOf(0, 1, 2), dao.allInBook(bookId).map { it.priority })
+        assertEquals(listOf("a", "b", "c"), dao.allInBook(bookId).map { it.id })
+    }
+
+    @Test
     fun `关键词按名匹配到账本内目标`() = runTest {
         val dao = db.keywordRuleDao()
         dao.upsert(

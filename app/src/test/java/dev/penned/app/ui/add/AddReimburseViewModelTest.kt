@@ -159,7 +159,8 @@ class AddReimburseViewModelTest {
         assertEquals("acc-wechat", saved.reimburseAccountId)
         assertEquals(500L, saved.reimburseCents)
         // 再记：金额清空，状态与账户留着（一摞单子连着记，不必每笔重选）
-        idle()
+        // （清空在落库**之后**：等它真的发生，别只 idle() 一次——同 AddRefundViewModelTest 的那条坑）
+        awaitVm { vm.reimburseText.value.isEmpty() }
         assertEquals("", vm.reimburseText.value)
         assertEquals(ReimburseState.PENDING, vm.reimburseState.value)
         assertEquals("acc-wechat", vm.reimburseAccountId.value)
