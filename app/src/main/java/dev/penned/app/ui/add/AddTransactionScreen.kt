@@ -58,6 +58,7 @@ import dev.penned.app.ui.components.PennedListRow
 import dev.penned.app.ui.components.PennedSegmentedTabs
 import dev.penned.app.ui.components.PennedSheet
 import dev.penned.app.ui.components.TagCreateDialog
+import dev.penned.app.ui.components.TimePickerDialog
 import dev.penned.app.ui.components.reimburseStateLabel
 import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.templates.TemplatePickerSheet
@@ -116,6 +117,7 @@ fun AddTransactionScreen(
     val canSave by viewModel.canSave.collectAsStateWithLifecycle()
     val showEquals by viewModel.showEquals.collectAsStateWithLifecycle()
     val dateEpochDay by viewModel.dateEpochDay.collectAsStateWithLifecycle()
+    val timeOfDay by viewModel.timeOfDay.collectAsStateWithLifecycle()
     val templates by viewModel.templates.collectAsStateWithLifecycle()
     val debtTab by viewModel.debtTab.collectAsStateWithLifecycle()
     val debts by viewModel.debts.collectAsStateWithLifecycle()
@@ -148,6 +150,7 @@ fun AddTransactionScreen(
         toId = toId,
         feeText = feeText,
         dateEpochDay = dateEpochDay,
+        timeOfDay = timeOfDay,
         accounts = accounts,
         parents = parents,
         expandedSubs = expandedSubs,
@@ -187,6 +190,7 @@ fun AddTransactionScreen(
         onSwap = viewModel::swapTransfer,
         onFeeChange = viewModel::setFee,
         onPickDate = viewModel::setDate,
+        onPickTime = viewModel::setTime,
         onAddCategory = { name, parentId -> viewModel.addCategoryAndSelect(name, parentId) },
         onSave = { viewModel.save(onDone) },
         onSaveAgain = viewModel::saveAgain,
@@ -214,6 +218,8 @@ fun AddTransactionContent(
     toId: String?,
     feeText: String,
     dateEpochDay: Long? = null,
+    /** 记账时间（时:分，优化轮 3）；null = 现在。 */
+    timeOfDay: java.time.LocalTime? = null,
     accounts: List<AccountEntity>,
     parents: List<CategoryUi>,
     expandedSubs: List<CategoryUi>,
@@ -263,6 +269,7 @@ fun AddTransactionContent(
     onPickReimburseAccount: (String?) -> Unit = {},
     onFeeChange: (String) -> Unit,
     onPickDate: (Long?) -> Unit = {},
+    onPickTime: (java.time.LocalTime) -> Unit = {},
     onAddCategory: (name: String, parentId: String?) -> Unit = { _, _ -> },
     onEvaluate: () -> Unit,
     onSave: () -> Unit,
@@ -277,6 +284,7 @@ fun AddTransactionContent(
     var showToPicker by remember { mutableStateOf(false) }
     var showFee by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
     var showAddCategory by remember { mutableStateOf(false) }
     var addCategoryParent by remember { mutableStateOf<String?>(null) }
     var showTagPicker by remember { mutableStateOf(false) }
@@ -440,6 +448,13 @@ fun AddTransactionContent(
                         icon = PennedIcons.Calendar,
                         selected = dateEpochDay != null && dateEpochDay != today.toEpochDay(),
                         onClick = { showDatePicker = true },
+                    )
+                    // 时间（优化轮 3）：默认「现在」＝保存时取当前时刻（老行为）；选了就精确到分
+                    PennedChip(
+                        label = dev.penned.app.domain.AddDate.timeChipLabel(timeOfDay),
+                        icon = PennedIcons.Clock,
+                        selected = timeOfDay != null,
+                        onClick = { showTimePicker = true },
                     )
                     if (debtTab) {
                         // 债务 Tab：资金账户在面板上选，备注在左边，没有分类/标签/退优惠/报销
@@ -630,6 +645,17 @@ fun AddTransactionContent(
         ) {
             androidx.compose.material3.DatePicker(state = pickerState, title = { Text("选择记账日期", modifier = Modifier.padding(PennedSpacing.lg)) })
         }
+    }
+    if (showTimePicker) {
+        TimePickerDialog(
+            // 没选过时分就从当前时刻开轮（与"保存时取现在"同一口径）
+            initial = timeOfDay ?: java.time.LocalTime.now(),
+            onDismiss = { showTimePicker = false },
+            onConfirm = { picked ->
+                onPickTime(picked)
+                showTimePicker = false
+            },
+        )
     }
     if (showTagPicker) {
         TagPickerSheet(

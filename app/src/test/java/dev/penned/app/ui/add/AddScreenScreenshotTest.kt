@@ -36,7 +36,9 @@ class AddScreenScreenshotTest {
     @androidx.compose.runtime.Composable
     private fun content(
         dateEpochDay: Long? = null,
+        timeOfDay: java.time.LocalTime? = null,
         onPickDate: (Long?) -> Unit = {},
+        onPickTime: (java.time.LocalTime) -> Unit = {},
         onAddCategory: (String, String?) -> Unit = { _, _ -> },
         onEdit: () -> Unit = {},
     ) = AddTransactionContent(
@@ -52,6 +54,7 @@ class AddScreenScreenshotTest {
         toId = null,
         feeText = "",
         dateEpochDay = dateEpochDay,
+        timeOfDay = timeOfDay,
         accounts = emptyList(),
         parents = listOf(
             CategoryUi("p0", "其他", hasSubs = true),
@@ -69,7 +72,7 @@ class AddScreenScreenshotTest {
         ),
         onSelectType = {}, onKey = {}, onSelectParent = {}, onSelectSub = {},
         onNoteChange = {}, onPickAccount = {}, onPickFrom = {}, onPickTo = {},
-        onSwap = {}, onFeeChange = {}, onPickDate = onPickDate, onAddCategory = onAddCategory, onEvaluate = {},
+        onSwap = {}, onFeeChange = {}, onPickDate = onPickDate, onPickTime = onPickTime, onAddCategory = onAddCategory, onEvaluate = {},
         onSave = {}, onSaveAgain = {}, onBack = {}, onEdit = onEdit,
     )
 
@@ -111,6 +114,29 @@ class AddScreenScreenshotTest {
         composeRule.onNodeWithText("选择记账日期").assertIsDisplayed()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_add_date_picker.png")
         // 确定：回传日期
+        composeRule.onNodeWithText("确定").performClick()
+        org.junit.Assert.assertNotNull(picked)
+    }
+
+    // ---- 时间到分（优化轮 3）：chip 回显 + 时分滚轮弹窗 ----
+
+    @Test
+    fun captureAddScreenWithPickedTime() {
+        composeRule.setContent { PennedTheme { content(timeOfDay = java.time.LocalTime.of(16, 38)) } }
+        // 选了时分：chip 显示 HH:mm 并进选中态；默认的「现在」不再出现
+        composeRule.onNodeWithText("16:38").assertIsDisplayed()
+        composeRule.onNodeWithText("现在").assertDoesNotExist()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_add_time_chip.png")
+    }
+
+    @Test
+    fun captureTimePickerDialog() {
+        var picked: java.time.LocalTime? = null
+        composeRule.setContent { PennedTheme { content(onPickTime = { picked = it }) } }
+        composeRule.onNodeWithText("现在").performClick()
+        composeRule.onNodeWithText("选择时间").assertIsDisplayed()
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_add_time_dialog.png")
+        // 确定：回传时刻（开轮就落在当前时刻，直接确定也回值）
         composeRule.onNodeWithText("确定").performClick()
         org.junit.Assert.assertNotNull(picked)
     }

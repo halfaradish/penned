@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.LocalTime
 import java.time.ZonedDateTime
 import java.util.UUID
 
@@ -102,6 +103,9 @@ class AddViewModel(
         private set
     /** 记账日期（epochDay）；null = 今天。编辑时按原流水反推。 */
     var dateEpochDay = MutableStateFlow<Long?>(null)
+        private set
+    /** 记账时间（时:分，优化轮 3）；null = 现在（保存时取当前时刻）。编辑时按原流水反推。 */
+    var timeOfDay = MutableStateFlow<LocalTime?>(null)
         private set
     var note = MutableStateFlow("")
         private set
@@ -326,6 +330,8 @@ class AddViewModel(
             feeText.value = if (tx.feeCents > 0) Money.format(tx.feeCents, grouped = false) else ""
             note.value = tx.note.orEmpty()
             dateEpochDay.value = AddDate.dayFromMinute(tx.dateEpochMinute)
+            // 时间 chip 直接回填原时分（显示 HH:mm、进选中态）；不碰它就是原值原样
+            timeOfDay.value = AddDate.timeFromMinute(tx.dateEpochMinute)
             // 标签引用直查关系表（`allTags` 与 `categories` 同病：WhileSubscribed 的 stateIn 在刚开页时是空表）
             selectedTagIds.value = db.tagDao().tagsForTx(id).map { it.id }.toSet()
             // 报销三字段（M3-3）：状态/账户直接回填；金额 0 = 按全额，输入框留空（0 是缺省不是"报 0 元"）
@@ -465,6 +471,11 @@ class AddViewModel(
         dateEpochDay.value = day
     }
 
+    /** 「时间」chip：选定 时:分（精确到分；没选就是"现在"）。 */
+    fun setTime(time: LocalTime) {
+        timeOfDay.value = time
+    }
+
     /** 记一笔宫格内新增分类并直接选中（M1 第二批）。parentId 为空 = 新增一级。 */
     fun addCategoryAndSelect(name: String, parentId: String?, onDone: () -> Unit = {}) {
         viewModelScope.launch {
@@ -590,7 +601,7 @@ class AddViewModel(
                 refundText.value = ""
                 discountText.value = ""
                 // 报销金额也清（它和金额/退款一样是"本笔的数"）；报销状态与账户**留着**——
-                // 一摞要报销的单子连着记，每笔都重新选待报销才叫烦（分类/账户同理保留）
+                // 一摞要报销的单子连着记，每笔都重新选待报销才叫烦（分类/账户/日期/时分同理保留）
                 reimburseText.value = ""
                 amountField.value = AmountField.AMOUNT
             }
@@ -706,11 +717,11 @@ class AddViewModel(
         return tx.id
     }
 
-    /** 保存用时间：新建 = 今天/所选日 + 当前时分；编辑 = 原时间点（换日期则只挪天）。 */
+    /** 保存用时间：新建 = 所选日 + 所选时分（没选就当前时刻）；编辑 = 原时间点（换日期/换时分只动一头，都没动则原值原样）。 */
     private fun dateMinuteForSave(original: TransactionEntity?): Long = if (original == null) {
-        AddDate.epochMinuteFor(dateEpochDay.value, ZonedDateTime.now())
+        AddDate.epochMinuteFor(dateEpochDay.value, timeOfDay.value, ZonedDateTime.now())
     } else {
-        AddDate.epochMinuteForEdit(original.dateEpochMinute, dateEpochDay.value)
+        AddDate.epochMinuteForEdit(original.dateEpochMinute, dateEpochDay.value, timeOfDay.value)
     }
 
     companion object {

@@ -192,7 +192,7 @@ class AssetsViewModel(private val app: PennedApplication) : ViewModel() {
                         amountCents = account.annualFeeCents,
                         accountId = account.id,
                         categoryId = categoryId,
-                        dateEpochMinute = AddDate.epochMinuteFor(null, java.time.ZonedDateTime.now()),
+                        dateEpochMinute = AddDate.epochMinuteFor(null, null, java.time.ZonedDateTime.now()),
                         note = "信用卡年费 · ${account.name}",
                         creatorDeviceId = app.deviceId,
                         createdAt = now,

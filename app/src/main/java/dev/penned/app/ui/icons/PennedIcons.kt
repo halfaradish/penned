@@ -106,6 +106,17 @@ object PennedIcons {
         }
     }
 
+    /** 记账时间（信息条「时间」chip）。 */
+    val Clock: ImageVector by lazy {
+        icon("clock") {
+            stroke {
+                circle(12f, 12f, 8.4f)
+                line(12f, 12f, 12f, 6.4f)
+                line(12f, 12f, 15.7f, 14.3f)
+            }
+        }
+    }
+
     val Wallet: ImageVector by lazy {
         icon("wallet") {
             stroke {
