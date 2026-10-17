@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -657,6 +658,10 @@ fun AddTransactionContent(
             onDismiss = { showDatePicker = false },
             title = "选择记账日期",
             confirmLabel = "确定",
+            // M3 日历网格最窄 336dp（7 × 48dp），弹窗走平台默认宽度只有 280~320dp——真机上会把周六那列裁掉。
+            // 交给窗口满宽 + 限 400dp（与测试视口同宽，D016）：内容 336 + 弹窗内边距 48 就放得下了
+            modifier = Modifier.widthIn(max = 400.dp).fillMaxWidth(), // token-ok：M3 网格 336 + 内边距 48 = 384，400 是弹窗一次性宽度上限
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
             onConfirm = {
                 pickerState.selectedDateMillis?.let { millis ->
                     onPickDate(dev.penned.app.domain.AddDate.pickerMillisToDay(millis))
