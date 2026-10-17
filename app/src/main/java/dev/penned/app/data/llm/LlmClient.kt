@@ -23,6 +23,17 @@ sealed interface LlmResult {
     data class Err(val reason: LlmError) : LlmResult
 }
 
+/**
+ * 只要"模型回的那段 JSON 原文"的结果（M4-6 的两条导入建议用）。
+ *
+ * 与 [LlmResult] 分开是因为出参形态不同：那边严格校验"一笔账"（缺金额即失败），
+ * 这边的建议 JSON 长的是另一个样子（字段→列名 / 商户→分类名），得由各自的纯函数去校验。
+ */
+sealed interface LlmContentResult {
+    data class Ok(val content: String, val model: String) : LlmContentResult
+    data class Err(val reason: LlmError) : LlmContentResult
+}
+
 enum class LlmError {
     /** 地址 / Key / 模型没配齐（或总开关关着）。 */
     NOT_CONFIGURED,
@@ -54,13 +65,39 @@ enum class LlmError {
  */
 class LlmClient(private val okHttp: OkHttpClient = defaultClient()) {
 
-    /** 文本入参（一句话 / 表头 / 商户名列表等）。 */
+    /** 文本入参（一句话 / 表头 / 商户名列表等）→ 严格按"一笔账"的 schema 校验。 */
     suspend fun extractText(config: LlmConfig, prompt: String): LlmResult =
+        when (val result = complete(config, prompt)) {
+            is LlmContentResult.Ok ->
+                dev.penned.app.domain.LlmDraftParser.parse(result.content)
+                    ?.let { LlmResult.Ok(it, result.model) }
+                    ?: LlmResult.Err(LlmError.BAD_RESPONSE)
+
+            is LlmContentResult.Err -> LlmResult.Err(result.reason)
+        }
+
+    /** 只取模型回的 JSON 原文（建议类出参自己校验；同一条 HTTP 链路）。 */
+    suspend fun complete(config: LlmConfig, prompt: String): LlmContentResult =
         call(config, model = config.model, prompt = prompt, imageJpegBase64 = null, imageDetail = null)
 
-    /** 图像入参（截图导入）：[jpegBase64] 是已压缩过的 JPEG base64（不带 data 前缀）。 */
+    /**
+     * 图像入参（截图导入）：[jpegBase64] 是已压缩过的 JPEG base64（不带 data 前缀）。
+     * 与文本一样严格按"一笔账"的 schema 校验（同一个 `LlmDraftParser`）。
+     */
     suspend fun extractImage(config: LlmConfig, prompt: String, jpegBase64: String): LlmResult =
-        call(config, model = config.effectiveVisionModel, prompt = prompt, imageJpegBase64 = jpegBase64, imageDetail = "high")
+        when (
+            val result = call(
+                config, model = config.effectiveVisionModel, prompt = prompt,
+                imageJpegBase64 = jpegBase64, imageDetail = "high",
+            )
+        ) {
+            is LlmContentResult.Ok ->
+                dev.penned.app.domain.LlmDraftParser.parse(result.content)
+                    ?.let { LlmResult.Ok(it, result.model) }
+                    ?: LlmResult.Err(LlmError.BAD_RESPONSE)
+
+            is LlmContentResult.Err -> LlmResult.Err(result.reason)
+        }
 
     /**
      * 「测试连接」：发一句最省 token 的话，只关心**通不通**。
@@ -78,9 +115,9 @@ class LlmClient(private val okHttp: OkHttpClient = defaultClient()) {
         prompt: String,
         imageJpegBase64: String?,
         imageDetail: String?,
-    ): LlmResult = withContext(Dispatchers.IO) {
+    ): LlmContentResult = withContext(Dispatchers.IO) {
         if (LlmEndpoints.validate(config.baseUrl, config.apiKey, config.model) != null) {
-            return@withContext LlmResult.Err(
+            return@withContext LlmContentResult.Err(
                 LlmEndpoints.validate(config.baseUrl, config.apiKey, config.model)
                     ?.toLlmError() ?: LlmError.NOT_CONFIGURED
             )
@@ -91,24 +128,22 @@ class LlmClient(private val okHttp: OkHttpClient = defaultClient()) {
             response.use {
                 val text = it.body?.string().orEmpty()
                 when {
-                    it.code == 401 -> LlmResult.Err(LlmError.UNAUTHORIZED)
-                    it.code == 403 -> LlmResult.Err(LlmError.FORBIDDEN)
-                    it.code == 429 -> LlmResult.Err(LlmError.RATE_LIMITED)
-                    it.code !in 200..299 -> LlmResult.Err(LlmError.SERVER)
-                    else -> contentOf(text)?.let { content ->
-                        LlmDraftParser.parse(content)?.let { draft -> LlmResult.Ok(draft, model) }
-                            ?: LlmResult.Err(LlmError.BAD_RESPONSE)
-                    } ?: LlmResult.Err(LlmError.BAD_RESPONSE)
+                    it.code == 401 -> LlmContentResult.Err(LlmError.UNAUTHORIZED)
+                    it.code == 403 -> LlmContentResult.Err(LlmError.FORBIDDEN)
+                    it.code == 429 -> LlmContentResult.Err(LlmError.RATE_LIMITED)
+                    it.code !in 200..299 -> LlmContentResult.Err(LlmError.SERVER)
+                    else -> contentOf(text)?.let { content -> LlmContentResult.Ok(content, model) }
+                        ?: LlmContentResult.Err(LlmError.BAD_RESPONSE)
                 }
             }
         } catch (e: CancellationException) {
             throw e
         } catch (_: InterruptedIOException) {
-            LlmResult.Err(LlmError.TIMEOUT)
+            LlmContentResult.Err(LlmError.TIMEOUT)
         } catch (_: java.net.SocketTimeoutException) {
-            LlmResult.Err(LlmError.TIMEOUT)
+            LlmContentResult.Err(LlmError.TIMEOUT)
         } catch (_: Exception) {
-            LlmResult.Err(LlmError.NETWORK)
+            LlmContentResult.Err(LlmError.NETWORK)
         }
     }
 

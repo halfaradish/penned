@@ -50,10 +50,20 @@ import dev.penned.app.data.importer.BillImportResult
 import dev.penned.app.data.importer.BillRowParser
 import dev.penned.app.data.importer.BillSource
 import dev.penned.app.data.importer.ParsedBill
+import dev.penned.app.data.db.entity.KeywordRuleEntity
+import dev.penned.app.data.llm.LlmContentResult
+import dev.penned.app.data.llm.LlmError
+import dev.penned.app.data.llm.LlmImportAssist
 import dev.penned.app.domain.AccountGuess
 import dev.penned.app.domain.AccountType
 import dev.penned.app.domain.BillDedupe
 import dev.penned.app.domain.BillRowCounts
+import dev.penned.app.domain.ColumnMappingSuggestion
+import dev.penned.app.domain.LlmConfig
+import dev.penned.app.domain.LlmEndpoints
+import dev.penned.app.domain.LlmSuggestions
+import dev.penned.app.domain.MerchantCategorySuggestion
+import dev.penned.app.domain.RuleTargetType
 import dev.penned.app.domain.Money
 import dev.penned.app.ui.components.PennedButton
 import dev.penned.app.ui.components.PennedCard
@@ -74,6 +84,13 @@ import java.nio.charset.Charset
 /** 预览页的测试标记（页面上同名文本太多，测试要钉准）。 */
 const val BILL_PREVIEW_COUNTS_TAG = "bill-preview-counts"
 const val BILL_PREVIEW_IMPORT_TAG = "bill-preview-import"
+
+/** 通用模式列映射卡 / AI 建议卡的测试标记。 */
+const val BILL_COLUMN_MAP_TAG = "bill-column-map"
+const val BILL_AI_TAG = "bill-ai"
+
+/** AI 没配置/未开启时的统一引导（一处文案）。 */
+const val OFFLINE_MESSAGE = "先去「AI 设置」填 Key 与地址（AI 默认关）"
 
 /** 预览页状态（一次把该显示的算好，UI 不自己拼）。 */
 data class BillImportUiState(
@@ -97,6 +114,18 @@ data class BillImportUiState(
     val categoryFromColumn: Int = 0,
     val categoryFromRule: Int = 0,
     val categoryMissing: Int = 0,
+    /** 通用模式的表头（认不出两家来源时才有；列映射 UI 用）。 */
+    val genericHeader: List<String> = emptyList(),
+    /** 通用模式当前生效的映射：我们的字段 → 表头列名（UI 显示与手改都用它）。 */
+    val genericMapping: Map<String, String> = emptyMap(),
+    /** AI 给的列映射建议（已在本地校验过；null = 还没问过）。 */
+    val aiMapping: ColumnMappingSuggestion? = null,
+    /** AI 的商户分类建议（只改预览页的建议值）。 */
+    val aiMerchants: List<MerchantCategorySuggestion> = emptyList(),
+    val aiBusy: Boolean = false,
+    val aiMessage: String? = null,
+    /** 「存为关键词规则」存过没有（存过就给一句"下次本地命中"）。 */
+    val rulesSaved: Boolean = false,
     val importing: Boolean = false,
     val progressDone: Int = 0,
     val progressTotal: Int = 0,
@@ -125,6 +154,8 @@ class BillImportViewModel(
 
     private var rawBytes: ByteArray? = null
     private var parsed: ParsedBill? = null
+    private var lastFile: BillFile? = null
+    private val assist = LlmImportAssist()
 
     fun load(charsetOverride: Charset? = null) {
         viewModelScope.launch {
@@ -138,9 +169,20 @@ class BillImportViewModel(
                 val file: BillFile = withContext(Dispatchers.IO) {
                     BillFileReader.read(bytes, fileName, charsetOverride)
                 }
+                lastFile = file
                 val parsedBill = withContext(Dispatchers.IO) { BillRowParser.parse(file) }
-                parsed = parsedBill
+                refreshFrom(parsedBill, file)
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(loading = false, error = e.message ?: "读不了这个文件")
+            }
+        }
+    }
 
+    /** 解析结果 → 一页状态（查重、账户映射、分类来源统计都在这里收口；通用模式重解析也走它）。 */
+    private suspend fun refreshFrom(parsedBill: ParsedBill, file: BillFile) {
+        parsed = parsedBill
+        run {
+            run {
                 val bookId = app.settings.currentBookId.first()
                 val importableRows = parsedBill.rows.filterNotNull()
                 val existingIds = bookId?.let { id ->
@@ -177,6 +219,18 @@ class BillImportViewModel(
                     loading = false,
                     fileName = fileName,
                     source = parsedBill.source,
+                    // 通用模式（认不出两家来源）才给列映射 UI：第 1 行当表头
+                    genericHeader = if (parsedBill.source == BillSource.GENERIC) {
+                        file.rows.firstOrNull().orEmpty()
+                    } else {
+                        emptyList()
+                    },
+                    // 通用模式重解析时保留当前映射（首帧为空 = 还没认列）
+                    genericMapping = if (parsedBill.source == BillSource.GENERIC) {
+                        _state.value.genericMapping
+                    } else {
+                        emptyMap()
+                    },
                     container = file.container,
                     charsetLabel = file.charsetLabel,
                     headerRowIndex = parsedBill.headerRowIndex,
@@ -192,14 +246,164 @@ class BillImportViewModel(
                     categoryFromRule = fromRule,
                     categoryMissing = missing,
                 )
-            } catch (e: Exception) {
-                _state.value = _state.value.copy(loading = false, error = e.message ?: "读不了这个文件")
             }
         }
     }
 
     /** 手动切编码重解析（预览页那是两个 chip）。 */
     fun reparseWith(charset: Charset?) = load(charset)
+
+    /** 通用模式：按"字段 → 列名"的手动映射重新解析（AI 建议"采用"后也走这里）。 */
+    fun reparseGeneric(mapping: Map<String, String>) {
+        val file = lastFile ?: return
+        viewModelScope.launch {
+            _state.value = _state.value.copy(genericMapping = mapping)
+            try {
+                val parsedBill = withContext(Dispatchers.IO) {
+                    BillRowParser.parseGeneric(file, file.rows.firstOrNull().orEmpty(), mapping)
+                }
+                refreshFrom(parsedBill, file)
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(error = e.message ?: "这份映射解析不了")
+            }
+        }
+    }
+
+    /** 「让 AI 认列」：默认只发表头；[includeSamples] = 用户点过「再看 3 行样例」（数字已掩码）。 */
+    fun requestAiMapping(includeSamples: Boolean) {
+        val file = lastFile ?: return
+        viewModelScope.launch {
+            _state.value = _state.value.copy(aiBusy = true, aiMessage = null)
+            val config = llmConfig()
+            if (config == null) {
+                _state.value = _state.value.copy(aiBusy = false, aiMessage = OFFLINE_MESSAGE)
+                return@launch
+            }
+            val header = file.rows.firstOrNull().orEmpty()
+            val samples = if (includeSamples) file.rows.drop(1).take(3) else emptyList()
+            when (val result = assist.suggestColumnMapping(config, header, samples)) {
+                is LlmContentResult.Ok -> {
+                    val suggestion = LlmSuggestions.parseColumnMapping(result.content, header)
+                    _state.value = _state.value.copy(
+                        aiBusy = false,
+                        aiMapping = suggestion,
+                        aiMessage = if (suggestion == null) "AI 回的列名对不上表头，改用手动映射吧" else null,
+                    )
+                }
+
+                is LlmContentResult.Err -> _state.value =
+                    _state.value.copy(aiBusy = false, aiMessage = aiErrorText(result.reason))
+            }
+        }
+    }
+
+    /** 采用 AI 的列映射建议（本地校验过的那份）。 */
+    fun applyAiMapping() {
+        val suggestion = _state.value.aiMapping ?: return
+        val mapping = buildMap {
+            put("time", suggestion.timeColumn)
+            put("amount", suggestion.amountColumn)
+            suggestion.directionColumn?.let { put("direction", it) }
+            suggestion.merchantColumn?.let { put("merchant", it) }
+            suggestion.itemColumn?.let { put("item", it) }
+            suggestion.statusColumn?.let { put("status", it) }
+            suggestion.externalIdColumn?.let { put("externalId", it) }
+            suggestion.paymentColumn?.let { put("payment", it) }
+            suggestion.categoryColumn?.let { put("category", it) }
+            suggestion.noteColumn?.let { put("note", it) }
+        }
+        _state.value = _state.value.copy(aiMapping = null)
+        reparseGeneric(mapping)
+    }
+
+    /** 「AI 补分类」：只发商户名 + 分类名（≤100/批）。 */
+    fun requestAiCategories() {
+        viewModelScope.launch {
+            val config = llmConfig()
+            if (config == null) {
+                _state.value = _state.value.copy(aiMessage = OFFLINE_MESSAGE)
+                return@launch
+            }
+            _state.value = _state.value.copy(aiBusy = true, aiMessage = null)
+            val bookId = _state.value.targetBookId ?: return@launch
+            val categories = app.database.categoryDao().allInBook(bookId)
+            val paths = categories.map { category ->
+                categories.firstOrNull { it.id == category.parentId }
+                    ?.let { "${it.name} / ${category.name}" } ?: category.name
+            }
+            val merchants = _state.value.importable.mapNotNull { it.note?.substringBefore(" · ") }
+            val collected = mutableListOf<MerchantCategorySuggestion>()
+            for (batch in LlmSuggestions.batchMerchants(merchants)) {
+                when (val result = assist.suggestMerchantCategories(config, batch, paths)) {
+                    is LlmContentResult.Ok ->
+                        collected += LlmSuggestions.parseMerchantCategories(result.content, categories)
+
+                    is LlmContentResult.Err -> {
+                        _state.value = _state.value.copy(aiBusy = false, aiMessage = aiErrorText(result.reason))
+                        return@launch
+                    }
+                }
+            }
+            val usable = collected.filter { it.categoryId != null }
+            _state.value = _state.value.copy(
+                aiBusy = false,
+                aiMerchants = usable,
+                aiMessage = if (usable.isEmpty()) "AI 没给出可用的分类建议" else null,
+            )
+        }
+    }
+
+    /** 「把这些商户 → 分类存为关键词规则」：写 `keyword_rules`，下次导入/一句话本地命中（不再花 LLM）。 */
+    fun saveAsKeywordRules() {
+        val rows = _state.value.aiMerchants
+        val bookId = _state.value.targetBookId ?: return
+        if (rows.isEmpty()) return
+        viewModelScope.launch {
+            val dao = app.database.keywordRuleDao()
+            val existing = dao.allInBook(bookId)
+            val now = System.currentTimeMillis()
+            rows.forEach { suggestion ->
+                val merchant = suggestion.merchant.trim()
+                val categoryId = suggestion.categoryId ?: return@forEach
+                if (existing.any { it.keyword == merchant && it.targetId == categoryId }) return@forEach
+                dao.insertAtEnd(
+                    KeywordRuleEntity(
+                        id = java.util.UUID.randomUUID().toString(),
+                        bookId = bookId,
+                        keyword = merchant,
+                        targetType = RuleTargetType.CATEGORY,
+                        targetId = categoryId,
+                        priority = 0,
+                        enabled = true,
+                        createdAt = now,
+                        updatedAt = now,
+                        deviceId = app.deviceId,
+                    )
+                )
+            }
+            _state.value = _state.value.copy(rulesSaved = true, aiMerchants = emptyList())
+        }
+    }
+
+    private suspend fun llmConfig(): LlmConfig? {
+        if (!app.settings.llmEnabled.first()) return null
+        val baseUrl = app.settings.llmBaseUrl.first()
+        val apiKey = app.settings.llmApiKey.first()
+        val model = app.settings.llmModel.first()
+        if (LlmEndpoints.validate(baseUrl, apiKey, model) != null) return null
+        return LlmEndpoints.config(baseUrl.orEmpty(), apiKey.orEmpty(), model.orEmpty(), app.settings.llmVisionModel.first())
+    }
+
+    private fun aiErrorText(reason: LlmError): String = when (reason) {
+        LlmError.NOT_CONFIGURED, LlmError.INSECURE_URL, LlmError.MALFORMED_URL -> OFFLINE_MESSAGE
+        LlmError.NETWORK -> "连不上：检查网络或地址"
+        LlmError.TIMEOUT -> "超时了，等会儿再试"
+        LlmError.UNAUTHORIZED -> "Key 无效（401）"
+        LlmError.FORBIDDEN -> "没有权限（403）"
+        LlmError.RATE_LIMITED -> "被限流了（429）"
+        LlmError.SERVER -> "服务端出错（5xx）"
+        LlmError.BAD_RESPONSE -> "回的不是能用的 JSON"
+    }
 
     fun setMappingAccount(clue: String, accountId: String?) {
         _state.value = _state.value.copy(
@@ -298,6 +502,15 @@ fun BillImportScreen(onBack: () -> Unit, onImported: (String) -> Unit) {
         onEditFallback = { showFallbackPicker = true },
         onEditBook = { showBookPicker = true },
         onImport = viewModel::import,
+        onPickColumn = { field, column ->
+            val updated = state.genericMapping.toMutableMap()
+            if (column == null) updated.remove(field) else updated[field] = column
+            viewModel.reparseGeneric(updated)
+        },
+        onAskAiMapping = { includeSamples -> viewModel.requestAiMapping(includeSamples) },
+        onApplyAiMapping = viewModel::applyAiMapping,
+        onAskAiCategories = viewModel::requestAiCategories,
+        onSaveRules = viewModel::saveAsKeywordRules,
     )
 
     editingClue?.let { clue ->
@@ -330,6 +543,20 @@ fun BillImportScreen(onBack: () -> Unit, onImported: (String) -> Unit) {
 }
 
 /** 预览页打开时把"从哪个 uri 来的"放这里（SAF 的 uri 没法进导航参数）。 */
+/** 列映射 UI 的字段顺序与中文标签（与 `LlmSuggestions.FIELDS` 对齐）。 */
+val ColumnMappingRows = listOf(
+    "time" to "时间",
+    "amount" to "金额",
+    "direction" to "收/支",
+    "merchant" to "商户",
+    "item" to "商品",
+    "status" to "状态",
+    "externalId" to "单号",
+    "payment" to "支付方式",
+    "category" to "分类",
+    "note" to "备注",
+)
+
 object BillImportRequest {
     var uri: Uri? = null
     var fileName: String = "账单文件"
@@ -351,7 +578,29 @@ fun BillImportContent(
     onEditFallback: () -> Unit = {},
     onEditBook: () -> Unit = {},
     onImport: () -> Unit = {},
+    /** 通用模式：手改某一列（null = 取消这一列）。 */
+    onPickColumn: (String, String?) -> Unit = { _, _ -> },
+    onAskAiMapping: (Boolean) -> Unit = {},
+    onApplyAiMapping: () -> Unit = {},
+    onAskAiCategories: () -> Unit = {},
+    onSaveRules: () -> Unit = {},
 ) {
+    var expandedField by remember { mutableStateOf<String?>(null) }
+
+    // 手改某列：抽屉里列这份文件的表头（+「不指定」）
+    expandedField?.let { field ->
+        ColumnPickerSheet(
+            title = "「${ColumnMappingRows.firstOrNull { it.first == field }?.second ?: field}」对应哪一列",
+            columns = state.genericHeader,
+            current = state.genericMapping[field],
+            onPick = { column ->
+                onPickColumn(field, column)
+                expandedField = null
+            },
+            onDismiss = { expandedField = null },
+        )
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = { PennedTopBar(title = "导入账单", onBack = onBack) },
@@ -461,6 +710,154 @@ fun BillImportContent(
             ) {
                 CountRow("支出合计", Money.format(state.expenseTotalCents))
                 CountRow("收入合计", Money.format(state.incomeTotalCents))
+            }
+
+            // ③点五 通用模式：列映射（认不出两家来源时才出现；AI 建议落在这里由用户确认/手改）
+            if (state.genericHeader.isNotEmpty()) {
+                PennedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.xs)
+                        .testTag(BILL_COLUMN_MAP_TAG),
+                    contentPadding = PaddingValues(0.dp),
+                ) {
+                    Text(
+                        "列映射（这份表头没认出来，指一下哪列是什么）",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = PennedSpacing.lg, top = PennedSpacing.sm),
+                    )
+                    ColumnMappingRows.forEach { (field, label) ->
+                        PickRow(
+                            label = label,
+                            value = state.genericMapping[field] ?: "没指定",
+                            onClick = { expandedField = field },
+                        )
+                    }
+                    Row(
+                        Modifier.padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.sm),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        PennedButton(
+                            text = if (state.aiBusy) "问 AI 中…" else "让 AI 认列",
+                            enabled = !state.aiBusy,
+                            fillWidth = false,
+                            onClick = { onAskAiMapping(false) },
+                        )
+                        if (state.genericMapping["time"] == null || state.genericMapping["amount"] == null) {
+                            Spacer(Modifier.width(PennedSpacing.sm))
+                            PennedButton(
+                                text = "让 AI 再看 3 行样例",
+                                enabled = !state.aiBusy,
+                                fillWidth = false,
+                                variant = dev.penned.app.ui.components.PennedButtonVariant.Secondary,
+                                onClick = { onAskAiMapping(true) },
+                            )
+                        }
+                    }
+                    Text(
+                        "AI 只发表头（点「再看 3 行样例」时多发前 3 行的**数字已打码**版本）；" +
+                            "列名对不上表头的建议会被丢掉，时间与金额两列必须指定",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.xs),
+                    )
+                }
+            }
+
+            // ③点六 AI 建议：列映射建议（通用模式）+ 商户分类建议（都可跳过）
+            if (state.aiMapping != null || state.aiMerchants.isNotEmpty() || state.aiMessage != null ||
+                state.rulesSaved || state.genericHeader.isNotEmpty() || state.counts.importable > 0
+            ) {
+                PennedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.xs)
+                        .testTag(BILL_AI_TAG),
+                    contentPadding = PaddingValues(0.dp),
+                ) {
+                    Text(
+                        "AI 补分类（可选；只发商户名与分类名，不发金额/时间/单号）",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = PennedSpacing.lg, top = PennedSpacing.sm),
+                    )
+                    state.aiMapping?.let { suggestion ->
+                        Text(
+                            "AI 认列：时间=${suggestion.timeColumn} · 金额=${suggestion.amountColumn}" +
+                                (suggestion.directionColumn?.let { " · 收支=$it" } ?: ""),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.xs),
+                        )
+                        Column(Modifier.padding(horizontal = PennedSpacing.lg)) {
+                            PennedButton(text = "采用这套列映射", onClick = onApplyAiMapping)
+                        }
+                        Spacer(Modifier.height(PennedSpacing.sm))
+                    }
+                    state.aiMerchants.take(5).forEach { suggestion ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.xs),
+                        ) {
+                            Text(
+                                suggestion.merchant,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                "→ ${suggestion.categoryName}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = dev.penned.app.ui.theme.primaryInkColor(),
+                            )
+                        }
+                    }
+                    if (state.aiMerchants.size > 5) {
+                        Text(
+                            "…共 ${state.aiMerchants.size} 条建议",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = PennedSpacing.lg),
+                        )
+                    }
+                    state.aiMessage?.let { message ->
+                        Text(
+                            message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.xs),
+                        )
+                    }
+                    if (state.rulesSaved) {
+                        Text(
+                            "已存为关键词规则：下次导入与一句话记账本地直接命中，不再花 AI",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = dev.penned.app.ui.theme.incomeColor(),
+                            modifier = Modifier.padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.xs),
+                        )
+                    }
+                    Row(
+                        Modifier.padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.sm),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        PennedButton(
+                            text = if (state.aiBusy) "问 AI 中…" else "AI 补分类",
+                            enabled = !state.aiBusy && state.counts.importable > 0,
+                            fillWidth = false,
+                            onClick = onAskAiCategories,
+                        )
+                        if (state.aiMerchants.isNotEmpty()) {
+                            Spacer(Modifier.width(PennedSpacing.sm))
+                            PennedButton(
+                                text = "存为关键词规则",
+                                fillWidth = false,
+                                variant = dev.penned.app.ui.components.PennedButtonVariant.Secondary,
+                                onClick = onSaveRules,
+                            )
+                        }
+                    }
+                }
             }
 
             // ④ 目标账本 + 账户映射表
@@ -643,6 +1040,43 @@ private fun AccountMappingSheet(
                             .padding(vertical = PennedSpacing.sm),
                     )
                 }
+            }
+        }
+    }
+}
+
+/** 通用模式：选某一列（表头列表 + 「不指定」）。 */
+@Composable
+private fun ColumnPickerSheet(
+    title: String,
+    columns: List<String>,
+    current: String?,
+    onPick: (String?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    PennedSheet(onDismiss = onDismiss, title = title) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = PennedSpacing.xl)) {
+            Text(
+                "不指定",
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (current == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = PennedDimens.touchTarget)
+                    .androidClickable { onPick(null) }
+                    .padding(vertical = PennedSpacing.sm),
+            )
+            columns.forEachIndexed { index, column ->
+                Text(
+                    "${index + 1}. $column",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (current == column) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = PennedDimens.touchTarget)
+                        .androidClickable { onPick(column) }
+                        .padding(vertical = PennedSpacing.sm),
+                )
             }
         }
     }

@@ -43,9 +43,46 @@ object BillRowParser {
         return parse(file, format, map)
     }
 
-    fun parse(file: BillFile, format: BillFormat, map: BillColumnMap): ParsedBill {
-        val headerIndex = BillFormats.headerRowIndex(file.rows)
-        val from = if (headerIndex >= 0) headerIndex + 1 else 0
+    /**
+     * 通用模式：按"我们的字段 → 表头列名"的映射解析（手改或 AI 建议都用这一条路）。
+     *
+     * [mapping] 里没有的字段就是"这一列没有"（-1）；时间/金额缺一 = 没法解析（调用方要拦住）。
+     */
+    fun parseGeneric(file: BillFile, header: List<String>, mapping: Map<String, String>): ParsedBill {
+        val cells = header.map { it.trim() }
+        fun index(field: String): Int = mapping[field]?.let { cells.indexOf(it) } ?: -1
+        val map = BillColumnMap(
+            time = index("time"),
+            amount = index("amount"),
+            direction = index("direction"),
+            merchant = index("merchant"),
+            item = index("item"),
+            status = index("status"),
+            externalId = index("externalId"),
+            payment = index("payment"),
+            category = index("category"),
+            note = index("note"),
+        )
+        if (map.time < 0 || map.amount < 0) throw BillFormatException("时间和金额两列必须指定")
+        return parseCells(file, BillFormat(BillSource.GENERIC, header), map, headerRowIndex = -1)
+    }
+
+    fun parse(file: BillFile, format: BillFormat, map: BillColumnMap): ParsedBill =
+        parseCells(file, format, map, headerRowIndex = BillFormats.headerRowIndex(file.rows))
+
+    private fun parseCells(
+        file: BillFile,
+        format: BillFormat,
+        map: BillColumnMap,
+        headerRowIndex: Int,
+    ): ParsedBill {
+        val headerIndex = headerRowIndex
+        // 通用模式（headerRowIndex = -1）：数据从第 2 行起（第 1 行当表头）
+        val from = when {
+            headerIndex >= 0 -> headerIndex + 1
+            file.rows.isNotEmpty() -> 1
+            else -> 0
+        }
         val rows = ArrayList<BillRow?>(file.rows.size)
         val buckets = ArrayList<BillBucket>(file.rows.size)
         var dataLines = 0

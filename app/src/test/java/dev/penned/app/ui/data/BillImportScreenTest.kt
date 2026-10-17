@@ -89,7 +89,8 @@ class BillImportScreenTest {
         composeRule.onNodeWithText("25.80").performScrollTo().assertIsDisplayed() // 支出合计 12.00 + 13.80
         composeRule.onNodeWithText("88.00").performScrollTo().assertIsDisplayed() // 收入合计
         composeRule.onNodeWithText("账户映射（将新建 1 个）").assertIsDisplayed()
-        composeRule.onNodeWithText("分类：按名命中 2 · 关键词规则 0 · 待补 1（导入时不会新建分类）").assertIsDisplayed()
+        composeRule.onNodeWithText("分类：按名命中 2 · 关键词规则 0 · 待补 1（导入时不会新建分类）")
+            .performScrollTo().assertIsDisplayed()
         capture("m4_bill_preview")
     }
 
@@ -127,11 +128,11 @@ class BillImportScreenTest {
                 )
             }
         }
-        composeRule.onNodeWithText("XX银行储蓄卡(4936)").performClick()
+        composeRule.onNodeWithText("XX银行储蓄卡(4936)").performScrollTo().performClick()
         assertEquals("XX银行储蓄卡(4936)", mappingClue)
-        composeRule.onNodeWithText("其余统一记到").performClick()
+        composeRule.onNodeWithText("其余统一记到").performScrollTo().performClick()
         assertEquals(true, fallback)
-        composeRule.onNodeWithText("目标账本").performClick()
+        composeRule.onNodeWithText("目标账本").performScrollTo().performClick()
         assertEquals(true, book)
         capture("m4_bill_preview_rows")
     }
@@ -142,7 +143,7 @@ class BillImportScreenTest {
         composeRule.setContent {
             PennedTheme { BillImportContent(state(), onBack = {}, onImport = { imported = true }) }
         }
-        composeRule.onNodeWithTag(BILL_PREVIEW_IMPORT_TAG).assertTextContains("导入 507 条").performClick()
+        composeRule.onNodeWithTag(BILL_PREVIEW_IMPORT_TAG).performScrollTo().assertTextContains("导入 507 条").performClick()
         assertEquals(true, imported)
     }
 
@@ -181,6 +182,62 @@ class BillImportScreenTest {
         composeRule.onNodeWithText("正在导入 250/507…").assertIsDisplayed()
         composeRule.onNodeWithTag(BILL_PREVIEW_IMPORT_TAG).performScrollTo().assertTextContains("导入中…")
         capture("m4_bill_preview_importing")
+    }
+
+    @Test
+    fun genericModeShowsColumnMappingAndAi() {
+        val generic = state().copy(
+            source = BillSource.GENERIC,
+            genericHeader = listOf("日期", "说明", "钱", "方向"),
+            genericMapping = mapOf("time" to "日期", "amount" to "钱"),
+            aiMapping = dev.penned.app.domain.ColumnMappingSuggestion(
+                timeColumn = "日期", amountColumn = "钱", directionColumn = "方向",
+                merchantColumn = "说明", itemColumn = null, statusColumn = null,
+                externalIdColumn = null, paymentColumn = null, categoryColumn = null, noteColumn = null,
+            ),
+            aiMerchants = listOf(
+                dev.penned.app.domain.MerchantCategorySuggestion("肯打鸡", "食品餐饮", "c1"),
+            ),
+        )
+        composeRule.setContent { PennedTheme { BillImportContent(generic, onBack = {}) } }
+        composeRule.onNodeWithTag(BILL_COLUMN_MAP_TAG).performScrollTo().assertExists()
+        composeRule.onNodeWithText("列映射（这份表头没认出来，指一下哪列是什么）").assertIsDisplayed()
+        composeRule.onNodeWithText("让 AI 认列").assertIsDisplayed()
+        composeRule.onNodeWithTag(BILL_AI_TAG).performScrollTo().assertExists()
+        composeRule.onNodeWithText("AI 认列：时间=日期 · 金额=钱 · 收支=方向").assertIsDisplayed()
+        composeRule.onNodeWithText("采用这套列映射").assertIsDisplayed()
+        composeRule.onNodeWithText("肯打鸡").assertIsDisplayed()
+        capture("m4_bill_generic_mapping")
+    }
+
+    @Test
+    fun genericModeWithoutTimeAmountOffersSamples() {
+        var samples = false
+        composeRule.setContent {
+            PennedTheme {
+                BillImportContent(
+                    state().copy(
+                        source = BillSource.GENERIC,
+                        genericHeader = listOf("日期", "钱"),
+                        genericMapping = emptyMap(),
+                    ),
+                    onBack = {},
+                    onAskAiMapping = { includeSamples -> samples = includeSamples },
+                )
+            }
+        }
+        composeRule.onNodeWithText("让 AI 再看 3 行样例").performScrollTo().performClick()
+        assertEquals(true, samples)
+        capture("m4_bill_generic_unmapped")
+    }
+
+    @Test
+    fun rulesSavedNote() {
+        composeRule.setContent {
+            PennedTheme { BillImportContent(state().copy(rulesSaved = true), onBack = {}) }
+        }
+        composeRule.onNodeWithText("已存为关键词规则：下次导入与一句话记账本地直接命中，不再花 AI")
+            .performScrollTo().assertIsDisplayed()
     }
 
     @Test
