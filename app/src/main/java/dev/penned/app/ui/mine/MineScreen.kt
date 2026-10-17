@@ -48,6 +48,8 @@ fun MineScreen(
     onOpenAiSettings: () -> Unit = {},
     /** 一句话记账（M4-3）。 */
     onOpenQuickEntry: () -> Unit = {},
+    /** 截图导入（M4-7）。 */
+    onOpenScreenshotImport: () -> Unit = {},
     modifier: Modifier = Modifier,
     versionName: String = dev.penned.app.BuildConfig.VERSION_NAME,
 ) {
@@ -165,6 +167,14 @@ fun MineScreen(
                 subtitle = "说一句「昨天打车 32.5」，解析成草稿再确认",
                 leadingIcon = PennedIcons.Edit,
                 onClick = onOpenQuickEntry,
+            )
+            PennedDivider(startIndent = ROW_DIVIDER_INDENT)
+            // M4-7：截图导入（BYOK 多模态；不做本地 OCR）
+            PennedListRow(
+                title = "截图导入",
+                subtitle = "支付截图认成一笔草稿，确认后才入账",
+                leadingIcon = PennedIcons.Search,
+                onClick = onOpenScreenshotImport,
             )
             PennedDivider(startIndent = ROW_DIVIDER_INDENT)
             // M4-2：BYOK 设置（默认关；只接受 https；Key 只存本机）

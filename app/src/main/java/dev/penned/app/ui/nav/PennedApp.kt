@@ -214,6 +214,15 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
             }
         },
     ) { padding ->
+            // M4-7：系统分享收图 → 直接进截图导入页（消费掉请求，避免回退又跳一次）
+            val sharedImage by dev.penned.app.ui.intelligence.ScreenshotShareRequest.incoming
+                .collectAsStateWithLifecycle()
+            androidx.compose.runtime.LaunchedEffect(sharedImage) {
+                sharedImage?.let {
+                    navController.navigate("screenshot")
+                }
+            }
+
         NavHost(
             navController = navController,
             startDestination = "home",
@@ -265,13 +274,15 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onManageBudgets = { navController.navigate("budgets") },
                     onSearch = { navController.navigate("search") },
                     onQuickEntry = { navController.navigate("quick") },
+                    onQuickEntryScreenshot = { navController.navigate("screenshot") },
                     // 行左滑动作区的「编辑」：与详情页同一条编辑路由
                     onEditRow = { id -> navController.navigate("add?editId=$id") },
                 )
             }
             composable(
                 route = "add?editId={editId}&debtId={debtId}&debtAction={debtAction}" +
-                    "&amountCents={amountCents}&day={day}&note={note}",
+                    "&amountCents={amountCents}&day={day}&note={note}" +
+                    "&pendingId={pendingId}&pendingSource={pendingSource}&pendingType={pendingType}",
                 arguments = listOf(
                     navArgument("editId") { type = NavType.StringType; defaultValue = "" },
                     navArgument("debtId") { type = NavType.StringType; defaultValue = "" },
@@ -280,6 +291,10 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     navArgument("amountCents") { type = NavType.LongType; defaultValue = -1L },
                     navArgument("day") { type = NavType.LongType; defaultValue = -1L },
                     navArgument("note") { type = NavType.StringType; defaultValue = "" },
+                    // 截图（M4-7）/ 通知（M4-8）预填：候选 id + 来源 + 方向
+                    navArgument("pendingId") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("pendingSource") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("pendingType") { type = NavType.StringType; defaultValue = "" },
                 ),
             ) { entry ->
                 val editId = entry.arguments?.getString("editId")?.ifEmpty { null }
@@ -294,9 +309,25 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     presetCents = entry.arguments?.getLong("amountCents")?.takeIf { it > 0L },
                     presetDay = entry.arguments?.getLong("day")?.takeIf { it > 0L },
                     presetNote = entry.arguments?.getString("note")?.ifEmpty { null },
+                    // 截图/通知预填（M4-7/M4-8）：来源与方向一起带进来
+                    presetSource = entry.arguments?.getString("pendingSource")?.ifEmpty { null }
+                        ?.let { name ->
+                            dev.penned.app.domain.TxSource.entries.firstOrNull { it.name == name }
+                        } ?: dev.penned.app.domain.TxSource.MANUAL,
+                    presetType = entry.arguments?.getString("pendingType")?.ifEmpty { null }
+                        ?.let { name ->
+                            dev.penned.app.domain.TxType.entries.firstOrNull { it.name == name }
+                        },
                     // 保存完成给一次反馈：把消息挂到上一个目的地（首页）的 savedStateHandle 上，
                     // 由首页的提示条读出来（此前保存完静默返回，用户不知道成没成）
                     onDone = { savedId ->
+                        // 截图/通知进来的：保存成功把候选标 ACCEPTED 并回填 txId（规格 §二·6）
+                        val pendingId = entry.arguments?.getString("pendingId")?.ifEmpty { null }
+                        if (pendingId != null) {
+                            app.appScopeLaunch {
+                                app.database.pendingEntryDao().markAccepted(pendingId, savedId, System.currentTimeMillis())
+                            }
+                        }
                         val prev = navController.previousBackStackEntry?.savedStateHandle
                         prev?.set(HOME_FLASH_KEY, if (editId == null) "已记账" else "已保存")
                         // 只有新建才给「存为模板」动作（编辑时模板已存过，不该再提示）
@@ -394,6 +425,7 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onOpenKeywordRules = { navController.navigate("keywords") },
                     onOpenAiSettings = { navController.navigate("ai-settings") },
                     onOpenQuickEntry = { navController.navigate("quick") },
+                    onOpenScreenshotImport = { navController.navigate("screenshot") },
                 )
             }
             // 分类关键词规则（M4-1）：关键词 → 分类 / 标签（只是建议值的源头，不改已入库的账）
@@ -403,6 +435,19 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
             // AI 设置（M4-2）：BYOK 的总开关与配置（不填不联网；地址只接受 https）
             composable("ai-settings") {
                 dev.penned.app.ui.intelligence.AiSettingsScreen(onBack = { navController.popBackStack() })
+            }
+            // 截图导入（M4-7）：识别 → 落候选池 → 打开记一笔页预填（source = SCREENSHOT）
+            composable("screenshot") {
+                dev.penned.app.ui.intelligence.ScreenshotImportScreen(
+                    onBack = { navController.popBackStack() },
+                    onPrefill = { pendingId, type, amountCents, note ->
+                        navController.navigate(
+                            "add?pendingId=$pendingId&pendingSource=SCREENSHOT&pendingType=${type.name}" +
+                                "&amountCents=$amountCents&note=${java.net.URLEncoder.encode(note.orEmpty(), "UTF-8")}"
+                        )
+                    },
+                    onOpenAiSettings = { navController.navigate("ai-settings") },
+                )
             }
             // 一句话记账（M4-3）：解析成草稿 → 结果卡逐行可改 → 保存才入账（source = TEXT）
             composable("quick") {

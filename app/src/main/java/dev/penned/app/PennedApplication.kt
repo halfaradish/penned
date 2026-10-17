@@ -27,6 +27,11 @@ class PennedApplication : Application() {
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /** 应用级协程（导航层这类没 ViewModel 的地方写一小笔状态用；别塞重活）。 */
+    fun appScopeLaunch(block: suspend () -> Unit) {
+        appScope.launch { block() }
+    }
+
     override fun onCreate() {
         super.onCreate()
         appScope.launch {

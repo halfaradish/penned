@@ -121,6 +121,8 @@ fun HomeScreen(
     onEditRow: (String) -> Unit = {},
     /** 长按悬浮入口给的快捷入口（M4-3）：进一句话记账页。 */
     onQuickEntry: () -> Unit = {},
+    /** 长按悬浮入口给的快捷入口（M4-7）：进截图导入页。 */
+    onQuickEntryScreenshot: () -> Unit = {},
     /** 一次性提示（如"已记账"）：由记一笔页写进本页的 savedStateHandle，展示后回调 [onFlashShown]。 */
     flashMessage: String? = null,
     /** 刚保存的流水 id（M3-5）：非空时提示条给「存为模板」动作。 */
@@ -226,6 +228,7 @@ fun HomeScreen(
         onOpenBudgets = onManageBudgets,
         onSearch = onSearch,
         onQuickEntry = onQuickEntry,
+        onQuickEntryScreenshot = onQuickEntryScreenshot,
         onBookClick = { showBookMenu = true },
         bookMenu = {
             DropdownMenu(expanded = showBookMenu, onDismissRequest = { showBookMenu = false }) {
@@ -338,6 +341,8 @@ fun HomeContent(
     onEditRow: (String) -> Unit = {},
     /** 长按悬浮入口给的快捷入口（M4-3）：进一句话记账页。 */
     onQuickEntry: () -> Unit = {},
+    /** 长按悬浮入口给的快捷入口（M4-7）：进截图导入页。 */
+    onQuickEntryScreenshot: () -> Unit = {},
     /** 当前左滑展开动作区的行 id（null = 都收起）；只留一行为开。 */
     revealedRowId: String? = null,
     onRevealedRowChange: (String?) -> Unit = {},
@@ -602,6 +607,15 @@ fun HomeContent(
                     onClick = {
                         showQuickMenu = false
                         onQuickEntry()
+                    },
+                )
+                dev.penned.app.ui.components.PennedListRow(
+                    title = "截图导入",
+                    subtitle = "支付截图认成一笔草稿（要配好 AI 设置）",
+                    leadingIcon = dev.penned.app.ui.icons.PennedIcons.Search,
+                    onClick = {
+                        showQuickMenu = false
+                        onQuickEntryScreenshot()
                     },
                 )
             }

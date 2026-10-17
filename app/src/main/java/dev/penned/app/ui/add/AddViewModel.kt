@@ -22,6 +22,7 @@ import dev.penned.app.domain.ReimburseState
 import dev.penned.app.domain.TemplatePrefill
 import dev.penned.app.domain.Templates
 import dev.penned.app.ui.assets.selectableAccounts as visibleAccounts
+import dev.penned.app.domain.TxSource
 import dev.penned.app.domain.TxType
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,6 +52,13 @@ class AddViewModel(
     private val presetCents: Long? = null,
     private val presetDay: Long? = null,
     private val presetNote: String? = null,
+    /**
+     * 预填来源（M4-7 截图导入 = SCREENSHOT，M4-8 通知 = NOTIFICATION）：落库时记进 `source`，
+     * 详情页据此显示"记录方式"。默认 MANUAL（手动记账）。
+     */
+    val presetSource: TxSource = TxSource.MANUAL,
+    /** 预填方向（截图/通知识别出的收/支）；null = 支出。 */
+    private val presetType: TxType? = null,
 ) : ViewModel() {
 
     private val db = app.database
@@ -275,7 +283,19 @@ class AddViewModel(
             prefillDebt(presetDebtId, presetDebtAction ?: DebtAction.OPEN)
         } else if (presetCents != null) {
             applyLoanPrefill()
+        } else if (presetSource != TxSource.MANUAL) {
+            applySourcePrefill()
         }
+    }
+
+    /**
+     * 截图（M4-7）/ 通知（M4-8）预填：金额 + 备注 +（可选）方向；分类走关键词规则的建议值。
+     * 与房贷预填分开是因为来源不同——这边落库要记 `source = SCREENSHOT / NOTIFICATION`。
+     */
+    private fun applySourcePrefill() {
+        presetType?.let { type.value = it }
+        presetCents?.let { amountText.value = Money.format(it, grouped = false) }
+        presetNote?.takeIf { it.isNotBlank() }?.let { note.value = it }
     }
 
     /** 房贷首期预填（M3-11）：金额（分）+ 日期 + 备注；分类与账户留给用户选。 */
@@ -696,7 +716,7 @@ class AddViewModel(
         // 编辑走 TxEdit.applyEdit：不计收支/不计预算/导入批次/报销等
         // 本页管不着的字段一律原样保留（重建实体曾把它们全部重置——复查 P0 bug）。
         var tx = original?.let { TxEdit.applyEdit(it, editable, now, app.deviceId) }
-            ?: TxEdit.newTransaction(book.id, editable, now, app.deviceId)
+            ?: TxEdit.newTransaction(book.id, editable, now, app.deviceId, source = presetSource)
         // 借入不是收入、还款不是支出：**新建**的债务流水默认两个口径都不计
         // （D068；模拟机走查抓到只关"收支"时还款仍会算进预算已用——两个开关是两回事）；
         // 编辑时不动这两位——用户可能在详情页手动改过，不该被保存动作悄悄重置。

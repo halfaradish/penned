@@ -49,6 +49,7 @@ import dev.penned.app.domain.DebtDirection
 import dev.penned.app.domain.DebtMath
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.ReimburseState
+import dev.penned.app.domain.TxSource
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.components.AddDateTimeDialog
 import dev.penned.app.ui.components.CategoryAvatar
@@ -95,10 +96,19 @@ fun AddTransactionScreen(
     presetCents: Long? = null,
     presetDay: Long? = null,
     presetNote: String? = null,
+    /** 预填来源（M4-7 截图导入 = SCREENSHOT / M4-8 通知 = NOTIFICATION）。 */
+    presetSource: TxSource = TxSource.MANUAL,
+    /** 预填方向（识别出的收/支）。 */
+    presetType: TxType? = null,
 ) {
     val viewModel = androidx.lifecycle.viewmodel.compose.viewModel(
         key = editId ?: "new-${presetDebtId.orEmpty()}-${presetDebtAction?.name.orEmpty()}-${presetCents ?: ""}",
-        initializer = { AddViewModel(app, editId, presetDebtId, presetDebtAction, presetCents, presetDay, presetNote) },
+        initializer = {
+            AddViewModel(
+                app, editId, presetDebtId, presetDebtAction, presetCents, presetDay, presetNote,
+                presetSource = presetSource, presetType = presetType,
+            )
+        },
     )
     val type by viewModel.type.collectAsStateWithLifecycle()
     val amount by viewModel.amountText.collectAsStateWithLifecycle()

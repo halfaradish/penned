@@ -21,13 +21,25 @@ import dev.penned.app.ui.lock.LockScreen
 import dev.penned.app.ui.nav.PennedApp
 
 class MainActivity : ComponentActivity() {
+
+    /** 分享收图（M4-7）：单 Activity，第二次分享走这里。 */
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        dev.penned.app.ui.intelligence.ScreenshotShareRequest.offerFrom(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
+
+
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             val app = application as PennedApplication
             // 主题外观（M3-12）：品牌色相 + 深浅模式从 DataStore 读（读法抽在 PennedThemeFromSettings，
             // 与流程测试共用一份；首值未到前先用默认青绿 + 跟随系统）
+            // M4-7：系统分享进来的图（冷启动 / 已在后台都收）
+            dev.penned.app.ui.intelligence.ScreenshotShareRequest.offerFrom(intent)
             dev.penned.app.ui.theme.PennedThemeFromSettings(app) {
                 CompositionLocalProvider(LocalApp provides app) {
                     LockGate(app) {
@@ -90,4 +102,5 @@ private fun LockGate(app: PennedApplication, content: @Composable () -> Unit) {
         pinHash != null && !unlocked -> LockScreen(storedHash = pinHash!!, onUnlock = { unlocked = true })
         else -> content()
     }
+
 }
