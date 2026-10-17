@@ -541,9 +541,10 @@ fun HomeContent(
                     }
                 }
 
-                val snackbarVisible = snackbarHostState?.currentSnackbarData != null
+                // 悬浮记账入口常驻（优化轮 3：提示条挪到顶部之后，这里不再跟着隐藏——
+                // 用户反馈"提示条把记一笔按钮挡住了"）
                 HomeAddEntry(
-                    visible = !selectionMode && !snackbarVisible,
+                    visible = !selectionMode,
                     expanded = entryExpanded,
                     onClick = onAdd,
                     modifier = Modifier.align(Alignment.BottomEnd),
@@ -552,9 +553,10 @@ fun HomeContent(
         }
 
         if (snackbarHostState != null) {
+            // 提示条在**顶部**（D098）：底部是悬浮记账入口，提示条挡它 = 挡住主操作
             PennedSnackbarHost(
                 hostState = snackbarHostState,
-                modifier = Modifier.align(Alignment.BottomCenter),
+                modifier = Modifier.align(Alignment.TopCenter),
             )
         }
     }

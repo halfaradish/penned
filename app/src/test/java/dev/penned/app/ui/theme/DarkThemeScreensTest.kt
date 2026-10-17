@@ -110,6 +110,35 @@ class DarkThemeScreensTest {
         capture("home")
     }
 
+    /** 保存后的提示条（优化轮 3，D098）：深色下的顶部浅色横幅 + 动作键。 */
+    @Test
+    fun darkHomeFlash() {
+        composeRule.mainClock.autoAdvance = false
+        dark {
+            val host = androidx.compose.runtime.remember { androidx.compose.material3.SnackbarHostState() }
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                host.showSnackbar(
+                    "已记账",
+                    actionLabel = "存为模板",
+                    duration = androidx.compose.material3.SnackbarDuration.Long,
+                )
+            }
+            HomeContent(
+                bookName = "日常账本",
+                rows = listOf(
+                    txRow("1", TxType.EXPENSE, 1600, "晚餐", "食品餐饮"),
+                    txRow("2", TxType.INCOME, 150000, "工资", null),
+                ),
+                onAdd = {},
+                snackbarHostState = host,
+            )
+        }
+        composeRule.mainClock.advanceTimeBy(1_000)
+        composeRule.onNodeWithText("已记账").assertIsDisplayed()
+        composeRule.onNodeWithText("存为模板").assertIsDisplayed()
+        capture("home_flash")
+    }
+
     /** 左滑动作区露满（UI-12）：深色下两个实心块（编辑 = surfaceContainerHigh，删除 = error）。 */
     @Test
     fun darkHomeRowAction() {

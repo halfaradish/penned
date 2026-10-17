@@ -1,5 +1,9 @@
 package dev.penned.app.ui.home
 
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasText
@@ -150,6 +154,38 @@ class HomeScreenScreenshotTest {
         composeRule.onNodeWithText("今天", substring = true).assertIsDisplayed()
         composeRule.onAllNodesWithText("12:30").onFirst().assertIsDisplayed()
         composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_home_top.png")
+    }
+
+    @Test
+    fun captureHomeWithFlashBanner() {
+        // 保存后的提示条（优化轮 3，D098）：**顶部**浅色横幅 + 「存为模板」，
+        // 同时底部的悬浮记账入口必须还看得见（用户反馈的两条：别挡按钮、别用深色）
+        composeRule.mainClock.autoAdvance = false
+        composeRule.setContent {
+            PennedTheme {
+                // 真机上这消息由 HomeScreen 从 savedStateHandle 里取出后 show（D098）；这里直接把 host 喂上
+                val host = remember { SnackbarHostState() }
+                LaunchedEffect(Unit) {
+                    host.showSnackbar("已记账", actionLabel = "存为模板", duration = SnackbarDuration.Long)
+                }
+                HomeContent(
+                    bookName = "日常账本",
+                    rows = rows,
+                    onAdd = {},
+                    budgetSummary = budget,
+                    snackbarHostState = host,
+                )
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(1_000)
+        composeRule.onNodeWithText("已记账").assertIsDisplayed()
+        composeRule.onNodeWithText("存为模板").assertIsDisplayed()
+        composeRule.onNodeWithText("添加一条新记账").assertIsDisplayed()
+        // 明确钉住"在顶部"：横幅文本落在屏幕上半部
+        val rootHeight = composeRule.onRoot().fetchSemanticsNode().size.height
+        val bannerTop = composeRule.onNodeWithText("已记账").fetchSemanticsNode().boundsInRoot.top
+        assertTrue("提示条该在顶部（top=$bannerTop, 屏高=$rootHeight）", bannerTop < rootHeight / 4f)
+        composeRule.onRoot().captureRoboImage("build/test-results/roborazzi/m1_home_flash.png")
     }
 
     @Test

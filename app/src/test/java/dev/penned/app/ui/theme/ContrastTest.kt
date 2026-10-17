@@ -105,9 +105,9 @@ class ContrastTest {
         // 左滑动作区（UI-12）：编辑块 = 次级填充，删除块 = error 实心
         add("onSurface / surfaceContainerHigh（编辑块）", OnSurfaceLight, SurfaceContainerHighLight)
         add("onError / error（删除块）", OnErrorLight, ErrorLight)
-        // 提示条走反向槽位：深底浅字 + inversePrimary 动作键
-        add("inverseOnSurface / inverseSurface（提示条）", BackgroundLight, OnSurfaceLight)
-        add("inversePrimary / inverseSurface（撤销键）", light.inversePrimary, OnSurfaceLight)
+        // 提示条（优化轮 3，D098）：浅色卡片式 —— surfaceContainerHigh 底 + 墨色正文 + primaryInk 动作键
+        add("onSurface / surfaceContainerHigh（提示条）", OnSurfaceLight, SurfaceContainerHighLight)
+        add("primaryInk / surfaceContainerHigh（提示条动作键）", light.primaryInk, SurfaceContainerHighLight)
         // —— 浅色：非文字（≥3:1）——
         add("iconMuted / surface", IconMutedLight, SurfaceLight, nonText)
         add("iconMuted / background", IconMutedLight, BackgroundLight, nonText)
@@ -139,8 +139,8 @@ class ContrastTest {
         add("onErrorContainer / errorContainer（深）", OnErrorContainerDark, ErrorContainerDark)
         add("onSurface / surfaceContainerHigh（编辑块·深）", OnSurfaceDark, SurfaceContainerHighDark)
         add("onError / error（删除块·深）", OnErrorDark, ErrorDark)
-        add("inverseOnSurface / inverseSurface（提示条·深）", SurfaceDark, OnSurfaceDark)
-        add("inversePrimary / inverseSurface（撤销键·深）", dark.inversePrimary, OnSurfaceDark)
+        add("onSurface / surfaceContainerHigh（提示条·深）", OnSurfaceDark, SurfaceContainerHighDark)
+        add("primaryInk / surfaceContainerHigh（提示条动作键·深）", dark.primaryInk, SurfaceContainerHighDark)
         // —— 深色：非文字 ——
         add("iconMuted / surface（深）", IconMutedDark, SurfaceDark, nonText)
         add("进度填充 primary / surface（深）", dark.primary, SurfaceDark, nonText)

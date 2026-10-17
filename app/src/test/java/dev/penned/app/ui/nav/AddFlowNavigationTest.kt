@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
@@ -150,6 +151,11 @@ class AddFlowNavigationTest {
         composeRule.mainClock.autoAdvance = true
         assertTrue("保存后首页没有显示「已记账」提示条", shown)
         composeRule.onNodeWithText("已记账").assertIsDisplayed()
+        // 优化轮 3（用户反馈）：提示条在**顶部**（浅色横幅），且不再压住底部的悬浮记账入口
+        val rootHeight = composeRule.onRoot().fetchSemanticsNode().size.height
+        val bannerTop = composeRule.onNodeWithText("已记账").fetchSemanticsNode().boundsInRoot.top
+        assertTrue("提示条该在顶部（top=$bannerTop, 屏高=$rootHeight）", bannerTop < rootHeight / 4f)
+        composeRule.onNodeWithText("添加一条新记账").assertIsDisplayed()
     }
 
     /**
