@@ -93,7 +93,9 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** 首页列表 tag（滚动退化/位置断言都靠它）。 */
 private const val HOME_LIST_TAG = "home-list"
@@ -103,6 +105,9 @@ internal const val HOME_BUDGET_BAR_TAG = "home-budget-bar"
 
 /** 月标题行的 tag：高度回归（优化轮 3 压回 48dp）按它断言。 */
 internal const val HOME_MONTH_TITLE_TAG = "home-month-title"
+
+/** 保存提示条（带「存为模板」的那条）的停留时长：比 M3 的 10s 短、给 4s 加一点抬手余量（D099）。 */
+internal const val HOME_FLASH_MILLIS = 5_000L
 
 
 @Composable
@@ -149,18 +154,28 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
 
     // 保存完成后的反馈（跨页）：此前保存完静默返回，用户不知道成没成。
-    // M3-5 起新建的那一笔还带一个「存为模板」动作（10s，与撤销同范式——D059 一律可取消）
+    // M3-5 起新建的那一笔还带一个「存为模板」动作（D059 一律可取消）。
+    // **停留时长（D099）**：M3 只有 4s / 10s 两档——10s 在顶部太占地方（用户反馈"停留太长"），
+    // 4s 又来不及点「存为模板」；所以带动作这条走 Indefinite 挂住、到点由这里 dismiss（撤销条仍是 10s）
     LaunchedEffect(flashMessage, flashTxId) {
         val message = flashMessage ?: return@LaunchedEffect
         val txId = flashTxId
         if (txId == null) {
+            // 编辑保存（无动作）：M3 的 Short（4s）就够
             snackbarHostState.showSnackbar(message)
         } else {
-            val result = snackbarHostState.showSnackbar(
-                message = message,
-                actionLabel = "存为模板",
-                duration = SnackbarDuration.Long,
-            )
+            val showing = async {
+                snackbarHostState.showSnackbar(
+                    message = message,
+                    actionLabel = "存为模板",
+                    duration = SnackbarDuration.Indefinite,
+                )
+            }
+            val result = withTimeoutOrNull(HOME_FLASH_MILLIS) { showing.await() } ?: run {
+                // 到点自己走：先收起（等动画走完）再让 onFlashShown 清消息，别在动画中把条拔掉
+                snackbarHostState.currentSnackbarData?.dismiss()
+                showing.await()
+            }
             if (result == SnackbarResult.ActionPerformed) onSaveAsTemplate(txId)
         }
         onFlashShown()

@@ -156,6 +156,20 @@ class AddFlowNavigationTest {
         val bannerTop = composeRule.onNodeWithText("已记账").fetchSemanticsNode().boundsInRoot.top
         assertTrue("提示条该在顶部（top=$bannerTop, 屏高=$rootHeight）", bannerTop < rootHeight / 4f)
         composeRule.onNodeWithText("添加一条新记账").assertIsDisplayed()
+
+        // 停留时长（D099）：5s 到点自己走——不能像 10s 那样一直占着顶部。
+        // 停表逐帧推（默认 4s/10s 那套时长也走同一根虚拟钟），7s 内必须已经收掉
+        composeRule.mainClock.autoAdvance = false
+        var gone = false
+        var framesToGone = 0
+        while (!gone && framesToGone < 440) {   // 440 帧 ≈ 7s 虚拟时间
+            composeRule.mainClock.advanceTimeByFrame()
+            composeRule.waitForIdle()
+            gone = count("已记账") == 0
+            framesToGone++
+        }
+        composeRule.mainClock.autoAdvance = true
+        assertTrue("提示条该在 5s 左右自己走（等了 $framesToGone 帧 ≈ ${framesToGone * 16}ms 还没走）", gone)
     }
 
     /**
