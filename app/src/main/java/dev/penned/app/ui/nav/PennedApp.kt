@@ -462,6 +462,21 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     viewModel = vm,
                     onBack = { navController.popBackStack() },
                     onOpenBatches = { navController.navigate("data/batches") },
+                    // M4-5：文件 uri 进不了导航参数，放 BillImportRequest 里带过去
+                    onPickBillFile = { uri, name ->
+                        dev.penned.app.ui.data.BillImportRequest.open(app, uri, name)
+                        navController.navigate("data/bill")
+                    },
+                )
+            }
+            // 账单导入预览（M4-5）：认列 → 计数 → 账户映射 → 导入
+            composable("data/bill") {
+                dev.penned.app.ui.data.BillImportScreen(
+                    onBack = { navController.popBackStack() },
+                    // 导完回数据管理页（批次页就在那儿点进去；提示条由批次页自己给）
+                    onImported = {
+                        navController.popBackStack()
+                    },
                 )
             }
             composable("data/batches") {

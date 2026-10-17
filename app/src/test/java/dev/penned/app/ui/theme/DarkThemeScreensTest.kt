@@ -283,6 +283,48 @@ class DarkThemeScreensTest {
         capture("quick_entry")
     }
 
+    /** 账单导入预览（M4-5）：识别结果 / 计数分列 / 账户映射的深色观感。 */
+    @Test
+    fun darkBillPreview() {
+        val book = dev.penned.app.data.db.entity.BookEntity(
+            id = "b1", name = "日常账本", sortOrder = 0, createdAt = 0, updatedAt = 0, deviceId = "d",
+        )
+        dark {
+            dev.penned.app.ui.data.BillImportContent(
+                state = dev.penned.app.ui.data.BillImportUiState(
+                    loading = false,
+                    fileName = "微信账单.xlsx",
+                    source = dev.penned.app.data.importer.BillSource.WECHAT,
+                    container = dev.penned.app.data.importer.BillContainer.XLSX,
+                    charsetLabel = null,
+                    headerRowIndex = 17,
+                    counts = dev.penned.app.domain.BillRowCounts(
+                        total = 42, importable = 42, duplicate = 0, statusSkipped = 0,
+                        nonCashflowSkipped = 0, bad = 0,
+                    ),
+                    importable = listOf(
+                        dev.penned.app.domain.BillRow(100L, 1200L, true, "某食堂", "WX-1", "零钱", null),
+                    ),
+                    mappings = listOf(
+                        dev.penned.app.data.importer.AccountMapping(
+                            clue = "零钱", newAccountName = "零钱",
+                            newAccountType = dev.penned.app.domain.AccountType.DEBIT,
+                        ),
+                    ),
+                    books = listOf(book),
+                    targetBookId = "b1",
+                    categoryFromColumn = 0,
+                    categoryFromRule = 0,
+                    categoryMissing = 1,
+                ),
+                onBack = {},
+            )
+        }
+        composeRule.onNodeWithText("微信支付账单").assertIsDisplayed()
+        composeRule.onNodeWithText("容器 xlsx · 表头在第 18 行").assertIsDisplayed()
+        capture("bill_preview")
+    }
+
     @Test
     fun darkDataManagement() {
         val app = ApplicationProvider.getApplicationContext<PennedApplication>()

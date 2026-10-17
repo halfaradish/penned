@@ -68,11 +68,22 @@ import dev.penned.app.ui.theme.expenseColor
  * 文件读写全部走 SAF（OpenDocument / CreateDocument），无需存储权限。
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+/** SAF 里的显示名（预览页"识别结果"与批次文件名都用它）。 */
+internal fun queriedDisplayName(resolver: android.content.ContentResolver, uri: android.net.Uri): String =
+    runCatching {
+        resolver.query(uri, null, null, null, null)?.use { cursor ->
+            val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
+        }
+    }.getOrNull() ?: "账单文件"
+
 @Composable
 fun DataManagementScreen(
     viewModel: DataViewModel,
     onBack: () -> Unit,
     onOpenBatches: () -> Unit,
+    /** 微信 / 支付宝账单（M4-5）：选完文件进预览页。 */
+    onPickBillFile: (android.net.Uri, String) -> Unit = { _, _ -> },
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val message by viewModel.message.collectAsStateWithLifecycle()
@@ -95,6 +106,13 @@ fun DataManagementScreen(
     val createCsv = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         uri?.let { viewModel.exportCsv(it, resolver) }
     }
+    // M4-5：微信 / 支付宝账单（xlsx / csv / xls / zip 都收；显示名要带进去做来源识别）
+    val pickBill = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { picked ->
+            val name = queriedDisplayName(resolver, picked)
+            onPickBillFile(picked, name)
+        }
+    }
 
     Scaffold(
         topBar = { PennedTopBar(title = "数据管理", onBack = onBack) },
@@ -115,11 +133,30 @@ fun DataManagementScreen(
                     enabled = !busy,
                 ) { pickXls.launch(arrayOf("application/vnd.ms-excel", "application/octet-stream")) }
                 HorizontalDivider()
+                HorizontalDivider()
                 MenuRow(
                     title = "CSV 备份导入",
                     subtitle = "导入 penned 导出的 CSV（恢复到当前账本）",
                     enabled = !busy,
                 ) { pickCsv.launch(arrayOf("text/csv", "text/comma-separated-values", "text/plain", "application/octet-stream")) }
+                HorizontalDivider()
+                // M4-5：非标准账单文件（微信 xlsx / 支付宝 GBK csv）——本地解析、不需要 Key
+                MenuRow(
+                    title = "微信 / 支付宝账单",
+                    subtitle = "官方导出的 xlsx / CSV(GBK)，非标准模板，自动认列",
+                    enabled = !busy,
+                ) {
+                    pickBill.launch(
+                        arrayOf(
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            "application/vnd.ms-excel",
+                            "text/csv",
+                            "text/comma-separated-values",
+                            "application/zip",
+                            "application/octet-stream",
+                        )
+                    )
+                }
             }
             SectionCard("导出") {
                 MenuRow(
