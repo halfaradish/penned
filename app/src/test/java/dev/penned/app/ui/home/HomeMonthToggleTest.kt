@@ -2,8 +2,10 @@ package dev.penned.app.ui.home
 
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import dev.penned.app.data.db.dao.TxWithCategory
 import dev.penned.app.domain.TxType
 import dev.penned.app.ui.theme.PennedTheme
@@ -46,6 +48,25 @@ class HomeMonthToggleTest {
         targetAccountName = null, excludeFromStats = false,
         refundCents = 0, discountCents = 0,
     )
+
+    /** 月标题行高度（优化轮 3）：去掉上下内边距后 = 「⋯」的 48dp 热区（M3-13 加「⋯」时被顶到过 68dp）。 */
+    @Test
+    fun `月标题行高是 48dp 档`() {
+        val today = LocalDate.now(zone)
+        composeRule.setContent {
+            PennedTheme {
+                HomeContent(
+                    bookName = "日常账本",
+                    rows = listOf(row("cur", today, "本月行")),
+                    onAdd = {},
+                )
+            }
+        }
+        val heightDp = with(composeRule.density) {
+            composeRule.onNodeWithTag(HOME_MONTH_TITLE_TAG).fetchSemanticsNode().size.height.toDp().value
+        }
+        assertEquals("月标题行该 = 「⋯」的 48dp 热区（68dp 别再回来）", 48f, heightDp, 1f)
+    }
 
     @Test
     fun `行跟日头条全程不脱节`() {

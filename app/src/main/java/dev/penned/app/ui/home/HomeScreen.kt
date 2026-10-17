@@ -101,6 +101,9 @@ private const val HOME_LIST_TAG = "home-list"
 /** 预算进度条的 tag：像素回归要按它的 bounds 去扫"有没有画出绿色"（AQ 轮被圆角裁掉过）。 */
 internal const val HOME_BUDGET_BAR_TAG = "home-budget-bar"
 
+/** 月标题行的 tag：高度回归（优化轮 3 压回 48dp）按它断言。 */
+internal const val HOME_MONTH_TITLE_TAG = "home-month-title"
+
 
 @Composable
 fun HomeScreen(
@@ -679,16 +682,14 @@ private fun MonthTitleRow(
     val label = HomeGroups.monthLabel(yearMonth.year, yearMonth.monthValue)
     val rotation by animateFloatAsState(if (expanded) 0f else -90f, label = "month-chevron")
     Row(
-        // 上宽下窄：标题压住下面的汇总块/日头条，不留一段空
+        // 上宽下窄：标题压住下面的汇总块/日头条，不留一段空。
+        // 优化轮 3：**上下内边距全去掉**——行高由「⋯」的 48dp 热区自然决定（68 → 48dp，回到 AQ 轮压过的高度档）；
+        // 想再矮就得把「⋯」热区降到 48 以下（D044 那条约定的例外），留待点名。
         modifier = modifier
             .fillMaxWidth()
+            .testTag(HOME_MONTH_TITLE_TAG)
             .clickable(onClick = onToggle)
-            .padding(
-                start = PennedSpacing.lg,
-                end = PennedSpacing.lg,
-                top = PennedSpacing.md,
-                bottom = PennedSpacing.sm,
-            ),
+            .padding(start = PennedSpacing.lg, end = PennedSpacing.lg),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
