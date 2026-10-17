@@ -27,6 +27,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         dev.penned.app.ui.intelligence.ScreenshotShareRequest.offerFrom(intent)
+        dev.penned.app.ui.intelligence.NotificationOpenRequest.offerFrom(intent)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -40,6 +41,7 @@ class MainActivity : ComponentActivity() {
             // 与流程测试共用一份；首值未到前先用默认青绿 + 跟随系统）
             // M4-7：系统分享进来的图（冷启动 / 已在后台都收）
             dev.penned.app.ui.intelligence.ScreenshotShareRequest.offerFrom(intent)
+            dev.penned.app.ui.intelligence.NotificationOpenRequest.offerFrom(intent)
             dev.penned.app.ui.theme.PennedThemeFromSettings(app) {
                 CompositionLocalProvider(LocalApp provides app) {
                     LockGate(app) {

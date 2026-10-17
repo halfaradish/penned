@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.core.app.ApplicationProvider
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -323,6 +324,58 @@ class DarkThemeScreensTest {
         composeRule.onNodeWithText("微信支付账单").assertIsDisplayed()
         composeRule.onNodeWithText("容器 xlsx · 表头在第 18 行").assertIsDisplayed()
         capture("bill_preview")
+    }
+
+    /** 自动记账页（M4-8）：状态卡 + 总开关 + 白名单 + 隐私说明的深色观感。 */
+    @Test
+    fun darkAutoEntry() {
+        dark {
+            dev.penned.app.ui.intelligence.AutoEntryContent(
+                state = dev.penned.app.ui.intelligence.AutoEntryUiState(
+                    enabled = true,
+                    whitelist = setOf("com.tencent.mm"),
+                    installedApps = listOf(
+                        dev.penned.app.ui.intelligence.AppEntry("com.tencent.mm", "微信"),
+                        dev.penned.app.ui.intelligence.AppEntry("com.eg.android.AlipayGphone", "支付宝"),
+                    ),
+                    pendingCount = 3,
+                ),
+                granted = true,
+                onBack = {},
+            )
+        }
+        composeRule.onNodeWithText("已获得通知使用权").assertIsDisplayed()
+        composeRule.onNodeWithText("3 条等你确认").performScrollTo().assertIsDisplayed()
+        capture("auto_entry")
+    }
+
+    /** 待确认页（M4-8）：候选行三态（支出/收入/截图来源）的深色观感。 */
+    @Test
+    fun darkPending() {
+        fun row(id: String, app: String?, expense: Boolean, amount: Long, raw: String) =
+            dev.penned.app.data.db.entity.PendingEntryEntity(
+                id = id,
+                kind = if (app == null) dev.penned.app.domain.PendingKind.SCREENSHOT
+                else dev.penned.app.domain.PendingKind.NOTIFICATION,
+                sourceApp = app, rawText = raw,
+                type = if (expense) dev.penned.app.domain.PendingType.EXPENSE
+                else dev.penned.app.domain.PendingType.INCOME,
+                amountCents = amount, occurredAtEpochMinute = 29_870_021L,
+                createdAt = 1L, updatedAt = 1L, deviceId = "d",
+            )
+        dark {
+            dev.penned.app.ui.intelligence.PendingContent(
+                rows = listOf(
+                    row("p1", "com.tencent.mm", true, 1250, "微信支付 12.50 已支付"),
+                    row("p2", "com.eg.android.AlipayGphone", false, 8800, "支付宝 收款 88.00 元已到账"),
+                    row("p3", null, true, 999, "截图识别 · 某商户"),
+                ),
+                onBack = {}, onOpenAutoEntry = {},
+            )
+        }
+        composeRule.onNodeWithText("12.50").assertIsDisplayed()
+        composeRule.onNodeWithText("清空已处理").assertIsDisplayed()
+        capture("pending")
     }
 
     @Test

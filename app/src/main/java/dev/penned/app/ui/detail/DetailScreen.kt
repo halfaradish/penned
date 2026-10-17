@@ -358,6 +358,8 @@ private fun sourceLabel(tx: TransactionEntity): String = when (tx.source.name) {
     "SCREENSHOT" -> "截图导入"
     "IMPORT" -> "账单导入"
     "AUTO" -> "自动记账"
+    // M4-8（C1）：通知入账与周期补记分开显示——"通知记账" vs "自动记账"
+    "NOTIFICATION" -> "通知记账"
     else -> tx.source.name
 }
 

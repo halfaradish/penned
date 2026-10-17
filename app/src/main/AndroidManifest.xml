@@ -4,6 +4,8 @@
     <!-- M2 应用内更新：拉静态清单、下载 APK；引导安装（未知来源） -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- M4-8：候选提醒（33+ 运行时申请；只用于提醒，不申请存储/相机/无障碍） -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".PennedApplication"
@@ -29,6 +31,17 @@
                 <data android:mimeType="image/*" />
             </intent-filter>
         </activity>
+
+        <!-- M4-8：自动记账（通知监听）——系统按需绑定，用户可随时在系统设置里撤销 -->
+        <service
+            android:name=".data.notify.AutoEntryService"
+            android:exported="true"
+            android:label="一笔一记 · 自动记账"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
 
         <!-- 更新包（cacheDir/updates）交给系统安装器读取，不导出 -->
         <provider

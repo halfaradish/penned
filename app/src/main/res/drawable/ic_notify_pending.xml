@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- M4-8 提醒的小图标：状态栏/通知按 alpha 做单色遮罩，所以只用白色描形（拿 ic_launcher 会渲染成一块白方块）。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M34,72 L34,80 L42,80 L70,52 L62,44 L34,72 Z M76,46 C78,44 78,41 76,39 L69,32 C67,30 64,30 62,32 L58,36 L72,50 Z" />
+</vector>

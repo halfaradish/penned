@@ -8,8 +8,8 @@ enum class AccountType { CASH, DEBIT, CREDIT, INVEST, DEBT }
 
 enum class ReimburseState { NONE, PENDING, DONE }
 
-/** 记录方式（D021）：流水来源 */
-enum class TxSource { MANUAL, VOICE, TEXT, SCREENSHOT, IMPORT, AUTO }
+/** 记录方式（D021）：流水来源；`NOTIFICATION` 是 M4-8 加的第七个值（D105，加值不改 schema）。 */
+enum class TxSource { MANUAL, VOICE, TEXT, SCREENSHOT, IMPORT, AUTO, NOTIFICATION }
 
 /** 关键词规则的目标（M4-0，D100）：命中后填分类还是标签（双目标共用同一张规则表）。 */
 enum class RuleTargetType { CATEGORY, TAG }

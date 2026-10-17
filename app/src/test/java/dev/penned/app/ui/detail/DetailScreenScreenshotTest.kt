@@ -72,6 +72,24 @@ class DetailScreenScreenshotTest {
         onEdit = {}, onDelete = {}, onToggleStats = {}, onToggleBudget = {}, onBack = {},
     )
 
+    /** M4-8（C1）：入账来源的两条标签——通知入账「通知记账」、周期补记仍是「自动记账」。 */
+    @Test
+    fun sourceLabelsDistinguishNotificationFromAuto() {
+        composeRule.setContent {
+            PennedTheme { content(row(amountCents = 1250).copy(source = TxSource.NOTIFICATION)) }
+        }
+        composeRule.onNodeWithText("记录方式").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("通知记账").assertIsDisplayed()
+    }
+
+    @Test
+    fun sourceLabelKeepsAutoForRecurring() {
+        composeRule.setContent {
+            PennedTheme { content(row(amountCents = 1250).copy(source = TxSource.AUTO)) }
+        }
+        composeRule.onNodeWithText("自动记账").performScrollTo().assertIsDisplayed()
+    }
+
     @Test
     fun captureFullRefundDetail() {
         // 全额退款：金额 0 + 退款列 14.54（导入的真实形态）

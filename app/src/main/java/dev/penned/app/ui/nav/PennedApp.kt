@@ -73,6 +73,7 @@ import dev.penned.app.ui.icons.PennedIcons
 import dev.penned.app.ui.theme.primaryInkColor
 import dev.penned.app.ui.theme.rememberAnimationsEnabled
 import dev.penned.app.ui.home.HomeScreen
+import dev.penned.app.ui.intelligence.prefillType
 import dev.penned.app.ui.invest.InvestDetailScreen
 import dev.penned.app.ui.loan.LoanScreen
 import dev.penned.app.ui.home.HomeViewModel
@@ -214,6 +215,16 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
             }
         },
     ) { padding ->
+            val openPendingFlag by dev.penned.app.ui.intelligence.NotificationOpenRequest.requested
+                .collectAsStateWithLifecycle()
+            // M4-8：提醒点击进来（intent 里带标记）→ 进「待确认」；**先过密码锁**：
+            // PennedApp 只在解锁后才组合，所以这里的跳转天然发生在解锁之后
+            androidx.compose.runtime.LaunchedEffect(openPendingFlag) {
+                if (openPendingFlag) {
+                    navController.navigate("pending")
+                    dev.penned.app.ui.intelligence.NotificationOpenRequest.consume()
+                }
+            }
             // M4-7：系统分享收图 → 直接进截图导入页（消费掉请求，避免回退又跳一次）
             val sharedImage by dev.penned.app.ui.intelligence.ScreenshotShareRequest.incoming
                 .collectAsStateWithLifecycle()
@@ -410,6 +421,10 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                 PinManageScreen(viewModel = vm, onBack = { navController.popBackStack() })
             }
             composable("mine") {
+                // 待确认条数（M4-8）：副标题上显示
+                val pendingCount by app.database.pendingEntryDao()
+                    .observeCount(dev.penned.app.domain.PendingStatus.PENDING)
+                    .collectAsStateWithLifecycle(initialValue = 0)
                 MineScreen(
                     onOpenDataManagement = { navController.navigate("data") },
                     onOpenTemplates = { navController.navigate("templates") },
@@ -426,6 +441,8 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onOpenAiSettings = { navController.navigate("ai-settings") },
                     onOpenQuickEntry = { navController.navigate("quick") },
                     onOpenScreenshotImport = { navController.navigate("screenshot") },
+                    onOpenAutoEntry = { navController.navigate("auto-entry") },
+                    pendingCount = pendingCount,
                 )
             }
             // 分类关键词规则（M4-1）：关键词 → 分类 / 标签（只是建议值的源头，不改已入库的账）
@@ -435,6 +452,33 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
             // AI 设置（M4-2）：BYOK 的总开关与配置（不填不联网；地址只接受 https）
             composable("ai-settings") {
                 dev.penned.app.ui.intelligence.AiSettingsScreen(onBack = { navController.popBackStack() })
+            }
+            // 自动记账（M4-8）：通知监听的状态/开关/白名单 + 待确认入口
+            composable("auto-entry") {
+                dev.penned.app.ui.intelligence.AutoEntryScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenPending = { navController.navigate("pending") },
+                    onOpenNotificationSettings = {
+                        navController.context.startActivity(
+                            android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                        )
+                    },
+                    notificationAccessGranted = dev.penned.app.ui.intelligence.NotificationAccess.isGranted(navController.context),
+                )
+            }
+            // 待确认（M4-8）：候选池列表 → 点行进记一笔预填（source = NOTIFICATION）
+            composable("pending") {
+                dev.penned.app.ui.intelligence.PendingScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenAutoEntry = { navController.navigate("auto-entry") },
+                    onPrefill = { entry ->
+                        navController.navigate(
+                            "add?pendingId=${entry.id}&pendingSource=NOTIFICATION" +
+                                "&pendingType=${entry.prefillType().name}&amountCents=${entry.amountCents ?: 0L}" +
+                                "&note=${java.net.URLEncoder.encode(entry.note.orEmpty(), "UTF-8")}"
+                        )
+                    },
+                )
             }
             // 截图导入（M4-7）：识别 → 落候选池 → 打开记一笔页预填（source = SCREENSHOT）
             composable("screenshot") {

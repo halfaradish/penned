@@ -96,6 +96,23 @@ class PennedCsvTest {
     }
 
     @Test
+    fun `notification source round trips and old values stay`() {
+        val csv = PennedCsv.export(
+            listOf(
+                tx("n1") { it.copy(source = TxSource.NOTIFICATION) },
+                tx("n2") { it.copy(source = TxSource.AUTO) },
+                tx("n3") { it.copy(source = TxSource.MANUAL) },
+            )
+        )
+        assertTrue("导出列里带 NOTIFICATION", csv.contains("NOTIFICATION"))
+
+        val restored = PennedCsv.import(csv, bookId = "b1").associateBy { it.id }
+        assertEquals(TxSource.NOTIFICATION, restored.getValue("n1").source)
+        assertEquals(TxSource.AUTO, restored.getValue("n2").source)
+        assertEquals(TxSource.MANUAL, restored.getValue("n3").source)
+    }
+
+    @Test
     fun `bad header rejected`() {
         assertThrows(PennedCsv.CsvFormatException::class.java) {
             PennedCsv.import("foo,bar\n1,2", bookId = "b1")

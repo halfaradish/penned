@@ -50,7 +50,11 @@ fun MineScreen(
     onOpenQuickEntry: () -> Unit = {},
     /** 截图导入（M4-7）。 */
     onOpenScreenshotImport: () -> Unit = {},
+    /** 自动记账（M4-8）。 */
+    onOpenAutoEntry: () -> Unit = {},
     modifier: Modifier = Modifier,
+    /** 待确认条数（M4-8）：>0 时在「自动记账」那行副标题上显示。 */
+    pendingCount: Int = 0,
     versionName: String = dev.penned.app.BuildConfig.VERSION_NAME,
 ) {
     Column(
@@ -175,6 +179,18 @@ fun MineScreen(
                 subtitle = "支付截图认成一笔草稿，确认后才入账",
                 leadingIcon = PennedIcons.Search,
                 onClick = onOpenScreenshotImport,
+            )
+            PennedDivider(startIndent = ROW_DIVIDER_INDENT)
+            // M4-8：自动记账（通知监听；识别到先落「待确认」，默认关）
+            PennedListRow(
+                title = "自动记账",
+                subtitle = if (pendingCount > 0) {
+                    "$pendingCount 条待确认"
+                } else {
+                    "读支付通知先落「待确认」，默认关 · 只勾你许可的 App"
+                },
+                leadingIcon = PennedIcons.Refresh,
+                onClick = onOpenAutoEntry,
             )
             PennedDivider(startIndent = ROW_DIVIDER_INDENT)
             // M4-2：BYOK 设置（默认关；只接受 https；Key 只存本机）
