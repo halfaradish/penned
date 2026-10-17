@@ -383,11 +383,16 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onOpenAppearance = { navController.navigate("appearance") },
                     onOpenWishlist = { navController.navigate("wishlist") },
                     onOpenKeywordRules = { navController.navigate("keywords") },
+                    onOpenAiSettings = { navController.navigate("ai-settings") },
                 )
             }
             // 分类关键词规则（M4-1）：关键词 → 分类 / 标签（只是建议值的源头，不改已入库的账）
             composable("keywords") {
                 dev.penned.app.ui.intelligence.KeywordRulesScreen(onBack = { navController.popBackStack() })
+            }
+            // AI 设置（M4-2）：BYOK 的总开关与配置（不填不联网；地址只接受 https）
+            composable("ai-settings") {
+                dev.penned.app.ui.intelligence.AiSettingsScreen(onBack = { navController.popBackStack() })
             }
             // 愿望清单（M3-15）：攒钱目标列表 + 新建/编辑（不生成流水）
             composable("wishlist") {

@@ -14,12 +14,15 @@ import java.util.concurrent.CopyOnWriteArrayList
  * android.jar 解析，`com.sun.*` 编译期不可见（运行期有也没用）。自己拿 `ServerSocket` 起一个更省事，
  * 顺带能演"响应传一半就断开"这种真实场景（M2 S3 的断点续传测试要）。
  *
- * 支持：按路径注册响应、记录请求（路径 + 头）、`Range: bytes=N-` 部分响应（206）、
+ * 支持：按路径注册响应、记录请求（路径 + 头 + **请求体**）、`Range: bytes=N-` 部分响应（206）、
  * 以及"写 N 字节后断开"（客户端会读到提前结束 → 可测续传）。
+ *
+ * **请求体**（M4-2 扩，M4-6 用来断外发边界）：按 `Content-Length` 读全，记进 [Request.body]——
+ * 之前只记 path + headers，断言不了"发出去的 JSON 里有什么/没什么"。
  */
 class FakeHttpServer {
 
-    class Request(val path: String, val headers: Map<String, String>)
+    class Request(val path: String, val headers: Map<String, String>, val body: String = "")
 
     class Response(
         val status: Int = 200,
@@ -113,7 +116,21 @@ class FakeHttpServer {
                         headers[line.substring(0, colon).trim().lowercase()] = line.substring(colon + 1).trim()
                     }
                 }
-                val request = Request(path, headers)
+                // 请求体：按 Content-Length 读全（POST /chat/completions 这类要断"发了什么"）
+                val contentLength = headers["content-length"]?.toIntOrNull() ?: 0
+                val body = if (contentLength > 0) {
+                    val bytes = ByteArray(contentLength)
+                    var read = 0
+                    while (read < contentLength) {
+                        val n = input.read(bytes, read, contentLength - read)
+                        if (n < 0) break
+                        read += n
+                    }
+                    String(bytes, 0, read, Charsets.UTF_8)
+                } else {
+                    ""
+                }
+                val request = Request(path, headers, body)
                 requestLog += request
 
                 val response = routes[path]?.invoke(request)

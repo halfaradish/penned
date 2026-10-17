@@ -44,6 +44,8 @@ fun MineScreen(
     onOpenWishlist: () -> Unit = {},
     /** 分类关键词规则（M4-1，「智能」分组卡的第一行）。 */
     onOpenKeywordRules: () -> Unit = {},
+    /** AI 设置（M4-2，BYOK：自带 Key 直连模型）。 */
+    onOpenAiSettings: () -> Unit = {},
     modifier: Modifier = Modifier,
     versionName: String = dev.penned.app.BuildConfig.VERSION_NAME,
 ) {
@@ -153,6 +155,14 @@ fun MineScreen(
                 subtitle = "关键词指向分类或标签：识别到它时先把分类填好，确认后才入账",
                 leadingIcon = PennedIcons.Tag,
                 onClick = onOpenKeywordRules,
+            )
+            PennedDivider(startIndent = ROW_DIVIDER_INDENT)
+            // M4-2：BYOK 设置（默认关；只接受 https；Key 只存本机）
+            PennedListRow(
+                title = "AI 设置",
+                subtitle = "自带 Key 直连模型 · 默认关闭 · 不填不联网",
+                leadingIcon = PennedIcons.Pen,
+                onClick = onOpenAiSettings,
             )
         }
 

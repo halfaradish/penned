@@ -242,6 +242,8 @@ class KeywordRulesScreenTest {
         composeRule.onNodeWithText("分类关键词").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("关键词指向分类或标签：识别到它时先把分类填好，确认后才入账")
             .performScrollTo().assertIsDisplayed()
+        // M4-2 起这张卡有第二行
+        composeRule.onNodeWithText("AI 设置").performScrollTo().assertIsDisplayed()
         capture("m4_mine_intelligence")
     }
 
@@ -261,6 +263,7 @@ class KeywordRulesScreenTest {
             }
         }
         composeRule.onNodeWithText("分类关键词").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("AI 设置").performScrollTo().assertIsDisplayed()
         capture("m4_mine_intelligence_dark")
     }
 }

@@ -229,6 +229,26 @@ class DarkThemeScreensTest {
         capture("keyword_rules")
     }
 
+    /** AI 设置页（M4-2）：开关 + 四样配置 + 测试连接 + 隐私说明的深色观感。 */
+    @Test
+    fun darkAiSettings() {
+        dark {
+            dev.penned.app.ui.intelligence.AiSettingsContent(
+                enabled = true,
+                baseUrl = "https://open.bigmodel.cn/api/paas/v4",
+                apiKey = "sk-abcdef123456",
+                model = "glm-4.6",
+                visionModel = "glm-4v",
+                showKey = false,
+                testState = dev.penned.app.ui.intelligence.TestState.Ok("glm-4.6"),
+                onBack = {},
+            )
+        }
+        composeRule.onNodeWithText("AI 设置").assertIsDisplayed()
+        composeRule.onNodeWithText("连上了：glm-4.6 回话正常").assertIsDisplayed()
+        capture("ai_settings")
+    }
+
     @Test
     fun darkDataManagement() {
         val app = ApplicationProvider.getApplicationContext<PennedApplication>()

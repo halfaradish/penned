@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.VisualTransformation
 import dev.penned.app.data.db.entity.TagEntity
 import dev.penned.app.ui.theme.PennedSpacing
 
@@ -82,6 +83,8 @@ fun PennedNameField(
     placeholder: String,
     onNameChange: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /** 密文显示（M4-2 的 API Key 用 `PasswordVisualTransformation`）；默认明文。 */
+    visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
     Box(
         modifier
@@ -101,6 +104,7 @@ fun PennedNameField(
                 color = MaterialTheme.colorScheme.onSurface,
                 fontSize = MaterialTheme.typography.bodyLarge.fontSize,
             ),
+            visualTransformation = visualTransformation,
             modifier = Modifier.fillMaxWidth(),
         )
     }
