@@ -9,10 +9,15 @@ import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import com.github.takahirom.roborazzi.captureRoboImage
+import dev.penned.app.domain.LlmProvider
+import dev.penned.app.ui.components.PennedSheet
 import dev.penned.app.ui.theme.PennedTheme
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -42,12 +47,18 @@ class AiSettingsScreenTest {
         visionModel: String = "",
         showKey: Boolean = false,
         testState: TestState = TestState.Idle,
+        provider: LlmProvider = LlmProvider.DEFAULT,
+        showProviders: Boolean = false,
+        onOpenProviders: () -> Unit = {},
+        onPickProvider: (LlmProvider) -> Unit = {},
     ) {
         composeRule.setContent {
             PennedTheme {
                 AiSettingsContent(
                     enabled = enabled, baseUrl = baseUrl, apiKey = apiKey, model = model,
                     visionModel = visionModel, showKey = showKey, testState = testState, onBack = {},
+                    provider = provider, showProviders = showProviders,
+                    onOpenProviders = onOpenProviders, onPickProvider = onPickProvider,
                 )
             }
         }
@@ -129,5 +140,66 @@ class AiSettingsScreenTest {
         render(enabled = true, baseUrl = "https://a.example/v1", apiKey = "sk-x", model = "m", testState = TestState.Testing)
         composeRule.onNodeWithText("测试中…").assertIsNotEnabled()
         composeRule.onNodeWithText("正在连…").assertIsDisplayed()
+    }
+
+    // ---- 供应商预选（D113）----
+
+    @Test
+    fun providerRowShowsCurrentAndHint() {
+        var opened = false
+        render(provider = LlmProvider.DEEPSEEK, onOpenProviders = { opened = true })
+        composeRule.onNodeWithText("供应商").assertIsDisplayed()
+        composeRule.onNodeWithText("DeepSeek").assertIsDisplayed()
+        // 口径提示跟着当前那家走
+        composeRule.onNodeWithText(LlmProvider.DEEPSEEK.hint).assertIsDisplayed()
+        capture("m4_ai_settings_provider_deepseek")
+
+        composeRule.onNodeWithTag(AI_PROVIDER_ROW_TAG).performClick()
+        assert(opened) { "点「供应商」行没有打开选择抽屉" }
+    }
+
+    @Test
+    fun providerRowZen() {
+        render(
+            enabled = true,
+            baseUrl = "https://opencode.ai/zen/v1",
+            apiKey = "sk-abcdef123456",
+            model = "deepseek-v4.1-flash",
+            provider = LlmProvider.OPENCODE_ZEN,
+        )
+        composeRule.onNodeWithText("OpenCode Zen").assertIsDisplayed()
+        composeRule.onNodeWithText(LlmProvider.OPENCODE_ZEN.hint).assertIsDisplayed()
+        capture("m4_ai_settings_provider_zen")
+    }
+
+    @Test
+    fun providerRowCustomWithoutPreset() {
+        render(provider = LlmProvider.CUSTOM)
+        composeRule.onNodeWithText("自定义").assertIsDisplayed()
+        composeRule.onNodeWithText(LlmProvider.CUSTOM.hint).assertIsDisplayed()
+        capture("m4_ai_settings_provider_custom")
+    }
+
+    /** 抽屉内容单独渲染（`ModalBottomSheet` 挂在另一个窗口上，主窗口节点搜不到——既有先例 `PennedSheetTest`）。 */
+    @Test
+    fun providerSheetMarksCurrentAndPicks() {
+        var picked: LlmProvider? = null
+        composeRule.setContent {
+            PennedTheme {
+                PennedSheet(onDismiss = {}, title = "选择供应商") {
+                    AiProviderSheetContent(current = LlmProvider.DEEPSEEK) { picked = it }
+                }
+            }
+        }
+        // 四档都在，副标题 = 预置地址（自定义那档给一句说明）
+        LlmProvider.entries.forEach { composeRule.onNodeWithText(it.label).assertIsDisplayed() }
+        composeRule.onNodeWithText("https://opencode.ai/zen/go/v1").assertIsDisplayed()
+        composeRule.onNodeWithText("地址、模型、Key 都自己填").assertIsDisplayed()
+        // 「已选」只出现在当前那行，且只有一处
+        assertEquals(1, composeRule.onAllNodesWithText("已选").fetchSemanticsNodes().size)
+        capture("m4_ai_settings_provider_sheet")
+
+        composeRule.onNodeWithText("OpenCode Go").performClick()
+        assertEquals(LlmProvider.OPENCODE_GO, picked)
     }
 }
