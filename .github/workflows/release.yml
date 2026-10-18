@@ -1,9 +1,18 @@
 name: release
 
-# 自动发包（D067）：打 v* tag 即发版。
+# 自动发包（D067 / D114）：打 v* tag 即发版。
+#   正式版 tag：v0.2.0        → 写 update.json（同时把这次正式版写进 update-prerelease.json）
+#   预发布 tag：v0.2.0-beta.1 → 只写 update-prerelease.json，GitHub Release 标 prerelease
 #   构建（bumpVersion → commit → tag -a 写发布说明 → push）之后的一切都由这里做：
-#   签名 APK → 建 GitHub Release（标题 = tag 名、说明 = tag 注释、附件 = APK + update.json）
-#   → 把 update.json 提回 main（raw / jsDelivr 的应用内更新清单随发版自动更新）。
+#   签名 APK → 建 GitHub Release（标题 = tag 名、说明 = tag 注释、附件 = APK + 通道清单）
+#   → 把通道清单提回 main（raw / jsDelivr 的应用内更新清单随发版自动更新）。
+#
+# 通道口径（D114）：
+#   - update.json 只由纯数字正式版写；预发布流水绝不碰它（第 12 步有硬断言）。
+#   - 每次发版 versionCode 必须大于两份清单的最大值（Android 不允许降级安装）。
+#   - 正式版发布时若 base 不低于预发布线，同时覆盖 update-prerelease.json（beta 用户跟着升正式版）；
+#     旧线 hotfix（base 低于 beta 线）只写正式清单，beta 用户留在更高版本线。
+#   - 通道是客户端订阅（DataStore），预发布用户升到正式版后仍继续收 beta，直到在关于页关掉开关。
 #
 # 一次性前置（仓库 Secrets，Settings → Secrets and variables → Actions）：
 #   PENNED_STORE_FILE_B64   keystore 的 base64（单行；本地 penned-signing/keystore.base64.txt）
@@ -12,11 +21,11 @@ name: release
 #   PENNED_KEY_PASSWORD     别名口令
 #
 # 本地发版动作（全部）：
-#   ./gradlew bumpVersion -PversionName=0.2.0
+#   ./gradlew bumpVersion -PversionName=0.2.0-beta.1
 #   git commit -am "..."（含 version.properties）
-#   git tag -a v0.2.0 -m "新增：……
+#   git tag -a v0.2.0-beta.1 -m "新增：……
 #   修复：……"            ← 每个非空行 = update.json 的一条 changelog，全文 = Release 说明
-#   git push origin main v0.2.0
+#   git push origin main v0.2.0-beta.1
 
 on:
   push:
@@ -36,16 +45,57 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # 要 tag 注释与 origin/main（update.json 提回去）
+          fetch-depth: 0   # 要 tag 注释与 origin/main（清单提回去）
 
-      - name: 校验 tag 与 version.properties 一致
+      - name: 通道脚本自测
+        run: python3 .github/scripts/release_channels.py --self-test
+
+      - name: 解析通道并过版本门
         run: |
+          set -euo pipefail
           V=$(sed -n 's/^versionName=//p' version.properties | tr -d '\r')
-          if [ "${GITHUB_REF_NAME}" != "v${V}" ]; then
-            echo "::error::tag（${GITHUB_REF_NAME}）与 version.properties（v${V}）不一致——先 bumpVersion、提交，再打 tag"
+          C=$(sed -n 's/^versionCode=//p' version.properties | tr -d '\r')
+          TAG="${GITHUB_REF_NAME}"
+
+          if [ "$TAG" != "v${V}" ]; then
+            echo "::error::tag（${TAG}）与 version.properties（v${V}）不一致——先 bumpVersion、提交，再打 tag"
             exit 1
           fi
-          echo "VERSION_NAME=${V}" >> "$GITHUB_ENV"
+          if [ "$(git cat-file -t "$TAG")" != "tag" ]; then
+            echo '::error::必须打 annotated tag（git tag -a vX -m "发布说明"），轻量 tag 没有清单说明'
+            exit 1
+          fi
+
+          git fetch origin +main:refs/remotes/origin/main
+          TAG_COMMIT=$(git rev-list -n 1 "$TAG")
+          # 预发布也必须打在 main 上：否则后续正式版不含 beta 的 DB 迁移，beta 用户升正式版会数据库降级
+          if ! git merge-base --is-ancestor "$TAG_COMMIT" origin/main; then
+            echo "::error::tag 必须在 main 上（先推 main，再推 tag）"
+            exit 1
+          fi
+
+          # 读当前 main 的清单（不能读 tag 里的旧清单，否则重打旧 tag 可能把旧清单写回去）
+          git show origin/main:update.json > /tmp/update.json
+          if git show origin/main:update-prerelease.json > /tmp/update-prerelease.json 2>/dev/null; then :; else
+            echo '{"versionCode": 0, "versionName": "0.0.0", "minVersionCode": 1}' > /tmp/update-prerelease.json
+          fi
+
+          python3 .github/scripts/release_channels.py plan \
+            --name "$V" --code "$C" \
+            --stable /tmp/update.json --prerelease /tmp/update-prerelease.json \
+            > /tmp/plan.env
+          cat /tmp/plan.env
+          . /tmp/plan.env
+          {
+            echo "VERSION_NAME=$V"
+            echo "VERSION_CODE=$C"
+            echo "TAG=$TAG"
+            echo "CHANNEL=$CHANNEL"
+            echo "PRERELEASE=$PRERELEASE"
+            echo "WRITE_STABLE=$WRITE_STABLE"
+            echo "WRITE_PRERELEASE=$WRITE_PRERELEASE"
+            echo "MIN_VERSION_CODE=$MIN_VERSION_CODE"
+          } >> "$GITHUB_ENV"
 
       - name: 检查签名 Secrets
         env:
@@ -96,41 +146,121 @@ jobs:
           "$ANDROID_HOME/build-tools/$BT/apksigner" verify --print-certs \
             app/build/outputs/apk/release/app-release.apk | head -2
 
-      - name: 生成 update.json（清单说明也从 tag 来）
+      - name: 生成通道清单
         run: |
-          # tag 注释 = 发布说明；每个非空行 = update.json 的一条 changelog（行首 "- " 会被剥掉）
-          git tag -l --format='%(contents)' "${GITHUB_REF_NAME}" \
+          set -euo pipefail
+          # tag 注释 = 发布说明；每个非空行 = 清单的一条 changelog（行首 "- " 会被剥掉）
+          git tag -l --format='%(contents)' "${TAG}" \
             | sed '/-----BEGIN PGP SIGNATURE-----/,/-----END PGP SIGNATURE-----/d' > tag-message.txt
-          CHANGELOG=$(grep -v '^[[:space:]]*$' tag-message.txt | sed 's/^[[:space:]]*-[[:space:]]*//' | paste -sd';' -)
-          # minVersionCode（"强烈建议更新"的下限）不常动：沿用上一份清单的值，首版缺省 1
-          MIN=$(python3 -c "import json;print(json.load(open('update.json')).get('minVersionCode', 1))" 2>/dev/null || echo 1)
-          ./gradlew makeUpdateJson --no-daemon \
-            -Purls="https://github.com/${{ github.repository }}/releases/download/${GITHUB_REF_NAME}/penned-${VERSION_NAME}.apk" \
-            -Pchangelog="$CHANGELOG" \
-            -PminVersionCode="$MIN"
-          cat update.json
+          CHANGELOG=$(sed -e '/^[[:space:]]*$/d' -e 's/^[[:space:]]*-[[:space:]]*//' tag-message.txt | paste -sd';' -)
+          PUBLISHED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          OUT=build/release
+          mkdir -p "$OUT"
+          URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/penned-${VERSION_NAME}.apk"
 
-      - name: 建 GitHub Release（APK + update.json，说明 = tag 注释）
+          if [ "$WRITE_STABLE" = true ]; then
+            ./gradlew makeUpdateJson --no-daemon \
+              -Pchannel=stable \
+              -Pout="$OUT/update.json" \
+              -Purls="$URL" \
+              -Pchangelog="$CHANGELOG" \
+              -PminVersionCode="$MIN_VERSION_CODE" \
+              -PpublishedAt="$PUBLISHED_AT" \
+              -Ptag="$TAG"
+          fi
+
+          if [ "$WRITE_PRERELEASE" = true ]; then
+            if [ "$CHANNEL" = stable ]; then
+              # 正式版发布后预发布用户也应拿到它：预发布清单的内容就是这次正式版清单
+              cp "$OUT/update.json" "$OUT/update-prerelease.json"
+            else
+              ./gradlew makeUpdateJson --no-daemon \
+                -Pchannel=prerelease \
+                -Pout="$OUT/update-prerelease.json" \
+                -Purls="$URL" \
+                -Pchangelog="$CHANGELOG" \
+                -PminVersionCode="$MIN_VERSION_CODE" \
+                -PpublishedAt="$PUBLISHED_AT" \
+                -Ptag="$TAG"
+            fi
+          fi
+
+          for file in "$OUT"/*.json; do
+            python3 -m json.tool "$file" > /dev/null
+            echo "--- $file"
+            cat "$file"
+          done
+
+      - name: 建 GitHub Release（正式 / 预发布）
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/build/outputs/apk/release/app-release.apk "penned-${VERSION_NAME}.apk"
-          gh release create "${GITHUB_REF_NAME}" \
-            --title "${GITHUB_REF_NAME}" \
-            --notes-file tag-message.txt \
-            "penned-${VERSION_NAME}.apk" update.json
+          set -euo pipefail
+          ASSETS=build/release-assets
+          mkdir -p "$ASSETS"
+          cp app/build/outputs/apk/release/app-release.apk "$ASSETS/penned-${VERSION_NAME}.apk"
+          cp tag-message.txt release-notes.txt
 
-      - name: 把 update.json 提回 main（应用内更新清单随发版自动更新）
+          if [ "$PRERELEASE" = true ]; then
+            MANIFEST=update-prerelease.json
+            printf '\n\n---\n> 预发布版本：只有开启「接收预发布版本」的安装会收到此更新，正式版用户不会收到。\n' \
+              >> release-notes.txt
+            GH_FLAGS=(--prerelease)
+          else
+            MANIFEST=update.json
+            GH_FLAGS=(--prerelease=false)
+          fi
+          cp "build/release/$MANIFEST" "$ASSETS/$MANIFEST"
+
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release 已存在，更新说明与资产（重跑幂等）"
+            gh release edit "$TAG" --title "$TAG" --notes-file release-notes.txt "${GH_FLAGS[@]}"
+            gh release upload "$TAG" "$ASSETS/penned-${VERSION_NAME}.apk" "$ASSETS/$MANIFEST" --clobber
+          else
+            gh release create "$TAG" --verify-tag --title "$TAG" --notes-file release-notes.txt \
+              "${GH_FLAGS[@]}" \
+              "$ASSETS/penned-${VERSION_NAME}.apk" "$ASSETS/$MANIFEST"
+          fi
+
+      - name: 把通道清单提回 main
         run: |
-          cp update.json /tmp/update.json
+          set -euo pipefail
           git config user.name "penned-release-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -B main origin/main
-          cp /tmp/update.json update.json
-          git add update.json
-          if git diff --cached --quiet; then
-            echo "update.json 无变化，跳过提交"
+          git switch -C main origin/main
+
+          if [ "$WRITE_STABLE" = true ]; then
+            cp build/release/update.json update.json
+            ACTUAL_CODE=$(python3 -c "import json;print(json.load(open('update.json'))['versionCode'])")
+            [ "$ACTUAL_CODE" = "$VERSION_CODE" ] || { echo "::error::update.json 的 versionCode 不是本次版本"; exit 1; }
           else
-            git commit -m "release: update.json ${GITHUB_REF_NAME}"
-            git push origin main
+            # 硬断言：预发布流水绝不允许修改正式清单
+            if ! git diff --quiet -- update.json; then
+              echo "::error::预发布流程修改了 update.json——正式版用户会被推 beta，拒绝提交"
+              exit 1
+            fi
+          fi
+
+          if [ "$WRITE_PRERELEASE" = true ]; then
+            cp build/release/update-prerelease.json update-prerelease.json
+          fi
+
+          git add update.json
+          if [ -f update-prerelease.json ]; then git add update-prerelease.json; fi
+
+          if git diff --cached --quiet; then
+            echo "清单无变化，跳过提交"
+          else
+            git commit -m "release: 通道清单 ${TAG}"
+            for i in 1 2 3; do
+              if git push origin main; then
+                exit 0
+              fi
+              echo "push 失败，第 $i 次重试…"
+              git fetch origin +main:refs/remotes/origin/main
+              git rebase origin/main || { git rebase --abort; exit 1; }
+              sleep 5
+            done
+            echo "::error::通道清单推回 main 失败"
+            exit 1
           fi

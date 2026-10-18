@@ -11,11 +11,15 @@ plugins {
 /**
  * 版本号自增（M2-7 / 开发工作流第五节 E：versionCode 由构建脚本生成，禁手改）。
  *
- * 用法：`./gradlew bumpVersion -PversionName=0.2.0`（不带 versionName 就只自增 versionCode）
+ * 用法：`./gradlew bumpVersion -PversionName=0.2.0` 或 `... -PversionName=0.2.0-beta.1`
+ * （不带 versionName 就只自增 versionCode）。
+ *
+ * 版本名规则（D114）：纯 `x.y.z` = 正式版；`x.y.z-suffix`（dev / test / beta / beta.1 …）= 预发布版。
+ * 其余写法直接失败——tag、文件名、清单 URL 都靠这个名字，不能在发版前才发现非法。
  */
 tasks.register("bumpVersion") {
     group = "release"
-    description = "versionCode +1（可选 -PversionName=x.y.z），写回 version.properties"
+    description = "versionCode +1（可选 -PversionName=x.y.z[-beta.1]），写回 version.properties"
     doLast {
         val file = file("version.properties")
         val props = Properties()
@@ -23,27 +27,39 @@ tasks.register("bumpVersion") {
         val newCode = props.getProperty("versionCode").trim().toInt() + 1
         val newName = (project.findProperty("versionName") as String?)?.trim()
             ?: props.getProperty("versionName").trim()
+        val versionPattern = Regex("""^\d+\.\d+\.\d+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$""")
+        if (!versionPattern.matches(newName)) {
+            throw GradleException(
+                "versionName 不合法：$newName（正式版写 x.y.z，预发布写 x.y.z-beta.1；" +
+                    "tag 会拼成 v + versionName）",
+            )
+        }
+        val channel = if (newName.contains('-')) "prerelease" else "stable"
         file.writeText(
             """
             |# 版本号单一来源（M2-7）：app/build.gradle.kts 读这里，**禁手改**
-            |# 发布前：./gradlew bumpVersion -PversionName=x.y.z（versionCode 自增 1）
+            |# 发布前：./gradlew bumpVersion -PversionName=x.y.z（预发布：x.y.z-beta.1；versionCode 自增 1）
             |versionCode=$newCode
             |versionName=$newName
             """.trimMargin() + "\n",
         )
-        println("versionCode -> $newCode，versionName -> $newName（记得提交 version.properties）")
+        println("versionCode -> $newCode，versionName -> $newName，通道 -> $channel（记得提交 version.properties）")
     }
 }
 
 /**
- * 生成 update.json（M2-7 / 开发工作流第五节 E）：从**签名** release APK 算 sha256/size。
+ * 生成通道清单（M2-7 / 开发工作流第五节 E / D114）：从**签名** release APK 算 sha256/size。
  *
- * 用法：`./gradlew makeUpdateJson -Purls="https://主/penned.apk,https://备/penned.apk" -Pchangelog="新增：…;修复：…" -PminVersionCode=1`
- * 产物落在仓库根 `update.json`（进仓库，配合托管方发布）。
+ * 用法：
+ * `./gradlew makeUpdateJson -Pchannel=stable -Purls="https://…/penned.apk" -Pchangelog="新增：…;修复：…"`
+ * 可选：`-Pout=update.json`（产物路径，默认仓库根）、`-PminVersionCode=1`、`-PpublishedAt=<ISO>`、`-Ptag=v…`
+ *
+ * `-Pchannel` 必须与 versionName 一致（纯数字 = stable，带 `-` = prerelease）；CI 分别写
+ * `update.json` / `update-prerelease.json`，预发布流水绝不碰正式清单。
  */
 tasks.register("makeUpdateJson") {
     group = "release"
-    description = "从签名 release APK 生成 update.json（-Purls / -Pchangelog / -PminVersionCode）"
+    description = "从签名 release APK 生成通道清单（-Pchannel / -Pout / -Purls / -Pchangelog / -PminVersionCode）"
     dependsOn(":app:assembleRelease")
     doLast {
         val apk = file("app/build/outputs/apk/release/app-release.apk")
@@ -52,6 +68,31 @@ tasks.register("makeUpdateJson") {
         }
         val props = Properties()
         file("version.properties").inputStream().use { props.load(it) }
+        val versionName = props.getProperty("versionName").trim()
+        val versionCode = props.getProperty("versionCode").trim()
+
+        // 通道与版本名必须自洽：防止 -Pchannel=stable 把一个 beta 包写进正式清单
+        val channel = (project.findProperty("channel") as String?)?.trim() ?: "stable"
+        if (channel != "stable" && channel != "prerelease") {
+            throw GradleException("channel 只认 stable / prerelease，收到：$channel")
+        }
+        val nameIsPrerelease = versionName.contains('-')
+        if (nameIsPrerelease != (channel == "prerelease")) {
+            throw GradleException(
+                "channel=$channel 与 versionName=$versionName 不一致" +
+                    "（纯数字 = stable，带 - = prerelease）",
+            )
+        }
+
+        val publishedAt = (project.findProperty("publishedAt") as String?)?.trim()?.takeIf { it.isNotEmpty() }
+            ?: java.time.Instant.now().toString()
+        try {
+            java.time.Instant.parse(publishedAt)
+        } catch (_: Exception) {
+            throw GradleException("publishedAt 不是 ISO-8601 UTC 时间：$publishedAt（例 2026-10-20T12:34:56Z）")
+        }
+        val tag = (project.findProperty("tag") as String?)?.trim()?.takeIf { it.isNotEmpty() }
+        val outFile = file((project.findProperty("out") as String?)?.trim()?.takeIf { it.isNotEmpty() } ?: "update.json")
 
         val digest = MessageDigest.getInstance("SHA-256")
         apk.inputStream().use { input ->
@@ -76,8 +117,11 @@ tasks.register("makeUpdateJson") {
 
         val json = buildString {
             appendLine("{")
-            appendLine("  \"versionCode\": ${props.getProperty("versionCode").trim()},")
-            appendLine("  \"versionName\": \"${escape(props.getProperty("versionName").trim())}\",")
+            appendLine("  \"versionCode\": $versionCode,")
+            appendLine("  \"versionName\": \"${escape(versionName)}\",")
+            appendLine("  \"channel\": \"$channel\",")
+            appendLine("  \"publishedAt\": \"${escape(publishedAt)}\",")
+            if (tag != null) appendLine("  \"tag\": \"${escape(tag)}\",")
             appendLine("  \"minVersionCode\": $minVersionCode,")
             appendLine("  \"changelog\": [${changelog.joinToString(", ") { "\"${escape(it)}\"" }}],")
             appendLine("  \"sha256\": \"$sha256\",")
@@ -85,7 +129,8 @@ tasks.register("makeUpdateJson") {
             appendLine("  \"urls\": [${urls.joinToString(", ") { "\"${escape(it)}\"" }}]")
             appendLine("}")
         }
-        file("update.json").writeText(json)
-        println("update.json 已生成：sha256=$sha256 size=${apk.length()} urls=${urls.size}")
+        outFile.parentFile?.mkdirs()
+        outFile.writeText(json)
+        println("清单已生成：${outFile.path}（channel=$channel version=$versionName sha256=$sha256 size=${apk.length()}）")
     }
 }
