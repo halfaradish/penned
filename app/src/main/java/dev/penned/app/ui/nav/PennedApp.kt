@@ -472,8 +472,14 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
                     onBack = { navController.popBackStack() },
                     onOpenAutoEntry = { navController.navigate("auto-entry") },
                     onPrefill = { entry ->
+                        // 来源按候选类型给：截图候选别记成"通知记账"（M4-7 起截图不再落池，旧行仍在）
+                        val source = if (entry.kind == dev.penned.app.domain.PendingKind.SCREENSHOT) {
+                            "SCREENSHOT"
+                        } else {
+                            "NOTIFICATION"
+                        }
                         navController.navigate(
-                            "add?pendingId=${entry.id}&pendingSource=NOTIFICATION" +
+                            "add?pendingId=${entry.id}&pendingSource=$source" +
                                 "&pendingType=${entry.prefillType().name}&amountCents=${entry.amountCents ?: 0L}" +
                                 "&note=${java.net.URLEncoder.encode(entry.note.orEmpty(), "UTF-8")}"
                         )
@@ -482,14 +488,9 @@ fun PennedApp(app: dev.penned.app.PennedApplication) {
             }
             // 截图导入（M4-7）：识别 → 落候选池 → 打开记一笔页预填（source = SCREENSHOT）
             composable("screenshot") {
+                // M4-7 → D111：识别成一批 → 预览页确认 → 一次导入（不再一张一笔地走记一笔页）
                 dev.penned.app.ui.intelligence.ScreenshotImportScreen(
                     onBack = { navController.popBackStack() },
-                    onPrefill = { pendingId, type, amountCents, note ->
-                        navController.navigate(
-                            "add?pendingId=$pendingId&pendingSource=SCREENSHOT&pendingType=${type.name}" +
-                                "&amountCents=$amountCents&note=${java.net.URLEncoder.encode(note.orEmpty(), "UTF-8")}"
-                        )
-                    },
                     onOpenAiSettings = { navController.navigate("ai-settings") },
                 )
             }

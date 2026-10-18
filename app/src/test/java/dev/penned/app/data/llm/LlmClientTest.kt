@@ -176,12 +176,13 @@ class LlmClientTest {
 
     @Test
     fun `图像调用走视觉模型且带 data url`() {
-        server.on(CHAT_PATH, body = okBody("""{"amount":9.9,"merchant":"某商家"}"""))
+        server.on(CHAT_PATH, body = okBody("""{"rows":[{"amount":9.9,"merchant":"某商家"}]}"""))
         val result = runBlocking {
-            client.extractImage(LlmEndpoints.config(TEST_BASE, "sk", "glm-4.6", "glm-4v"), "看图", "QUJD")
+            client.extractImageRows(LlmEndpoints.config(TEST_BASE, "sk", "glm-4.6", "glm-4v"), "看图", "QUJD")
         }
-        assertEquals(990L, (result as LlmResult.Ok).draft.amountCents)
-        assertEquals("glm-4v", result.model)
+        val ok = result as LlmRowsResult.Ok
+        assertEquals(990L, ok.rows.rows.single().amountCents)
+        assertEquals("glm-4v", ok.model)
         // 断结构而不是子串：Android 的 org.json 会把 "/" 转义成 "\/"（子串匹配会假红）
         val payload = JSONObject(server.requests.single().body)
         val content = payload.getJSONArray("messages").getJSONObject(0).getJSONArray("content").getJSONObject(0)

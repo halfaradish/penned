@@ -165,6 +165,29 @@ class BillRowsTest {
     }
 
     @Test
+    fun `逐行标重复：保留行序 只标后面的那一条`() {
+        fun row(time: Long = 100L, amount: Long = 1000L, note: String? = "x") = BillRow(
+            dateEpochMinute = time, amountCents = amount, expense = true, note = note,
+            externalId = null, accountClue = null, categoryHint = null,
+        )
+
+        // 同一键出现两次：第 1 条该导入、第 2 条才算重复（截图预览页按屏幕顺序标"重复"要靠这条）
+        val flags = BillDedupe.duplicateFlags(listOf(row(), row(), row(amount = 2000L)))
+        assertEquals(listOf(false, true, false), flags)
+
+        // 库内已有同键 → 第一条就标重复
+        val againstDb = BillDedupe.duplicateFlags(
+            listOf(row(time = 500L, amount = 700L, note = "午饭")),
+            existingFallbackKeys = setOf("500|700|E|午饭"),
+        )
+        assertEquals(listOf(true), againstDb)
+
+        // 与 partition 同口径：标出来的条数 = partition 的重复条数
+        val rows = listOf(row(), row(), row(amount = 3000L))
+        assertEquals(BillDedupe.partition(rows).second.size, BillDedupe.duplicateFlags(rows).count { it })
+    }
+
+    @Test
     fun `每行只归一类：优先级 坏行 重复 状态 不计收支 导入`() {
         val ok = BillRow(1L, 100L, true, null, null, null, null)
         assertEquals(BillBucket.BAD, BillDedupe.bucket(null, false, false, false))

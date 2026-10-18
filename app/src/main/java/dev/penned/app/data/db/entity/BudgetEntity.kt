@@ -54,5 +54,8 @@ data class ImportBatchEntity(
         const val SOURCE_WECHAT = "WECHAT"
         const val SOURCE_ALIPAY = "ALIPAY"
         const val SOURCE_GENERIC = "GENERIC"
+
+        /** 截图识别一批（账单列表导入，D111）——`sourceKind` 是普通 TEXT 列，加值不改 schema。 */
+        const val SOURCE_SCREENSHOT = "SCREENSHOT"
     }
 }

@@ -281,10 +281,12 @@ class AddViewModel(
             loadForEdit(editId)
         } else if (presetDebtId != null) {
             prefillDebt(presetDebtId, presetDebtAction ?: DebtAction.OPEN)
+        } else if (presetSource != TxSource.MANUAL) {
+            // 顺序有讲究：来源预填（截图/通知/一句话）**必须抢在房贷预填之前**——
+            // 房贷那支写死 `type = EXPENSE`，先跑会把 `presetType` 吞掉（通知里的收入 +88.00 会被预填成支出）
+            applySourcePrefill()
         } else if (presetCents != null) {
             applyLoanPrefill()
-        } else if (presetSource != TxSource.MANUAL) {
-            applySourcePrefill()
         }
     }
 

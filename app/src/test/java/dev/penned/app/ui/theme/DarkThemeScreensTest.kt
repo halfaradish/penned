@@ -378,6 +378,42 @@ class DarkThemeScreensTest {
         capture("pending")
     }
 
+    /** 账单列表截图导入的预览页（D111）：计数卡 + 行 + 账户 + 主按钮的深色观感。 */
+    @Test
+    fun darkScreenshotPreview() {
+        dark {
+            dev.penned.app.ui.intelligence.ScreenshotImportContent(
+                state = dev.penned.app.ui.intelligence.ScreenshotUiState(
+                    endpointLabel = "open.bigmodel.cn",
+                    modelLabel = "glm-4v",
+                    rows = listOf(
+                        dev.penned.app.ui.intelligence.ScreenshotRow(
+                            "r1", dev.penned.app.domain.TxType.EXPENSE, 6707, "拼多多平台商户",
+                            29_870_021L, true, false,
+                        ),
+                        dev.penned.app.ui.intelligence.ScreenshotRow(
+                            "r2", dev.penned.app.domain.TxType.EXPENSE, 1200, "西大朴诚食堂 自动扣款成功",
+                            29_869_000L, true, false,
+                        ),
+                        dev.penned.app.ui.intelligence.ScreenshotRow(
+                            "r3", dev.penned.app.domain.TxType.INCOME, 8800, "微信红包-来自姐姐",
+                            29_869_000L, true, true,
+                        ),
+                    ),
+                    droppedRows = 1,
+                    accounts = listOf(
+                        dev.penned.app.ui.intelligence.AccountOption("a1", "微信零钱"),
+                    ),
+                    accountId = "a1",
+                ),
+                onBack = {},
+            )
+        }
+        composeRule.onNodeWithTag(dev.penned.app.ui.intelligence.SCREENSHOT_COUNTS_TAG).assertIsDisplayed()
+        composeRule.onNodeWithText("拼多多平台商户").performScrollTo().assertIsDisplayed()
+        capture("screenshot_preview")
+    }
+
     @Test
     fun darkDataManagement() {
         val app = ApplicationProvider.getApplicationContext<PennedApplication>()

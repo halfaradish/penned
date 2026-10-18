@@ -103,6 +103,13 @@ class BillImportRepository(
         mappings: List<AccountMapping>,
         duplicateCount: Int,
         skippedCount: Int,
+        /**
+         * 落库流水的记录方式：文件导入是 `IMPORT`，**截图识别一批是 `SCREENSHOT`**（D111），
+         * 详情页据此显示「账单导入」/「截图导入」。
+         */
+        txSource: TxSource = TxSource.IMPORT,
+        /** 「这批记到」选的账户：**只对没有账户线索的行生效**（文件导入靠映射表，截图没有线索）。 */
+        fallbackAccountId: String? = null,
         onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
     ): BillImportResult {
         val now = System.currentTimeMillis()
@@ -146,12 +153,12 @@ class BillImportRepository(
                     bookId = bookId,
                     type = if (row.expense) TxType.EXPENSE else TxType.INCOME,
                     amountCents = row.amountCents,
-                    accountId = row.accountClue?.let { accountIdByClue[it] },
+                    accountId = row.accountClue?.let { accountIdByClue[it] } ?: fallbackAccountId,
                     targetAccountId = null,
                     categoryId = resolveCategoryId(bookId, row, categories, rules),
                     dateEpochMinute = row.dateEpochMinute,
                     note = row.note,
-                    source = TxSource.IMPORT,
+                    source = txSource,
                     importBatchId = batchId,
                     externalId = row.externalId,
                     creatorDeviceId = deviceId,

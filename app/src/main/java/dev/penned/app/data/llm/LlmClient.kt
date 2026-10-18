@@ -34,6 +34,12 @@ sealed interface LlmContentResult {
     data class Err(val reason: LlmError) : LlmContentResult
 }
 
+/** 图像识别的出参：**一批账**（账单列表截图，D111）。 */
+sealed interface LlmRowsResult {
+    data class Ok(val rows: dev.penned.app.domain.LlmRows, val model: String) : LlmRowsResult
+    data class Err(val reason: LlmError) : LlmRowsResult
+}
+
 enum class LlmError {
     /** 地址 / Key / 模型没配齐（或总开关关着）。 */
     NOT_CONFIGURED,
@@ -82,9 +88,12 @@ class LlmClient(private val okHttp: OkHttpClient = defaultClient()) {
 
     /**
      * 图像入参（截图导入）：[jpegBase64] 是已压缩过的 JPEG base64（不带 data 前缀）。
-     * 与文本一样严格按"一笔账"的 schema 校验（同一个 `LlmDraftParser`）。
+     *
+     * 出参是**一批账**（`LlmRowsParser`）——账单列表截图一屏十几行，一笔一个对象；
+     * 单笔支付截图就是"一批里的一条"。解析不出 JSON 结构 → `BAD_RESPONSE`；
+     * 解析出了但 `rows` 为空 = 模型说"这不是账单"（调用方给"没看出这是账单"的文案）。
      */
-    suspend fun extractImage(config: LlmConfig, prompt: String, jpegBase64: String): LlmResult =
+    suspend fun extractImageRows(config: LlmConfig, prompt: String, jpegBase64: String): LlmRowsResult =
         when (
             val result = call(
                 config, model = config.effectiveVisionModel, prompt = prompt,
@@ -92,11 +101,11 @@ class LlmClient(private val okHttp: OkHttpClient = defaultClient()) {
             )
         ) {
             is LlmContentResult.Ok ->
-                dev.penned.app.domain.LlmDraftParser.parse(result.content)
-                    ?.let { LlmResult.Ok(it, result.model) }
-                    ?: LlmResult.Err(LlmError.BAD_RESPONSE)
+                dev.penned.app.domain.LlmRowsParser.parse(result.content)
+                    ?.let { LlmRowsResult.Ok(it, result.model) }
+                    ?: LlmRowsResult.Err(LlmError.BAD_RESPONSE)
 
-            is LlmContentResult.Err -> LlmResult.Err(result.reason)
+            is LlmContentResult.Err -> LlmRowsResult.Err(result.reason)
         }
 
     /**

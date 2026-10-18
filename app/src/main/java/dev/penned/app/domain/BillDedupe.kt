@@ -38,22 +38,35 @@ object BillDedupe {
         existingIds: Set<String> = emptySet(),
         existingFallbackKeys: Set<String> = emptySet(),
     ): Pair<List<BillRow>, List<BillRow>> {
-        val seenIds = HashSet<String>()
-        val seenFallback = HashSet<String>()
+        val flags = duplicateFlags(rows, existingIds, existingFallbackKeys)
         val importing = ArrayList<BillRow>()
         val duplicates = ArrayList<BillRow>()
-        for (row in rows) {
-            val id = row.externalId
-            val dup = when {
-                id != null -> id in existingIds || !seenIds.add(id)
-                else -> {
-                    val key = row.fallbackKey
-                    key in existingFallbackKeys || !seenFallback.add(key)
-                }
-            }
-            if (dup) duplicates += row else importing += row
-        }
+        rows.forEachIndexed { index, row -> if (flags[index]) duplicates += row else importing += row }
         return importing to duplicates
+    }
+
+    /**
+     * 逐行标出"是不是重复"（**与 [partition] 同一口径与同一顺序**）。
+     *
+     * 为什么要有它：截图预览页要**按屏幕顺序**把每一行都显示出来（重复行也显示、标一下、只是不导入），
+     * 按 fallbackKey 反查会把"同一键的第 1 行（该导入的那行）"也一起标成重复——M4-7 改批量时实测踩到。
+     */
+    fun duplicateFlags(
+        rows: List<BillRow>,
+        existingIds: Set<String> = emptySet(),
+        existingFallbackKeys: Set<String> = emptySet(),
+    ): List<Boolean> {
+        val seenIds = HashSet<String>()
+        val seenFallback = HashSet<String>()
+        return rows.map { row ->
+            val id = row.externalId
+            if (id != null) {
+                id in existingIds || !seenIds.add(id)
+            } else {
+                val key = row.fallbackKey
+                key in existingFallbackKeys || !seenFallback.add(key)
+            }
+        }
     }
 
     /**
