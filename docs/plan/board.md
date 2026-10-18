@@ -4,6 +4,27 @@
 
 ## 进行中
 
+**AI 设置·供应商预选（用户点名）——已交付（2026-10-18，两片）**：四档预置（DeepSeek / OpenCode Zen / OpenCode Go / 自定义），
+**四样配置每家各存一份、切家不串台**，老配置按地址自动认领（决策 **D113**，规范 **§13·补三十九**）。切片：`2818b76` 纯逻辑
+（`domain/LlmProvider.kt` + `SettingsRepository` 分区槽位 / `adoptLegacyLlmConfigIfNeeded` / `activeLlmConfig` 收口）→
+`1dd845e` UI 闭环（配置卡首行「供应商」+ 一行口径提示 + `PennedSheet` 选择抽屉 + 只补空 + 占位示例跟着供应商走）。
+测试 **1016 → 1036 / 0 失败**（+`LlmProviderTest` 5 / `IntelligenceSettingsTest` +8 / `AiSettingsViewModelTest` +2 / `AiSettingsScreenTest` +4）。
+**模拟机复验（GxuDev，真 Key）**：① 打开页面即**把老配置认领成 DeepSeek**（地址/Key/模型/视觉模型原样，Key 仍密文）；
+② 抽屉四档 + 当前行「已选」；③ 切到 OpenCode Zen → 地址与模型换成预置、**Key 空（没串台）**、提示换成 Zen 那条；
+④ 切回 DeepSeek → **值原样回来**，「测试连接」照样「连上了：deepseek-flash 回话正常」；⑤ 截图识别复跑 **16 笔 /
+支出 252.27 / 收入 88.00**（与修复后一致），走的就是新的 `activeLlmConfig()`；⑥ 走查前后库内基线 **760 活跃 / 15 软删 /
+3 账户 / 2 账本 / 1 批次 / v9** 一字未动（预览没导入）。截图 `docs/local/界面重构验证/s3_0*.png`。
+**仍未验（缺料，不造假）**：OpenCode Zen / Go 两条**连接性没验**（没有这两家的 Key；地址与模型清单只做过公开可读的
+`/models` 核对）；账单导入的两条 AI 建议按钮仍未在真账单文件上点过（同一条文本链路，测试连接已证）。
+**本会话观察到的 flake（都不是本次改动引入，单跑必过、全量复跑即绿）**：`AboutViewModelTest`（"auto check runs once a
+day…"）、`AddEditSubCategoryTest`（宫格展开）、`QuickEntryFlowTest`（一句话记账流）、`ScreenshotImportViewModelTest`
+（"重复行不进库…"）、`AddTimeFlowTest`（选时分保存）——清一色 Robolectric + Compose 的 `ComposeTimeoutException`
+或紧随其后的状态断言，出没随机、单类运行不复现；全量复跑一次即 1036/0。
+**另一条工具口径（省得下次再踩）**：核对模拟机库内基线**别拉库文件**（`run-as cat` 出来的 `.db` 在宿主上会被报
+`database disk image is malformed`，两次都是）——设备自带 `/system/bin/sqlite3`，直接
+`adb shell 'run-as dev.penned.app sqlite3 databases/penned.db "select count(*) from transactions where deleted=0; …"'`
+最稳（只读，不用 force-stop）。
+
 **真机 AI 链路验收（2026-10-18，GxuDev，真 Key）—— 补上 M4 一直 deferred 的那条，并修掉两处实测 bug**：用户在模拟机上配好了 AI 设置（`https://api.deepseek.com` + `deepseek-flash`，开关开），本会话按「先实测、再动代码」跑通：
 - **测试连接**：✅「连上了：deepseek-flash 回话正常」（文本链路 = 真网真 Key 可用）。
 - **截图识别**：**原来 100% 失败**——根因是 `LlmClient` 有图时把提示词整个丢掉（DeepSeek 回 400），修好后两张真图都出结果，且**逐笔对得上**：微信列表图 16 笔（合计 252.27 / 88.00 与图分毫不差）、支付宝列表图 5 笔（合计 204.71 自洽）。修复与口径见 **D112**；同时把 400 从「服务端出错（5xx）」分档成「请求被拒（4xx）」。
