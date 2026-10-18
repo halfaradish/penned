@@ -1,8 +1,6 @@
 package dev.penned.app.domain
 
 import org.json.JSONObject
-import java.time.LocalDate
-import java.time.ZoneId
 
 /**
  * 模型返回的一笔账（M4-2，规格 §三 M4-2 / R4）——**四条路径共用的出参形态**。
@@ -51,7 +49,14 @@ object LlmDraftParser {
                 return null
             }
         }
+        return parseObject(json)
+    }
 
+    /**
+     * 单个 JSON 对象 → 一笔账（`parse` 与 `LlmRowsParser` 共用这一处字段口径）。
+     * 返回 null = 这条不算数（**缺金额 / 金额坏**）。
+     */
+    fun parseObject(json: JSONObject): LlmDraft? {
         val amountCents = json.opt("amount").let { value ->
             when (value) {
                 null, JSONObject.NULL -> null
@@ -76,7 +81,7 @@ object LlmDraftParser {
     }
 
     /** ```json … ``` 围栏剥掉（模型很爱加，加了也不是"错"——剥完还是严格 JSON 校验）。 */
-    private fun stripFence(text: String): String {
+    internal fun stripFence(text: String): String {
         val trimmed = text.trim()
         if (!trimmed.startsWith("```")) return trimmed
         return trimmed
@@ -90,26 +95,11 @@ object LlmDraftParser {
     /**
      * 时间文本 → `dateEpochMinute`。
      *
-     * **口径**（与 `AddDate`/导入器/详情页同一约定）：model 给的是**本地墙钟**（"2026-10-17 12:30"
-     * 就是本地 12:30），落库要的是**真 epoch 分钟**——必须过一遍系统时区换算，
-     * **不能**写成 `epochDay * 1440 + 时分`（那是墙钟编码，UTC+8 会偏 8 小时、记到隔壁日期，`AddDate` 头注释里写着这条）。
+     * **口径**（与 `AddDate`/导入器/详情页同一约定）：model 给的是**本地墙钟**，落库要的是
+     * **真 epoch 分钟**——过一遍系统时区换算，**不能**写成 `epochDay * 1440 + 时分`。
      *
-     * 认 `2026-10-17 12:30` / `:30:00` / `2026/10/17 12:30` / `T` 分隔；认不出返回 null（**不猜**，退回"现在"）。
+     * 认什么形态由 [TextTime] 定（D111 起放宽：账单列表截图的 `10月18日 09:23` / `10-16 22:42` /
+     * `昨天 23:38` 都认，无年按"最近一次过去"推）；认不出返回 null（**不猜**，退回"现在"）。
      */
-    private fun parseTimeMinute(text: String?): Long? {
-        val value = text?.trim().orEmpty()
-        if (value.isEmpty()) return null
-        val match = Regex(
-            """^(\d{4})[-/](\d{1,2})[-/](\d{1,2})[ T](\d{1,2}):(\d{2})(?::\d{2})?$"""
-        ).find(value) ?: return null
-        val (year, month, day, hour, minute) = match.destructured
-        return try {
-            LocalDate.of(year.toInt(), month.toInt(), day.toInt())
-                .atTime(hour.toInt(), minute.toInt())
-                .atZone(ZoneId.systemDefault())
-                .toEpochSecond() / 60
-        } catch (_: Exception) {
-            null // 2026-02-30 / 25:99 这类不存在的时刻
-        }
-    }
+    private fun parseTimeMinute(text: String?): Long? = TextTime.minuteFromLooseText(text)
 }
