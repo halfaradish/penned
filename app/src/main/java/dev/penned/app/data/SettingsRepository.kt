@@ -9,12 +9,32 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import dev.penned.app.domain.LlmConfig
+import dev.penned.app.domain.LlmEndpoints
+import dev.penned.app.domain.LlmProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.io.File
+
+/** 一家供应商的四样配置（null = 这一家还没配过）。自定义那档落在 M4 的四个老键上（D113）。 */
+data class LlmFields(
+    val baseUrl: String? = null,
+    val apiKey: String? = null,
+    val model: String? = null,
+    val visionModel: String? = null,
+)
+
+/** 一家供应商的存储槽（键里那截后缀）。 */
+private enum class LlmSlot(val suffix: String) {
+    BASE_URL("base_url"),
+    API_KEY("api_key"),
+    MODEL("model"),
+    VISION_MODEL("vision_model"),
+}
 
 /**
  * 设置用的 DataStore：**同一个文件路径一份实例**（文件名与历史一致，老用户的设置照旧读到）。
@@ -104,17 +124,13 @@ class SettingsRepository(private val context: Context) {
      */
     val llmEnabled: Flow<Boolean> = context.settingsDataStore().data.map { it[KEY_LLM_ENABLED] ?: false }
 
-    /** BYOK 服务地址（OpenAI 兼容 base，如 `https://open.bigmodel.cn/api/paas/v4`）。**只接受 https**（C2）。 */
-    val llmBaseUrl: Flow<String?> = context.settingsDataStore().data.map { it[KEY_LLM_BASE_URL] }
-
-    /** 用户的 API Key：**明文存本机 DataStore**（R5 裁决；引加密库 = 加依赖），页面明示风险。 */
-    val llmApiKey: Flow<String?> = context.settingsDataStore().data.map { it[KEY_LLM_API_KEY] }
-
-    /** 文本模型名。 */
-    val llmModel: Flow<String?> = context.settingsDataStore().data.map { it[KEY_LLM_MODEL] }
-
-    /** 视觉模型名；空 = 跟 [llmModel]（同一家的多模态型号常常就是同一个名字）。 */
-    val llmVisionModel: Flow<String?> = context.settingsDataStore().data.map { it[KEY_LLM_VISION_MODEL] }
+    /**
+     * 当前的 AI 供应商（D113）：存 `LlmProvider.id`；**没存过 = 自定义**（老用户那份扁平配置的落点）。
+     *
+     * 每家的配置各存一份（见 [llmFields] / [setLlmBaseUrl] 等）；旧配置由
+     * [adoptLegacyLlmConfigIfNeeded] 按地址认领到对应的家。
+     */
+    val llmProvider: Flow<String?> = context.settingsDataStore().data.map { it[KEY_LLM_PROVIDER] }
 
     /** 自动记账总开关（M4-8）。**默认 false**：勾了 App 也还得开着这个才处理通知。 */
     val autoEntryEnabled: Flow<Boolean> = context.settingsDataStore().data.map { it[KEY_AUTO_ENTRY_ENABLED] ?: false }
@@ -129,22 +145,98 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore().edit { it[KEY_LLM_ENABLED] = enabled }
     }
 
-    suspend fun setLlmBaseUrl(url: String?) {
-        context.settingsDataStore().edit { if (url == null) it.remove(KEY_LLM_BASE_URL) else it[KEY_LLM_BASE_URL] = url }
-    }
-
-    suspend fun setLlmApiKey(key: String?) {
-        context.settingsDataStore().edit { if (key == null) it.remove(KEY_LLM_API_KEY) else it[KEY_LLM_API_KEY] = key }
-    }
-
-    suspend fun setLlmModel(model: String?) {
-        context.settingsDataStore().edit { if (model == null) it.remove(KEY_LLM_MODEL) else it[KEY_LLM_MODEL] = model }
-    }
-
-    suspend fun setLlmVisionModel(model: String?) {
+    /**
+     * 切换供应商（只写"当前是哪家"，各家自己的配置一个字不动）。
+     * [provider] 传 null = **抹掉"选过"这件事**（回到"没存过 = 自定义"）——测试要能回到干净起点。
+     */
+    suspend fun setLlmProvider(provider: LlmProvider?) {
         context.settingsDataStore().edit {
-            if (model == null) it.remove(KEY_LLM_VISION_MODEL) else it[KEY_LLM_VISION_MODEL] = model
+            if (provider == null) it.remove(KEY_LLM_PROVIDER) else it[KEY_LLM_PROVIDER] = provider.id
         }
+    }
+
+    /** 读某一家的四样配置（一次读完，不做四趟）。 */
+    suspend fun llmFields(provider: LlmProvider): LlmFields {
+        val prefs = context.settingsDataStore().data.first()
+        return LlmFields(
+            baseUrl = prefs[keyLlm(provider, LlmSlot.BASE_URL)],
+            apiKey = prefs[keyLlm(provider, LlmSlot.API_KEY)],
+            model = prefs[keyLlm(provider, LlmSlot.MODEL)],
+            visionModel = prefs[keyLlm(provider, LlmSlot.VISION_MODEL)],
+        )
+    }
+
+    /** 服务地址（**只接受 https**，C2——校验在 `LlmEndpoints`，这里只存）。 */
+    suspend fun setLlmBaseUrl(provider: LlmProvider, url: String?) = putLlm(provider, LlmSlot.BASE_URL, url)
+
+    /** 用户的 API Key：**明文存本机 DataStore**（R5 裁决；引加密库 = 加依赖），页面明示风险。 */
+    suspend fun setLlmApiKey(provider: LlmProvider, key: String?) = putLlm(provider, LlmSlot.API_KEY, key)
+
+    /** 文本模型名。 */
+    suspend fun setLlmModel(provider: LlmProvider, model: String?) = putLlm(provider, LlmSlot.MODEL, model)
+
+    /** 视觉模型名；空 = 跟文本模型（同一家的多模态型号常常就是同一个名字）。 */
+    suspend fun setLlmVisionModel(provider: LlmProvider, model: String?) =
+        putLlm(provider, LlmSlot.VISION_MODEL, model)
+
+    /**
+     * 当前供应商的一份**可用**配置：总开关关着 / 没配齐 / 地址非法 → null（一个包都不发）。
+     *
+     * 截图导入与账单导入共用这一份口径（M4 时两处各抄了一遍，D113 收口到这里）。
+     */
+    suspend fun activeLlmConfig(): LlmConfig? {
+        if (!llmEnabled.first()) return null
+        val fields = llmFields(LlmProvider.fromId(llmProvider.first()))
+        if (LlmEndpoints.validate(fields.baseUrl, fields.apiKey, fields.model) != null) return null
+        return LlmEndpoints.config(
+            fields.baseUrl.orEmpty(), fields.apiKey.orEmpty(), fields.model.orEmpty(), fields.visionModel,
+        )
+    }
+
+    /**
+     * 把 M4 那份扁平配置认领到对应的家（D113）：只在**没写过"当前供应商"**且老地址非空时做一次。
+     *
+     * 判据 = 地址（[LlmProvider.inferByBaseUrl]）；复制过去**只补空**（目标槽位已有值就不动），
+     * 老键**不删**——用户想回「自定义」看原样、或将来想改归属，都还回得去。
+     */
+    suspend fun adoptLegacyLlmConfigIfNeeded() {
+        val prefs = context.settingsDataStore().data.first()
+        if (prefs[KEY_LLM_PROVIDER] != null) return
+        val legacyBase = prefs[KEY_LLM_BASE_URL]?.takeIf { it.isNotBlank() } ?: return
+        val provider = LlmProvider.inferByBaseUrl(legacyBase)
+        context.settingsDataStore().edit { target ->
+            target[KEY_LLM_PROVIDER] = provider.id
+            if (provider != LlmProvider.CUSTOM) {
+                val legacy = listOf(
+                    LlmSlot.BASE_URL to prefs[KEY_LLM_BASE_URL],
+                    LlmSlot.API_KEY to prefs[KEY_LLM_API_KEY],
+                    LlmSlot.MODEL to prefs[KEY_LLM_MODEL],
+                    LlmSlot.VISION_MODEL to prefs[KEY_LLM_VISION_MODEL],
+                )
+                legacy.forEach { (slot, value) ->
+                    val key = keyLlm(provider, slot)
+                    if (target[key] == null && value != null) target[key] = value
+                }
+            }
+        }
+    }
+
+    private suspend fun putLlm(provider: LlmProvider, slot: LlmSlot, value: String?) {
+        context.settingsDataStore().edit { prefs ->
+            if (value == null) prefs.remove(keyLlm(provider, slot)) else prefs[keyLlm(provider, slot)] = value
+        }
+    }
+
+    /**
+     * 某一家某一槽的键：**自定义沿用 M4 的四个老键**（`llm_base_url` 等，老用户零迁移——D113），
+     * 其余家各自 `llm_<id>_<槽>`。
+     */
+    private fun keyLlm(provider: LlmProvider, slot: LlmSlot): Preferences.Key<String> = when {
+        provider != LlmProvider.CUSTOM -> stringPreferencesKey("llm_${provider.id}_${slot.suffix}")
+        slot == LlmSlot.BASE_URL -> KEY_LLM_BASE_URL
+        slot == LlmSlot.API_KEY -> KEY_LLM_API_KEY
+        slot == LlmSlot.MODEL -> KEY_LLM_MODEL
+        else -> KEY_LLM_VISION_MODEL
     }
 
     suspend fun setAutoEntryEnabled(enabled: Boolean) {
@@ -208,8 +300,9 @@ class SettingsRepository(private val context: Context) {
         private val KEY_HOME_STAT_ITEMS = stringPreferencesKey("home_stat_items")
         private val KEY_STATS_ORDER = stringPreferencesKey("stats_order")
         private val KEY_STATS_ENABLED = stringPreferencesKey("stats_enabled")
-        // M4 智能（M4-0）
+        // M4 智能（M4-0）；供应商槽位与归属见 D113
         private val KEY_LLM_ENABLED = booleanPreferencesKey("llm_enabled")
+        private val KEY_LLM_PROVIDER = stringPreferencesKey("llm_provider")
         private val KEY_LLM_BASE_URL = stringPreferencesKey("llm_base_url")
         private val KEY_LLM_API_KEY = stringPreferencesKey("llm_api_key")
         private val KEY_LLM_MODEL = stringPreferencesKey("llm_model")

@@ -40,6 +40,7 @@ import dev.penned.app.data.llm.LlmResult
 import dev.penned.app.domain.LlmConfig
 import dev.penned.app.domain.LlmConfigError
 import dev.penned.app.domain.LlmEndpoints
+import dev.penned.app.domain.LlmProvider
 import dev.penned.app.ui.LocalApp
 import dev.penned.app.ui.components.PennedButton
 import dev.penned.app.ui.components.PennedButtonVariant
@@ -73,6 +74,8 @@ object AiPrivacyCopy {
 /** 设置页的整页状态。 */
 data class AiSettingsUiState(
     val enabled: Boolean = false,
+    /** 当前供应商（D113）：四样配置都是**这一家**的。 */
+    val provider: LlmProvider = LlmProvider.DEFAULT,
     val baseUrl: String = "",
     val apiKey: String = "",
     val model: String = "",
@@ -102,6 +105,9 @@ sealed interface TestState {
  *
  * **AI 默认关**（`llm_enabled = false`）：关着时一切入口都不发请求（§二·19）。
  * 地址**只接受 https**（C2）：填 http 在页面当场报错——正式版禁明文，填了也连不上。
+ *
+ * **供应商（D113）**：四样配置**每家各存一份**，页面上的读写永远针对"当前这家"；
+ * 切换供应商只换显示的值，别家的一个字不动。
  */
 class AiSettingsViewModel(private val app: PennedApplication) : ViewModel() {
 
@@ -112,30 +118,38 @@ class AiSettingsViewModel(private val app: PennedApplication) : ViewModel() {
 
     /** 从设置里读一次（页面进入时调；之后由页面自己管输入态）。 */
     suspend fun load(): AiSettingsUiState {
-        val loaded = AiSettingsUiState(
+        // 老用户那份扁平配置先认领到对应的家（只做一次，D113）
+        app.settings.adoptLegacyLlmConfigIfNeeded()
+        val provider = LlmProvider.fromId(app.settings.llmProvider.first())
+        val fields = app.settings.llmFields(provider)
+        return AiSettingsUiState(
             enabled = app.settings.llmEnabled.first(),
-            baseUrl = app.settings.llmBaseUrl.first().orEmpty(),
-            apiKey = app.settings.llmApiKey.first().orEmpty(),
-            model = app.settings.llmModel.first().orEmpty(),
-            visionModel = app.settings.llmVisionModel.first().orEmpty(),
+            provider = provider,
+            baseUrl = fields.baseUrl.orEmpty(),
+            apiKey = fields.apiKey.orEmpty(),
+            model = fields.model.orEmpty(),
+            visionModel = fields.visionModel.orEmpty(),
         )
-        return loaded
     }
 
     fun setEnabled(enabled: Boolean) = persist { app.settings.setLlmEnabled(enabled) }
 
-    fun saveBaseUrl(url: String) = persist { app.settings.setLlmBaseUrl(url.trim().ifEmpty { null }) }
+    fun saveBaseUrl(provider: LlmProvider, url: String) =
+        persist { app.settings.setLlmBaseUrl(provider, url.trim().ifEmpty { null }) }
 
-    fun saveApiKey(key: String) = persist { app.settings.setLlmApiKey(key.trim().ifEmpty { null }) }
+    fun saveApiKey(provider: LlmProvider, key: String) =
+        persist { app.settings.setLlmApiKey(provider, key.trim().ifEmpty { null }) }
 
-    fun saveModel(model: String) = persist { app.settings.setLlmModel(model.trim().ifEmpty { null }) }
+    fun saveModel(provider: LlmProvider, model: String) =
+        persist { app.settings.setLlmModel(provider, model.trim().ifEmpty { null }) }
 
-    fun saveVisionModel(model: String) =
-        persist { app.settings.setLlmVisionModel(model.trim().ifEmpty { null }) }
+    fun saveVisionModel(provider: LlmProvider, model: String) =
+        persist { app.settings.setLlmVisionModel(provider, model.trim().ifEmpty { null }) }
 
-    fun clearKey() {
+    /** 只清**当前这家**的 Key（别家的不动）。 */
+    fun clearKey(provider: LlmProvider) {
         _test.value = TestState.Idle
-        persist { app.settings.setLlmApiKey(null) }
+        persist { app.settings.setLlmApiKey(provider, null) }
     }
 
     /**
@@ -209,25 +223,25 @@ fun AiSettingsScreen(onBack: () -> Unit) {
         },
         onBaseUrlChange = { value ->
             form = current.copy(baseUrl = value)
-            viewModel.saveBaseUrl(value)
+            viewModel.saveBaseUrl(current.provider, value)
         },
         onApiKeyChange = { value ->
             form = current.copy(apiKey = value)
-            viewModel.saveApiKey(value)
+            viewModel.saveApiKey(current.provider, value)
         },
         onModelChange = { value ->
             form = current.copy(model = value)
-            viewModel.saveModel(value)
+            viewModel.saveModel(current.provider, value)
         },
         onVisionModelChange = { value ->
             form = current.copy(visionModel = value)
-            viewModel.saveVisionModel(value)
+            viewModel.saveVisionModel(current.provider, value)
         },
         onToggleShowKey = { showKey = !showKey },
         onTest = { viewModel.testConnection(current) },
         onClearKey = {
             form = current.copy(apiKey = "")
-            viewModel.clearKey()
+            viewModel.clearKey(current.provider)
         },
     )
 }

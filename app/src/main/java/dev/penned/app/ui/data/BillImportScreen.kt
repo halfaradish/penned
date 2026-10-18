@@ -60,7 +60,6 @@ import dev.penned.app.domain.BillDedupe
 import dev.penned.app.domain.BillRowCounts
 import dev.penned.app.domain.ColumnMappingSuggestion
 import dev.penned.app.domain.LlmConfig
-import dev.penned.app.domain.LlmEndpoints
 import dev.penned.app.domain.LlmSuggestions
 import dev.penned.app.domain.MerchantCategorySuggestion
 import dev.penned.app.domain.RuleTargetType
@@ -385,14 +384,8 @@ class BillImportViewModel(
         }
     }
 
-    private suspend fun llmConfig(): LlmConfig? {
-        if (!app.settings.llmEnabled.first()) return null
-        val baseUrl = app.settings.llmBaseUrl.first()
-        val apiKey = app.settings.llmApiKey.first()
-        val model = app.settings.llmModel.first()
-        if (LlmEndpoints.validate(baseUrl, apiKey, model) != null) return null
-        return LlmEndpoints.config(baseUrl.orEmpty(), apiKey.orEmpty(), model.orEmpty(), app.settings.llmVisionModel.first())
-    }
+    /** 当前供应商的一份可用配置（口径在 repo 里一处，D113）。 */
+    private suspend fun llmConfig(): LlmConfig? = app.settings.activeLlmConfig()
 
     private fun aiErrorText(reason: LlmError): String = when (reason) {
         LlmError.NOT_CONFIGURED, LlmError.INSECURE_URL, LlmError.MALFORMED_URL -> OFFLINE_MESSAGE

@@ -63,7 +63,6 @@ import dev.penned.app.domain.BillDedupe
 import dev.penned.app.domain.BillRow
 import dev.penned.app.domain.LlmConfig
 import dev.penned.app.domain.LlmDraft
-import dev.penned.app.domain.LlmEndpoints
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.TxSource
 import dev.penned.app.domain.TxType
@@ -399,16 +398,8 @@ class ScreenshotImportViewModel(
         return candidates.mapIndexed { index, (_, row) -> row.copy(duplicate = flags[index]) }
     }
 
-    private suspend fun llmConfig(): LlmConfig? {
-        if (!app.settings.llmEnabled.first()) return null
-        val baseUrl = app.settings.llmBaseUrl.first()
-        val apiKey = app.settings.llmApiKey.first()
-        val model = app.settings.llmModel.first()
-        if (LlmEndpoints.validate(baseUrl, apiKey, model) != null) return null
-        return LlmEndpoints.config(
-            baseUrl.orEmpty(), apiKey.orEmpty(), model.orEmpty(), app.settings.llmVisionModel.first(),
-        )
-    }
+    /** 当前供应商的一份可用配置（总开关关着 / 没配齐 → null，一个包都不发；口径在 repo 里一处，D113）。 */
+    private suspend fun llmConfig(): LlmConfig? = app.settings.activeLlmConfig()
 
     private fun errorText(reason: LlmError): String = when (reason) {
         LlmError.NETWORK -> "连不上：检查网络或地址"

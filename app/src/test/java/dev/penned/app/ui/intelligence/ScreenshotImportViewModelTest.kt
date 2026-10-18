@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import dev.penned.app.PennedApplication
+import dev.penned.app.domain.LlmProvider
 import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.data.db.entity.BookEntity
 import dev.penned.app.data.db.entity.ImportBatchEntity
@@ -67,9 +68,10 @@ class ScreenshotImportViewModelTest {
             )
             app.settings.setCurrentBook(bookId)
             app.settings.setLlmEnabled(true)
-            app.settings.setLlmBaseUrl("https://example.test/v1")
-            app.settings.setLlmApiKey("sk-test")
-            app.settings.setLlmModel("glm-4.6")
+            app.settings.setLlmProvider(LlmProvider.CUSTOM)
+            app.settings.setLlmBaseUrl(LlmProvider.CUSTOM, "https://example.test/v1")
+            app.settings.setLlmApiKey(LlmProvider.CUSTOM, "sk-test")
+            app.settings.setLlmModel(LlmProvider.CUSTOM, "glm-4.6")
         }
     }
 
@@ -78,9 +80,10 @@ class ScreenshotImportViewModelTest {
         server.stop()
         runBlocking {
             app.settings.setLlmEnabled(false)
-            app.settings.setLlmBaseUrl(null)
-            app.settings.setLlmApiKey(null)
-            app.settings.setLlmModel(null)
+            app.settings.setLlmProvider(null)
+            app.settings.setLlmBaseUrl(LlmProvider.CUSTOM, null)
+            app.settings.setLlmApiKey(LlmProvider.CUSTOM, null)
+            app.settings.setLlmModel(LlmProvider.CUSTOM, null)
         }
     }
 
