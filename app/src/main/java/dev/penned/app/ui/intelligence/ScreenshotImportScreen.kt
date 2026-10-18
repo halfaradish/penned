@@ -38,6 +38,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
@@ -625,8 +630,7 @@ fun ScreenshotImportContent(
                         .padding(horizontal = PennedSpacing.lg),
                 ) {
                     Text(
-                        "选一张支付截图或账单列表截图（或点系统分享把图发进来）——" +
-                            "识别出的每一笔都会先列出来，**确认后才入账**",
+                        entryHintLine(),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -682,6 +686,12 @@ fun ScreenshotImportContent(
             onDismiss = { accountSheet = false },
         )
     }
+}
+
+/** 入口说明一行：「确认后才入账」加重（**别把 `**` 直接印在页面上**——M4-8 踩过一次）。 */
+internal fun entryHintLine(): AnnotatedString = buildAnnotatedString {
+    append("选一张支付截图或账单列表截图（或点系统分享把图发进来）——识别出的每一笔都会先列出来，")
+    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append("确认后才入账") }
 }
 
 /** 预览：计数 + 合计 + 这批记到哪 + 行列表 + 主按钮。 */

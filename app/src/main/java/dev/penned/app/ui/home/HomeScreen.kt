@@ -611,7 +611,7 @@ fun HomeContent(
                 )
                 dev.penned.app.ui.components.PennedListRow(
                     title = "截图导入",
-                    subtitle = "支付截图认成一笔草稿（要配好 AI 设置）",
+                    subtitle = "账单列表截图也能认（一屏多笔，确认后一起导入；要配好 AI 设置）",
                     leadingIcon = dev.penned.app.ui.icons.PennedIcons.Search,
                     onClick = {
                         showQuickMenu = false

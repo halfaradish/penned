@@ -9,6 +9,8 @@
 - **批次二**：`M4-3` ✅ 已交付（提交 `7595559`）｜`M4-4` ✅ 已交付（提交 `5ffb5b6`）——**批次二收官**
 - **批次三**：`M4-5` ✅ 已交付（提交 `be81a2a`）｜`M4-6` ✅ 已交付（提交 `b1a4a17`）——**批次三收官**
 - **批次四**：`M4-7` ✅ 已交付（提交 `6b05383`）｜`M4-8` ✅ 已交付（提交 `7128d0a`）——**批次四收官 = M4 九片全部交付（2026-10-17～10-18）**
+- **后续（2026-10-18）**：M4 之后接了一条**截图列表导入**（D111，用户点名）——9 片之外的单片，两片已交付（`dcde043` / `55f34f6`），
+  M4 九片本身不变；测试基线随之 **975 → 1016**（`./gradlew build test lint` 全绿、lint 34 warnings 无新品类）。
 - **里程碑终态**：`./gradlew build test lint` **975 测试 / 0 失败 / 0 error / 34 warnings**（无新品类）；**零新增依赖**（`libs.versions.toml` 与 `app/build.gradle.kts` 依赖清单自 M4 起点零变化）；Manifest 只多四处（`POST_NOTIFICATIONS` + 通知监听 `<service>` + M4-7 的 `ACTION_SEND` filter）；外发只有 AI（只收 https、默认关、拒绝时一个包都不出）与 M2 的更新检查两条；库 **v9**（`9.json` 入库）；**全部软删 + 唯一硬删例外**（候选池 `clearProcessed`，D104）；金额一律 Long 分。**未 push、未打 tag、未发版**。
 - **测试基线**：M4 开工前 **723 条 / 0 失败**；`M4-0` 后 767；`M4-1` 后 785；`M4-2` 后 826；`M4-3` 后 850；`M4-4` 后 882；`M4-5` 后 906；`M4-6` 后 920；`M4-7` 后 939；`M4-8` 后 **975 条 / 0 失败 / lint 0 error（34 warnings 无新品类）**。
 - **M4-8 产出**（UI 片 + 系统接线）：`domain/NotifyParse.kt`（**代码内常量规则表**，不落库不热更新：微信/支付宝特征词 + 金额正则 `¥?([\d,]+\.\d{2})` 交 `MoneyParse` + 方向判定 + 关键词规则带分类；**解析不出金额或方向直接丢弃**；`alertText` 固定文案「识别到一笔 12.50 的支出，点这里确认」；`whitelist` 解析逗号串。**DEBUG 包里多一条 `com.android.shell` 规则**，专为 `adb` 造通知那条验收——release 不含）；`data/notify/AutoEntryService.kt`（读 `EXTRA_TITLE/TEXT/**BIG_TEXT**/SUB_TEXT/SUMMARY_TEXT`——`cmd notification post -S bigtext` 与很多支付通知把正文放在 BIG_TEXT，只读 TEXT 会读不到金额；门：`auto_entry_enabled` + 白名单；去重同 App+同分钟+同原文；落候选池带 `occurredAtEpochMinute`/`note`/`categoryId`（命中规则）；发本 App 提醒（渠道 `auto_entry`），小图标用新加的 `res/drawable/ic_notify_pending.xml`——**状态栏按 alpha 做单色遮罩，拿 `ic_launcher` 会渲染成一块白方块**；`PendingIntent` 带 `EXTRA_OPEN_PENDING`）；`ui/intelligence/AutoEntryScreen.kt`（状态卡两态 +「去开启」跳 `Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS` + 总开关默认关 + 白名单只列**已安装**的常见支付类 + 待确认入口带条数 + 隐私说明；33+ 开开关时顺手申请 `POST_NOTIFICATIONS`——**只服务提醒，拒绝不拦落库**）；`ui/intelligence/PendingScreen.kt`（候选行 = 来源 + 方向 + **时间** + 金额 + 原文一行 + 左滑「丢弃」；「全部丢弃」；页脚「清空已处理」= **全库唯一硬删**（D104）；空态给"去开自动记账"）；`ui/intelligence/NotificationOpenRequest.kt`（intent 标记 + 通知使用权判定）；`TxSource.NOTIFICATION` + 详情页「通知记账」；我的页「智能」卡第四行 + 路由 `auto-entry`/`pending` + 通知点击补跳。测试 **+36**（939 → **975**）：`NotifyParseTest` 8（**含微信 6 / 支付宝 6 两张表**，脱敏样张）/`AutoEntryServiceTest` 7（白名单、总开关、去重、解析不出不落库、ACCEPTED 回写、硬删）/`AutoEntryScreensTest` 10 + 截图浅 4 张 + 深 2 张（`dark_auto_entry`/`dark_pending`）/`NotificationOpenRequestTest` 2/`NotificationWiringTest` 4（服务真被系统"通知使用权"列表按 action + 权限 + 显示名收进去、`POST_NOTIFICATIONS` 在清单里、33+ 未授权才申请）/`CsvTest` +1（`NOTIFICATION` 往返、旧值不受影响）/`DetailScreenScreenshotTest` +2（「通知记账」vs「自动记账」两条标签）/`DarkThemeScreensTest` +2。规范 **§13·补三十七** 已写。
@@ -199,6 +201,24 @@ obolectric-*`，其中两个 `robolectric-nativeruntime*` 各 40–200MB）：�
 - 用户裁决：要能勾选多个账本（所属账本之外还想让账户出现在指定账本里）
 - 落地：D028；实施见"已完成"
 
+### 截图列表导入（2026-10-18，用户裁决「做账单列表导入」）—— 已完成 2/2 片
+
+**用户四条裁决**：① 走**预览页一次导入**（照账单导入那套）② **不做对账** ③ 带状态的行**全都导入、状态写进备注** ④ 预览行**只能删/切方向**。
+
+- **片 1 `dcde043`**（纯逻辑）：`domain/TextTime.kt`（宽松时间：`10月18日 09:23` / `10-16 22:42` / `昨天 23:38` / 下午晚上 / 全角；无年按最近一次过去推；**认不出不猜**）、`domain/LlmRowsParser.kt`（`{"rows":[…]}` / `items` / 裸数组 / 围栏闲聊 / 模型回单对象；**坏行丢但计数**、上限 300 行、`mergedNote()` 商户+状态）。
+- **片 2 `55f34f6`**（闭环）：prompt 改数组（一屏多笔按屏幕顺序、时间换算完整日期、状态进 note）；`LlmClient.extractImageRows`；
+  `ScreenshotImportViewModel` 多图合并 + 逐张失败不整体作废 + 去重（库内+批内）+ 账户选择 + 一次导入 + 撤销；
+  预览页（计数/合计/账户/行列表/主按钮）；落库走 `BillImportRepository.import(txSource, fallbackAccountId)` +
+  `ImportBatchEntity.SOURCE_SCREENSHOT`；`BillDedupe.duplicateFlags`（逐行标重复保留行序）。
+- **顺手修的两个真 bug**（都有"没修复就红"的测试）：`AddViewModel.init` 顺序（通知里的收入预填会变支出）、候选池路由硬编码 `NOTIFICATION`。
+- **真图实测（4 张，只读，跑完即删的探针）**：全部解码成功、**长边正好 1280**（1080×3946 那张 `inSampleSize=2` → 350×1280；
+  2340 的三张 → 591×1280）、payload 84~106KB；合成 16 行回复 → 预览 16 行 → 落库 16 行（批次 `SCREENSHOT`）→ 撤销归零。
+- **真机走查（GxuDev）**：我的 → 智能 → 截图导入（新文案在）+ 选真图 → 无 Key 时给引导卡；**库内基线 760 活跃 / 15 软删 / 3 账户 / 2 账本 / 1 批次 / 0 候选 前后一致**，推到模拟机的测试图与临时文件已删。
+- **deferred（没有料，不许造假）**：**模型在这 4 张真图上的识别质量**——没有可用 Key，https-only 也挡住本机假服务器；
+  识别链路由假服务器 + 合成回复覆盖，真机只验了"壳 + 无 Key 引导"。**有 Key 时自测口径**：一张列表图应出 N 笔（与屏幕行数对得上）、
+  金额/时间与图里逐笔对、重复行被标出来。
+- **测试**：975 → **1016**（片 1 +23、片 2 +18）；lint 34 warnings 无新品类。
+
 ### M4-7 截图导入 × 真实截图（2026-10-18，**口径冲突，等点名**）
 
 用户给了 4 张真实截图（`docs/local/微信支付宝账单截图/`，微信 2 + 支付宝 2，**只读、不入库、不入测试**）。实测结论：**这 4 张全是"账单列表"（多笔），不是单笔支付成功页**，与规格 §三 M4-7 的口径「**一张图只取一笔**（图里有多笔时只认主笔）」正面冲突。
@@ -210,6 +230,14 @@ obolectric-*`，其中两个 `robolectric-nativeruntime*` 各 40–200MB）：�
 - **重叠/去重**：两张微信截图是**同一个月、相隔 37 分钟**拍的（表头 387.57 → 398.57，后者多一行），两张支付宝也覆盖同一个 10 月——若一次导入多张，**行级重叠会重复入账**；CSV 路的 `BillDedupe` 口径（单号优先 + 无单号兜底键）在这里没有单号可用，需要新的兜底键（日期 + 金额 + 商户）。
 - **两条出路（等裁决）**：**A. 列表图批量识别**——prompt 改"回数组，每行一笔"，出参走新的数组解析 → 一批候选进「待确认」+ 行级去重 + 逐行带时间（正解，要改规格这条口径）；**B. 只认单笔、列表图劝退**——prompt 里明说"多行列表就回 UNKNOWN"，改动最小、最优诚实，但这批真实场景（补记历史账单）就用不上。**我推荐 A（先做最小版：数组出参 + 直接进候选池，不做逐张预填 + 去重）**。
 - 顺带两条与 A 无关也该修的：**时间解析补 `M月d日 HH:mm` / `MM-dd HH:mm` / `昨天|今天|前天`**（无年按"最近一次"推）；**预填把时间带过去**（现在 `occurredAtEpochMinute` 只存在候选行里、没进记一笔页）。
+
+### 测试基建：全量门在机器负载下会随机红（2026-10-18，待点名）
+
+**现象**：`./gradlew build test lint`（`org.gradle.parallel=true`，lint 与测试抢 CPU）在负载高时会随机红 **1~2 个** Compose 流程用例——今天一口气红了 **8 个不同类**（`AddDebtFlowTest` / `AddReimburseFlowTest`（2 次）/ `AddEditSubCategoryTest` / `TagsFlowTest`（2 次）/ `AddHiddenCategoryTest` / `BillFiltersFlowTest` / `AboutViewModelTest`），**每一支单独 `--rerun` 都绿**，失败签名集中在自家 helper 的固定时长轮询上（`等数据库结果超时` / `等界面超时` / `Failed to inject touch input`）。跑绿仍是常态（今天多次全绿：975 / 998 / 1016 各一轮）。
+
+**为什么值得单独记一条**：这不是本特性引入的（这些类一行没碰，M4 期间就记过一次同型偶发），但每次都会让人重跑 1~2 分钟、还会让人怀疑是不是自己改坏了。
+
+**三条候选修法**（等点名，别顺手改）：① 把这些 helper 的固定轮询换成"**推 looper + 条件等待**"（`shadowOf(Looper.getMainLooper()).idle()` + 更长的 deadline——今天的坑就是 DB 写入落在背线程、主 looper 没被推）；② 给测试任务限制并行分叉（`maxParallelForks = 1`，慢一点但稳）；③ DoD 里把"全绿"拆成"`test` 单独跑全绿 + `lint` 单独跑全绿"（现在 `build test lint` 三条同跑才有互抢）。
 
 ### M4-8 走查发现的两处小件（2026-10-17，待点名）
 

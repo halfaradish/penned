@@ -176,7 +176,7 @@ fun MineScreen(
             // M4-7：截图导入（BYOK 多模态；不做本地 OCR）
             PennedListRow(
                 title = "截图导入",
-                subtitle = "支付截图认成一笔草稿，确认后才入账",
+                subtitle = "截图里的一笔或一屏账单都认，确认后一起导入",
                 leadingIcon = PennedIcons.Search,
                 onClick = onOpenScreenshotImport,
             )
