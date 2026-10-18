@@ -1,6 +1,8 @@
 package dev.penned.app.ui.about
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -41,7 +43,9 @@ class AboutScreenScreenshotTest {
     private fun content(
         state: UpdateUiState,
         needsUnknownSources: Boolean = false,
+        prereleaseEnabled: Boolean = false,
         onCheck: () -> Unit = {},
+        onTogglePrerelease: (Boolean) -> Unit = {},
         onDownload: () -> Unit = {},
         onRetry: () -> Unit = {},
         onInstall: () -> Unit = {},
@@ -57,6 +61,7 @@ class AboutScreenScreenshotTest {
                     needsUnknownSources = needsUnknownSources,
                     onBack = {},
                     onCheck = onCheck,
+                    onTogglePrerelease = onTogglePrerelease,
                     onDownload = onDownload,
                     onCancelDownload = {},
                     onRetry = onRetry,
@@ -64,6 +69,7 @@ class AboutScreenScreenshotTest {
                     onOpenRepo = onOpenRepo,
                     onOpenUnknownSourcesSettings = {},
                     onDismissUnknownSources = {},
+                    prereleaseEnabled = prereleaseEnabled,
                 )
             }
         }
@@ -82,6 +88,8 @@ class AboutScreenScreenshotTest {
         composeRule.onNodeWithText("本地优先 · 无服务器").assertIsDisplayed()
         composeRule.onNodeWithText("当前版本").assertIsDisplayed()
         composeRule.onNodeWithText("0.1.0（1）").assertIsDisplayed()
+        composeRule.onNodeWithText("接收预发布版本").assertIsDisplayed()
+        composeRule.onNodeWithText("开启后会收到 dev / test / beta；正式版更新不受影响").assertIsDisplayed()
         composeRule.onNodeWithText("未检查").assertIsDisplayed()
         composeRule.onNodeWithText("每天自动检查一次").assertIsDisplayed()
         composeRule.onNodeWithText("更新检查只访问静态文件，不携带任何标识。").assertIsDisplayed()
@@ -94,6 +102,16 @@ class AboutScreenScreenshotTest {
         composeRule.onNodeWithText("项目主页").performClick()
         assertEquals(1, repoOpens)
         capture("ui16_about_idle")
+    }
+
+    @Test
+    fun capturePrereleaseOnAndAssertToggleWiring() {
+        var toggled: Boolean? = null
+        content(UpdateUiState.Idle, prereleaseEnabled = true, onTogglePrerelease = { toggled = it })
+        composeRule.onNodeWithText("接收预发布版本").assertIsDisplayed()
+        composeRule.onNode(isToggleable()).assertIsOn().performClick()
+        assertEquals("关掉开关要回调 false（D114）", false, toggled)
+        capture("ui16_about_prerelease")
     }
 
     @Test
@@ -191,9 +209,11 @@ class AboutScreenScreenshotTest {
                     versionCode = 1,
                     repoUrl = REPO_URL,
                     needsUnknownSources = false,
+                    prereleaseEnabled = false,
                     onOpenRepo = {},
                     onBack = {},
                     onCheck = {},
+                    onTogglePrerelease = {},
                     onDownload = {},
                     onCancelDownload = {},
                     onRetry = {},
@@ -216,9 +236,11 @@ class AboutScreenScreenshotTest {
                     versionCode = 1,
                     repoUrl = REPO_URL,
                     needsUnknownSources = false,
+                    prereleaseEnabled = false,
                     onOpenRepo = {},
                     onBack = {},
                     onCheck = {},
+                    onTogglePrerelease = {},
                     onDownload = {},
                     onCancelDownload = {},
                     onRetry = {},

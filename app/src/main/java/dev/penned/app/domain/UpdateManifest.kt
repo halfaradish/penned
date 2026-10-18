@@ -8,6 +8,9 @@ import org.json.JSONObject
  *
  * 解析走平台自带 `org.json`（不引序列化库，D058）；未知字段容忍，**必填字段缺失/类型不符 = 清单无效**
  * （[parse] 返回 null，调用方当"检查失败"处理，不崩）。
+ *
+ * v1.1（D114）只追加可选字段：[channel]（这次发布本身是正式还是预发布）、[publishedAt]、[tag]。
+ * 老客户端忽略它们；老清单缺 `channel` 也照旧有效。
  */
 data class UpdateManifest(
     val versionCode: Int,
@@ -17,6 +20,9 @@ data class UpdateManifest(
     val sha256: String,
     val size: Long,
     val urls: List<String>,
+    val channel: UpdateChannel? = null,
+    val publishedAt: String? = null,
+    val tag: String? = null,
 ) {
 
     /**
@@ -37,14 +43,21 @@ data class UpdateManifest(
 
     companion object {
 
-        /** 清单必填：`versionCode` / `sha256` / `size` / `urls`；其余可选。 */
+        /** 清单必填：`versionCode` / `sha256` / `size` / `urls`；其余可选（`channel` 认不出 = 无效）。 */
         fun parse(json: String): UpdateManifest? = try {
             val obj = JSONObject(json)
             val versionCode = obj.getInt("versionCode")
             val sha256 = obj.getString("sha256")
             val size = obj.getLong("size")
             val urls = obj.getJSONArray("urls").toStringList()
-            if (versionCode <= 0 || sha256.isBlank() || size <= 0 || urls.isEmpty()) {
+            val channelText = obj.optString("channel").trim()
+            val channel = if (channelText.isEmpty()) null else UpdateChannel.ofKey(channelText)
+            if (versionCode <= 0 ||
+                sha256.isBlank() ||
+                size <= 0 ||
+                urls.isEmpty() ||
+                (channelText.isNotEmpty() && channel == null)
+            ) {
                 null
             } else {
                 UpdateManifest(
@@ -55,6 +68,9 @@ data class UpdateManifest(
                     sha256 = sha256.lowercase(),
                     size = size,
                     urls = urls,
+                    channel = channel,
+                    publishedAt = obj.optString("publishedAt").takeIf { it.isNotBlank() },
+                    tag = obj.optString("tag").takeIf { it.isNotBlank() },
                 )
             }
         } catch (_: Exception) {

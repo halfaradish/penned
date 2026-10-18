@@ -37,6 +37,7 @@ import dev.penned.app.ui.components.PennedDialog
 import dev.penned.app.ui.components.PennedDivider
 import dev.penned.app.ui.components.PennedListRow
 import dev.penned.app.ui.components.PennedProgressBar
+import dev.penned.app.ui.components.PennedSwitchRow
 import dev.penned.app.ui.components.PennedTopBar
 import dev.penned.app.ui.components.SectionCard
 import dev.penned.app.ui.icons.PennedIcons
@@ -55,7 +56,7 @@ private val MARK_GLYPH = 60.dp
  * 品牌头（App 标记 + 名字）→ 版本 / 更新卡 → 页脚隐私一句话。
  *
  * 入口在「我的」页的「关于」行；启动自动检查的提示由 [UpdateAvailableDialog] 承担（PennedApp 层弹）。
- * 自动检查**恒为开**（D064，开关留后续里程碑），所以本页没有开关行。
+ * 自动检查**恒为开**（D064），本页唯一的开关是「接收预发布版本」——那是更新通道，不是自动检查（D114）。
  */
 @Composable
 fun AboutScreen(
@@ -64,6 +65,7 @@ fun AboutScreen(
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val prereleaseEnabled by viewModel.prereleaseEnabled.collectAsStateWithLifecycle()
     val needsUnknownSources by viewModel.needsUnknownSources.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -73,8 +75,10 @@ fun AboutScreen(
         versionCode = viewModel.versionCode,
         repoUrl = BuildConfig.REPO_URL,
         needsUnknownSources = needsUnknownSources,
+        prereleaseEnabled = prereleaseEnabled,
         onBack = onBack,
         onCheck = viewModel::checkNow,
+        onTogglePrerelease = viewModel::setPrereleaseEnabled,
         onDownload = viewModel::download,
         onCancelDownload = viewModel::cancelDownload,
         onRetry = viewModel::retry,
@@ -104,6 +108,8 @@ fun AboutContent(
     needsUnknownSources: Boolean,
     onBack: () -> Unit,
     onCheck: () -> Unit,
+    onTogglePrerelease: (Boolean) -> Unit,
+    prereleaseEnabled: Boolean,
     onDownload: () -> Unit,
     onCancelDownload: () -> Unit,
     onRetry: () -> Unit,
@@ -142,6 +148,13 @@ fun AboutContent(
                         title = "当前版本",
                         leadingIcon = PennedIcons.Info,
                         trailing = "$versionName（$versionCode）",
+                    )
+                    PennedDivider(startIndent = ROW_DIVIDER_INDENT)
+                    PennedSwitchRow(
+                        title = "接收预发布版本",
+                        subtitle = "开启后会收到 dev / test / beta；正式版更新不受影响",
+                        checked = prereleaseEnabled,
+                        onCheckedChange = onTogglePrerelease,
                     )
                     PennedDivider(startIndent = ROW_DIVIDER_INDENT)
                     PennedListRow(

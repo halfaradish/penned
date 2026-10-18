@@ -1,5 +1,6 @@
 package dev.penned.app.data.update
 
+import dev.penned.app.domain.UpdateChannel
 import dev.penned.app.domain.UpdateManifest
 import dev.penned.app.domain.UpdateStatus
 
@@ -22,6 +23,8 @@ class UpdateChecker(
     private val manifestUrls: List<String>,
     private val userAgent: String,
     private val currentVersionCode: Int,
+    /** 订阅的是不是预发布通道（D114）：false 时拒绝任何预发布清单，绝不把 beta 推给正式版。 */
+    private val acceptsPrerelease: Boolean = false,
 ) {
 
     suspend fun check(): UpdateCheckResult {
@@ -37,6 +40,13 @@ class UpdateChecker(
             val manifest = UpdateManifest.parse(body)
             if (manifest == null) {
                 failure = "更新清单格式不对"
+                continue
+            }
+            // 正式版客户端双重拒绝：清单标了 prerelease，或版本名带 "-"（老清单没 channel 时也拦得住）
+            if (!acceptsPrerelease &&
+                (manifest.channel == UpdateChannel.PRERELEASE || manifest.versionName.contains('-'))
+            ) {
+                failure = "更新清单通道不符"
                 continue
             }
             return UpdateCheckResult.Checked(manifest.statusFor(currentVersionCode))

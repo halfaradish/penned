@@ -22,6 +22,9 @@ class UpdateManifestTest {
         {
           "versionCode": 2,
           "versionName": "0.2.0",
+          "channel": "stable",
+          "publishedAt": "2026-10-20T12:34:56Z",
+          "tag": "v0.2.0",
           "minVersionCode": 1,
           "changelog": ["新增：应用内更新", "修复：若干"],
           "sha256": "ABC123def",
@@ -42,6 +45,9 @@ class UpdateManifestTest {
         assertEquals("abc123def", m.sha256) // 统一存小写
         assertEquals(8_123_456L, m.size)
         assertEquals(2, m.urls.size)
+        assertEquals(UpdateChannel.STABLE, m.channel)
+        assertEquals("2026-10-20T12:34:56Z", m.publishedAt)
+        assertEquals("v0.2.0", m.tag)
     }
 
     @Test
@@ -54,6 +60,9 @@ class UpdateManifestTest {
         assertEquals("7", m.versionName) // 缺 versionName → 退回 versionCode 文案
         assertEquals(0, m.minVersionCode)
         assertTrue(m.changelog.isEmpty())
+        assertNull("老清单没有 channel", m.channel)
+        assertNull(m.publishedAt)
+        assertNull(m.tag)
     }
 
     @Test
@@ -86,6 +95,8 @@ class UpdateManifestTest {
             """{"versionCode": 2, "sha256": "aa", "size": 10, "urls": ["  "]}""" to "urls 全是空白",
             """{"versionCode": 2, "sha256": "aa", "size": 10, "urls": "https://x"}""" to "urls 不是数组",
             """{"versionCode": "二", "sha256": "aa", "size": 10, "urls": ["u"]}""" to "versionCode 不是数字",
+            """{"versionCode": 2, "versionName": "0.2.0-beta.1", "channel": "beta", "sha256": "aa", "size": 10, "urls": ["u"]}""" to "channel 认不出",
+            """{"versionCode": 2, "versionName": "0.2.0", "channel": 1, "sha256": "aa", "size": 10, "urls": ["u"]}""" to "channel 不是字符串",
         )
         cases.forEach { (json, note) ->
             assertNull("「$note」应当判为无效清单", UpdateManifest.parse(json))

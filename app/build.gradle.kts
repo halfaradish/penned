@@ -17,16 +17,23 @@ val signingProps = Properties().apply {
     if (file.exists()) file.inputStream().use { load(it) }
 }
 // 本地闭环测试开关（M2-8，默认关，发布物不受影响）：
-//   -PtestManifestUrls=http://10.0.2.2:8000/update.json  覆盖 release 的清单地址
-//   -PtestCleartext=true                                  放行明文（只配本地 HTTP 假服务时用）
-// 线上地址的连通性与真实托管在 M2-10 发布时验；这两个开关只为"release 配置的闭环"能在本机跑。
+//   -PtestManifestUrls=http://10.0.2.2:8000/update.json             覆盖 release 的正式清单地址
+//   -PtestPrereleaseManifestUrls=http://10.0.2.2:8000/update-prerelease.json  覆盖预发布清单地址
+//   -PtestCleartext=true                                           放行明文（只配本地 HTTP 假服务时用）
+// 线上地址的连通性与真实托管在 M2-10 发布时验；这三个开关只为"release 配置的闭环"能在本机跑。
 val testManifestUrls = (project.findProperty("testManifestUrls") as String?)?.trim()
+val testPrereleaseManifestUrls = (project.findProperty("testPrereleaseManifestUrls") as String?)?.trim()
 val testCleartext = project.findProperty("testCleartext") == "true"
 
-/** release 的清单候选地址（规格 M2 S1）：主地址等首发托管定稿后换，备地址保持 GitHub raw。 */
+/** 正式通道清单（规格 M2 S1）：只由纯数字版本流水写。 */
 val RELEASE_MANIFEST_URLS =
     "https://raw.githubusercontent.com/halfaradish/penned/main/update.json," +
         "https://cdn.jsdelivr.net/gh/halfaradish/penned@main/update.json"
+
+/** 预发布通道清单（D114）：dev / test / beta / rc 共用；正式版发布时也会覆盖它。 */
+val RELEASE_PRERELEASE_MANIFEST_URLS =
+    "https://raw.githubusercontent.com/halfaradish/penned/main/update-prerelease.json," +
+        "https://cdn.jsdelivr.net/gh/halfaradish/penned@main/update-prerelease.json"
 
 android {
     namespace = "dev.penned.app"
@@ -70,17 +77,27 @@ android {
                 "UPDATE_MANIFEST_URLS",
                 "\"http://10.0.2.2:8000/update.json\"",
             )
+            buildConfigField(
+                "String",
+                "UPDATE_MANIFEST_URLS_PRERELEASE",
+                "\"http://10.0.2.2:8000/update-prerelease.json\"",
+            )
         }
         release {
             isMinifyEnabled = true // D012：M2 打开并做体积验收
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // 清单候选地址按序回退（规格 M2 S1）；首发托管定稿后换主地址，备地址保持 GitHub raw。
-            // -PtestManifestUrls 只为本地闭环覆盖（默认走下面的线上地址）
+            // 两条通道各一组候选地址（规格 M2 S1 / D114）；-Ptest* 只为本地闭环覆盖。
+            // 预发布地址没单独给测试覆盖时，回落到正式的那个假服务地址（同一份假清单也能跑通）。
             buildConfigField(
                 "String",
                 "UPDATE_MANIFEST_URLS",
                 "\"${testManifestUrls ?: RELEASE_MANIFEST_URLS}\"",
+            )
+            buildConfigField(
+                "String",
+                "UPDATE_MANIFEST_URLS_PRERELEASE",
+                "\"${testPrereleaseManifestUrls ?: testManifestUrls ?: RELEASE_PRERELEASE_MANIFEST_URLS}\"",
             )
             // 有签名配置就签（local.properties 里配了 penned.storeFile），没配就照旧出 unsigned
             if (signingConfigs.getByName("release").storeFile != null) {
@@ -105,7 +122,7 @@ android {
 
     buildFeatures {
         compose = true
-        buildConfig = true // M2：UPDATE_MANIFEST_URLS / 版本号进 BuildConfig；REPO_URL 供关于页跳转
+        buildConfig = true // M2：UPDATE_MANIFEST_URLS(_PRERELEASE) / 版本号进 BuildConfig；REPO_URL 供关于页跳转
     }
 
     sourceSets {

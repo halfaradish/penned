@@ -101,6 +101,17 @@ class SettingsRepository(private val context: Context) {
      */
     val autoUpdateCheck: Flow<Boolean> = context.settingsDataStore().data.map { it[KEY_AUTO_UPDATE_CHECK] ?: true }
 
+    /**
+     * 更新通道（D114）：存 `UpdateChannel.key`；**null = 还没决定**，首次启动按当前安装包初始化。
+     *
+     * 注意它和 [autoUpdateCheck] 是两件事：自动检查恒为开，这里只决定订正式版还是预发布版。
+     */
+    val updateChannel: Flow<String?> = context.settingsDataStore().data.map { it[KEY_UPDATE_CHANNEL] }
+
+    /** 用户是否在「关于」页手动选过通道（D114）：true 时自动判定不再覆盖（显式选择优先）。 */
+    val updateChannelExplicit: Flow<Boolean> =
+        context.settingsDataStore().data.map { it[KEY_UPDATE_CHANNEL_EXPLICIT] ?: false }
+
     /** 品牌色相（M3-12）：存 `ThemeAccent.name`；没存过/认不出 = 青绿（默认）。 */
     val themeAccentKey: Flow<String?> = context.settingsDataStore().data.map { it[KEY_THEME_ACCENT] }
 
@@ -289,12 +300,26 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore().edit { it[KEY_AUTO_UPDATE_CHECK] = enabled }
     }
 
+    /**
+     * 写更新通道（D114）。[channel] 为 null = 清掉决定（测试复位用；生产只在首次初始化时写具体值）。
+     *
+     * [explicit] 必须跟着通道一起写：只写通道不写 explicit 会被自动判定覆盖。
+     */
+    suspend fun setUpdateChannel(channel: String?, explicit: Boolean) {
+        context.settingsDataStore().edit {
+            if (channel == null) it.remove(KEY_UPDATE_CHANNEL) else it[KEY_UPDATE_CHANNEL] = channel
+            it[KEY_UPDATE_CHANNEL_EXPLICIT] = explicit
+        }
+    }
+
     companion object {
         private val KEY_CURRENT_BOOK = stringPreferencesKey("current_book_id")
         private val KEY_PIN_HASH = stringPreferencesKey("pin_hash")
         private val KEY_LAST_UPDATE_CHECK_AT = longPreferencesKey("update_last_check_at")
         private val KEY_NOTIFIED_UPDATE_VERSION_CODE = intPreferencesKey("update_notified_version_code")
         private val KEY_AUTO_UPDATE_CHECK = booleanPreferencesKey("update_auto_check")
+        private val KEY_UPDATE_CHANNEL = stringPreferencesKey("update_channel")
+        private val KEY_UPDATE_CHANNEL_EXPLICIT = booleanPreferencesKey("update_channel_explicit")
         private val KEY_THEME_ACCENT = stringPreferencesKey("theme_accent")
         private val KEY_DARK_MODE = stringPreferencesKey("dark_mode")
         private val KEY_HOME_STAT_ITEMS = stringPreferencesKey("home_stat_items")

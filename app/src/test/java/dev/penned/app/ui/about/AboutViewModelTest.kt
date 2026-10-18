@@ -18,6 +18,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -48,8 +49,27 @@ class AboutViewModelTest {
          "urls": ["${server.url(apkPath)}"]}
     """.trimIndent()
 
+    /** 预发布清单（D114）：版本名带 "-"、channel = prerelease。 */
+    private fun betaManifestJson(versionCode: Int = 4) = """
+        {"versionCode": $versionCode, "versionName": "0.$versionCode.0-beta", "channel": "prerelease",
+         "minVersionCode": 1, "changelog": ["预发布"], "sha256": "${Sha256.ofBytes(apkBytes)}",
+         "size": ${apkBytes.size}, "urls": ["${server.url(apkPath)}"]}
+    """.trimIndent()
+
     private fun viewModel(verifier: (File) -> Boolean = { true }) =
-        AboutViewModel(app, OkHttpFetcher(), verifier, listOf(server.url("/update.json")))
+        AboutViewModel(
+            app,
+            OkHttpFetcher(),
+            verifier,
+            stableManifestUrls = listOf(server.url("/update.json")),
+            prereleaseManifestUrls = listOf(server.url("/update-prerelease.json")),
+        )
+
+    /** 每个测试先清掉通道决定：Robolectric 的 DataStore 跨方法复用，不清会串（D114）。 */
+    @Before
+    fun resetChannel() = runBlocking {
+        app.settings.setUpdateChannel(null, explicit = false)
+    }
 
     /** 推进主线程队列直到条件成立（IO 在别的线程上跑，所以要轮询 + idle）。 */
     private fun waitFor(note: String, condition: () -> Boolean) {
@@ -208,5 +228,69 @@ class AboutViewModelTest {
 
         vm.dismissUnknownSources()
         assertFalse("引导必须可取消（D059）", vm.needsUnknownSources.value)
+    }
+
+    @Test
+    fun `stored prerelease channel keeps reading beta manifest on a stable build`() {
+        resetThrottle()
+        // 模拟「0.2.0-beta.1 升到 0.2.0 正式版」：安装包是稳定版，但订阅还记着 prerelease
+        runBlocking { app.settings.setUpdateChannel("prerelease", explicit = false) }
+        server.on("/update.json", body = manifestJson(versionCode = 2))
+        server.on("/update-prerelease.json", body = betaManifestJson(versionCode = 4))
+        server.start()
+        val vm = viewModel()
+
+        vm.checkNow()
+        waitFor("进入 Available") { vm.state.value is UpdateUiState.Available }
+
+        assertEquals(
+            "beta 订阅者升正式版后仍要看到预发布线",
+            "0.4.0-beta",
+            (vm.state.value as UpdateUiState.Available).manifest.versionName,
+        )
+        assertTrue("要读预发布清单", server.requests.any { it.path == "/update-prerelease.json" })
+        assertFalse("不应回退到正式清单", server.requests.any { it.path == "/update.json" })
+        assertTrue("关于页开关要显示为开", vm.prereleaseEnabled.value)
+    }
+
+    @Test
+    fun `stable subscriber rejects a beta manifest at the stable url`() {
+        resetThrottle()
+        server.on("/update.json", body = betaManifestJson(versionCode = 4))
+        server.start()
+        val vm = viewModel()
+
+        vm.checkNow()
+        waitFor("进入 Failed") { vm.state.value is UpdateUiState.Failed }
+
+        assertEquals(
+            "正式版绝不能把 beta 当更新",
+            "更新清单通道不符",
+            (vm.state.value as UpdateUiState.Failed).reason,
+        )
+    }
+
+    @Test
+    fun `turning prerelease on writes explicit and then checks the beta url`() {
+        resetThrottle()
+        server.on("/update.json", body = manifestJson(versionCode = 2))
+        server.on("/update-prerelease.json", body = betaManifestJson(versionCode = 4))
+        server.start()
+        val vm = viewModel()
+
+        vm.setPrereleaseEnabled(true)
+        waitFor("通道落盘") {
+            runBlocking { app.settings.updateChannel.first() } == "prerelease"
+        }
+        assertTrue("用户显式选择要落盘", runBlocking { app.settings.updateChannelExplicit.first() })
+        waitFor("开关显示为开") { vm.prereleaseEnabled.value }
+
+        vm.checkNow()
+        waitFor("进入 Available") { vm.state.value is UpdateUiState.Available }
+        assertEquals(
+            "0.4.0-beta",
+            (vm.state.value as UpdateUiState.Available).manifest.versionName,
+        )
+        assertTrue(server.requests.any { it.path == "/update-prerelease.json" })
     }
 }
