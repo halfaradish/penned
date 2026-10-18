@@ -51,7 +51,15 @@ enum class LlmError {
     UNAUTHORIZED,
     FORBIDDEN,
     RATE_LIMITED,
-    /** 服务端 5xx 或其它非 2xx。 */
+    /**
+     * **请求被拒**（4xx 里除 401/403/429 之外的那些）：模型名不对、端点路径不对，
+     * 或这家/这个模型不吃这个用法（最典型：纯文本模型收到图片）。
+     *
+     * 与 [SERVER] 分开是实测逼出来的：DeepSeek 拒 `response_format` 时回的是 400，
+     * 笼统报「服务端出错（5xx）」会把人往"对方挂了"上带（D113）。
+     */
+    REJECTED,
+    /** 服务端 5xx（及其它没有更细归类的非 2xx）。 */
     SERVER,
     /** 回来了但不是能用的 JSON（闲聊 / 缺字段 / 缺金额）。 */
     BAD_RESPONSE,
@@ -140,6 +148,7 @@ class LlmClient(private val okHttp: OkHttpClient = defaultClient()) {
                     it.code == 401 -> LlmContentResult.Err(LlmError.UNAUTHORIZED)
                     it.code == 403 -> LlmContentResult.Err(LlmError.FORBIDDEN)
                     it.code == 429 -> LlmContentResult.Err(LlmError.RATE_LIMITED)
+                    it.code in 400..499 -> LlmContentResult.Err(LlmError.REJECTED)
                     it.code !in 200..299 -> LlmContentResult.Err(LlmError.SERVER)
                     else -> contentOf(text)?.let { content -> LlmContentResult.Ok(content, model) }
                         ?: LlmContentResult.Err(LlmError.BAD_RESPONSE)
@@ -163,20 +172,23 @@ class LlmClient(private val okHttp: OkHttpClient = defaultClient()) {
         imageJpegBase64: String?,
         imageDetail: String?,
     ): Request {
-        val content = if (imageJpegBase64 == null) {
-            JSONObject().put("type", "text").put("text", prompt)
-        } else {
-            JSONObject()
-                .put("type", "image_url")
-                .put(
-                    "image_url",
-                    JSONObject()
-                        .put("url", "data:image/jpeg;base64,$imageJpegBase64")
-                        .apply { if (imageDetail != null) put("detail", imageDetail) }
-                )
+        // 一个 content 数组：**先给指令、再给图**。曾经有图时整段 prompt 被丢掉，
+        // 模型既没 schema 也没规则，实测 DeepSeek 直接 400 拒掉 json 模式（D113）。
+        val content = JSONArray().put(JSONObject().put("type", "text").put("text", prompt))
+        if (imageJpegBase64 != null) {
+            content.put(
+                JSONObject()
+                    .put("type", "image_url")
+                    .put(
+                        "image_url",
+                        JSONObject()
+                            .put("url", "data:image/jpeg;base64,$imageJpegBase64")
+                            .apply { if (imageDetail != null) put("detail", imageDetail) }
+                    )
+            )
         }
         val messages = JSONArray().put(
-            JSONObject().put("role", "user").put("content", JSONArray().put(content))
+            JSONObject().put("role", "user").put("content", content)
         )
         val payload = JSONObject()
             .put("model", model)

@@ -108,12 +108,19 @@ class LlmClientTest {
     }
 
     @Test
-    fun `403 与 429 与 5xx 分得开`() {
+    fun `403 与 429 与 400 与 5xx 分得开`() {
         server.on(CHAT_PATH, status = 403, body = "{}")
         assertEquals(LlmError.FORBIDDEN, (runBlocking { client.extractText(config(), "x") } as LlmResult.Err).reason)
 
         server.on(CHAT_PATH, status = 429, body = "{}")
         assertEquals(LlmError.RATE_LIMITED, (runBlocking { client.extractText(config(), "x") } as LlmResult.Err).reason)
+
+        // 400/404 这类 = 请求被拒（模型名/用法不对），不是"对方挂了"（D113 实测口径）
+        server.on(CHAT_PATH, status = 400, body = """{"error":{"message":"bad model"}}""")
+        assertEquals(LlmError.REJECTED, (runBlocking { client.extractText(config(), "x") } as LlmResult.Err).reason)
+
+        server.on(CHAT_PATH, status = 404, body = "{}")
+        assertEquals(LlmError.REJECTED, (runBlocking { client.extractText(config(), "x") } as LlmResult.Err).reason)
 
         server.on(CHAT_PATH, status = 500, body = "{}")
         assertEquals(LlmError.SERVER, (runBlocking { client.extractText(config(), "x") } as LlmResult.Err).reason)
@@ -175,7 +182,7 @@ class LlmClientTest {
     }
 
     @Test
-    fun `图像调用走视觉模型且带 data url`() {
+    fun `图像调用走视觉模型_提示词和图一起发`() {
         server.on(CHAT_PATH, body = okBody("""{"rows":[{"amount":9.9,"merchant":"某商家"}]}"""))
         val result = runBlocking {
             client.extractImageRows(LlmEndpoints.config(TEST_BASE, "sk", "glm-4.6", "glm-4v"), "看图", "QUJD")
@@ -185,9 +192,24 @@ class LlmClientTest {
         assertEquals("glm-4v", ok.model)
         // 断结构而不是子串：Android 的 org.json 会把 "/" 转义成 "\/"（子串匹配会假红）
         val payload = JSONObject(server.requests.single().body)
-        val content = payload.getJSONArray("messages").getJSONObject(0).getJSONArray("content").getJSONObject(0)
-        assertEquals("image_url", content.getString("type"))
-        assertEquals("data:image/jpeg;base64,QUJD", content.getJSONObject("image_url").getString("url"))
-        assertEquals("high", content.getJSONObject("image_url").getString("detail"))
+        val content = payload.getJSONArray("messages").getJSONObject(0).getJSONArray("content")
+        // 一条 content 数组里**两段都要在**：先指令、后图。少了指令模型既没 schema 也没规则，
+        // 实测 DeepSeek 会 400 拒掉 json 模式（D113）。
+        assertEquals(2, content.length())
+        assertEquals("text", content.getJSONObject(0).getString("type"))
+        assertEquals("看图", content.getJSONObject(0).getString("text"))
+        assertEquals("image_url", content.getJSONObject(1).getString("type"))
+        assertEquals("data:image/jpeg;base64,QUJD", content.getJSONObject(1).getJSONObject("image_url").getString("url"))
+        assertEquals("high", content.getJSONObject(1).getJSONObject("image_url").getString("detail"))
+    }
+
+    @Test
+    fun `纯文本调用只有一段文本`() {
+        server.on(CHAT_PATH, body = okBody("""{"amount":1}"""))
+        runBlocking { client.complete(config(), "只发表头") }
+        val payload = JSONObject(server.requests.single().body)
+        val content = payload.getJSONArray("messages").getJSONObject(0).getJSONArray("content")
+        assertEquals(1, content.length())
+        assertEquals("text", content.getJSONObject(0).getString("type"))
     }
 }

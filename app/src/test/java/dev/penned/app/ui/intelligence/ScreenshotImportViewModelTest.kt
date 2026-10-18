@@ -127,11 +127,14 @@ class ScreenshotImportViewModelTest {
         // 时间从图里读出来了（无年份也能落成真 epoch 分钟）
         assertTrue(state.rows.all { it.timeFromImage })
 
-        // 请求体是压缩后的 JPEG，模型取视觉模型
+        // 请求体：**提示词在前、压缩后的 JPEG 在后**（少了提示词模型既没 schema 也没规则，D113）
         val content = JSONObject(server.requests.single().body).getJSONArray("messages")
-            .getJSONObject(0).getJSONArray("content").getJSONObject(0)
-        assertEquals("image_url", content.getString("type"))
-        assertTrue(content.getJSONObject("image_url").getString("url").startsWith("data:image/jpeg;base64,"))
+            .getJSONObject(0).getJSONArray("content")
+        assertEquals(2, content.length())
+        assertEquals("text", content.getJSONObject(0).getString("type"))
+        assertTrue(content.getJSONObject(0).getString("text").contains("rows"))
+        assertEquals("image_url", content.getJSONObject(1).getString("type"))
+        assertTrue(content.getJSONObject(1).getJSONObject("image_url").getString("url").startsWith("data:image/jpeg;base64,"))
     }
 
     @Test

@@ -170,6 +170,7 @@ class AiSettingsViewModel(private val app: PennedApplication) : ViewModel() {
         LlmError.UNAUTHORIZED -> "Key 无效（401）"
         LlmError.FORBIDDEN -> "没有权限（403）"
         LlmError.RATE_LIMITED -> "被限流了（429），等会儿再试"
+        LlmError.REJECTED -> "请求被拒（4xx）：地址或模型名不对，或这个模型不支持这种用法"
         LlmError.SERVER -> "服务端出错（5xx）"
         LlmError.BAD_RESPONSE -> "通了但回的不是账单 JSON（模型或提示词不对）"
     }
