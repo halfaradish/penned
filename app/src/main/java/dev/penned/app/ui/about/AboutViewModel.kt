@@ -72,10 +72,9 @@ class AboutViewModel(
     private val verifier: (File) -> Boolean = { PackageSignatures.matchesInstalled(app, it) },
     private val stableManifestUrls: List<String> = defaultStableManifestUrls(),
     private val prereleaseManifestUrls: List<String> = defaultPrereleaseManifestUrls(),
+    val versionName: String = BuildConfig.VERSION_NAME,
+    val versionCode: Int = BuildConfig.VERSION_CODE,
 ) : ViewModel() {
-
-    val versionName: String = BuildConfig.VERSION_NAME
-    val versionCode: Int = BuildConfig.VERSION_CODE
 
     private val userAgent = "penned-update/$versionName"
     private val downloader = UpdateDownloader(http, userAgent)

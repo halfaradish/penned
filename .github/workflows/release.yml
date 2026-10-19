@@ -61,7 +61,10 @@ jobs:
             echo "::error::tag（${TAG}）与 version.properties（v${V}）不一致——先 bumpVersion、提交，再打 tag"
             exit 1
           fi
-          if [ "$(git cat-file -t "$TAG")" != "tag" ]; then
+          # actions/checkout 对 tag 事件会按 commit SHA 抓取，并在本地生成同名轻量 tag。
+          # 显式重抓远端 tag ref，确保类型检查与后续 changelog 读取拿到的都是 annotated tag 对象。
+          git fetch --force origin "refs/tags/${TAG}:refs/tags/${TAG}"
+          if [ "$(git cat-file -t "refs/tags/${TAG}")" != "tag" ]; then
             echo '::error::必须打 annotated tag（git tag -a vX -m "发布说明"），轻量 tag 没有清单说明'
             exit 1
           fi

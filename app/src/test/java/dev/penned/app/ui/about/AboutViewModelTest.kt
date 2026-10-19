@@ -3,7 +3,6 @@ package dev.penned.app.ui.about
 import android.content.Context
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
-import dev.penned.app.BuildConfig
 import dev.penned.app.PennedApplication
 import dev.penned.app.data.update.FakeHttpServer
 import dev.penned.app.data.update.OkHttpFetcher
@@ -63,6 +62,8 @@ class AboutViewModelTest {
             verifier,
             stableManifestUrls = listOf(server.url("/update.json")),
             prereleaseManifestUrls = listOf(server.url("/update-prerelease.json")),
+            versionName = "0.1.0",
+            versionCode = 1,
         )
 
     /** 每个测试先清掉通道决定：Robolectric 的 DataStore 跨方法复用，不清会串（D114）。 */
