@@ -107,12 +107,12 @@ jobs:
           ALIAS: ${{ secrets.PENNED_KEY_ALIAS }}
           KEY: ${{ secrets.PENNED_KEY_PASSWORD }}
         run: |
-          ok=1
-          [ -n "$B64" ]   || { echo "::error::缺 Secret PENNED_STORE_FILE_B64（keystore 的 base64）"; ok=0; }
-          [ -n "$STORE" ] || { echo "::error::缺 Secret PENNED_STORE_PASSWORD"; ok=0; }
-          [ -n "$ALIAS" ] || { echo "::error::缺 Secret PENNED_KEY_ALIAS"; ok=0; }
-          [ -n "$KEY" ]   || { echo "::error::缺 Secret PENNED_KEY_PASSWORD"; ok=0; }
-          exit $ok
+          missing=0
+          [ -n "${B64:-}" ]   || { echo "::error::缺 Secret PENNED_STORE_FILE_B64（keystore 的 base64）"; missing=1; }
+          [ -n "${STORE:-}" ] || { echo "::error::缺 Secret PENNED_STORE_PASSWORD"; missing=1; }
+          [ -n "${ALIAS:-}" ] || { echo "::error::缺 Secret PENNED_KEY_ALIAS"; missing=1; }
+          [ -n "${KEY:-}" ]   || { echo "::error::缺 Secret PENNED_KEY_PASSWORD"; missing=1; }
+          exit "$missing"
 
       - uses: actions/setup-java@v4
         with:
