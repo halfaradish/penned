@@ -4,7 +4,7 @@
 
 ## 进行中
 
-**预发布通道（D114，用户点名）——已实现，全量 gate 绿（1047/0，lint 0 error / 34 warnings）；真实 beta 闭环待跑（2026-10-18）**：
+**预发布通道（D114，用户点名）——已实现，全量 gate 绿（1047/0，lint 0 error / 34 warnings）；首次真实 beta tag 在版本门失败，待重新 bump（2026-10-19）**：
 用户要求能发 `v0.2.0-dev` / `-beta` / `-beta.1` 类非正式版：正式版（纯数字）不收非正式版通知，非正式版始终更新到日期最新；
 并指出「beta 收正式版后会掉回正式通道、收不到 0.3.x-beta」的漏洞。落地口径：
 - **双清单**：`update.json` 只由正式版流水写；`update-prerelease.json` 每次发版覆盖（正式版 base 不倒退时也写，beta 用户跟着升正式版）。清单 v1.1 加可选 `channel` / `publishedAt` / `tag`；0.1.0 只认正式清单，服务端隔离是它唯一防线。
@@ -13,7 +13,8 @@
 - **测试**：新增 `UpdateChannelTest`（格式表 + policy 10 例）；扩 `UpdateManifestTest`（v1.1 字段 / 未知 channel 无效）、`UpdateCheckerTest`（正式拒绝 beta、预发布双收、地址回退）、`AboutViewModelTest`（稳定版包 + prerelease 订阅读 beta 清单、开关落 explicit、正式包拒绝 beta）、`AboutScreenScreenshotTest`（开关开/关与接线）。全量 **1036 → 1047 测试 / 0 失败**：首轮全量撞到三处已知 flake（`AddDebtFlowTest` ComposeTimeout、`AddTimeFlowTest` IllegalState、`AppearanceScreenTest` DataStore rename IOException），单跑三处全过并复跑全量绿；改完 UI 签名后全量再撞 `AddDebtFlowTest` 同一 flake 一次，单跑全量单测 **1047/0** 后 `./gradlew build test lint` 以该结果通过（lint **0 error / 34 warnings**，与基线同数）。截图 `ui16_about_prerelease` 已过目（版本卡四行、开关在「当前版本」与「检查更新」之间）。
 - **文档**：D114、M2 S1/S2/S6/S7、界面规范 §13·补四十、AGENTS、开发工作流、本看板。
 - **实现坑（写下来省得下次再踩）**：`AboutViewModel.init` 若在 Main 上持锁解析 DataStore，而 `autoCheckOnLaunch()` 又被测试/启动路径用 `runBlocking` 调，会互相等死（本次首轮全量卡在 `AboutViewModelTest.auto check…` 10+ 分钟）；`currentChannel()` 的整段读-判定-写已放 `Dispatchers.IO` + `Mutex`，并给通道切换也放 IO。另：`AboutContent` 的 `modifier` 必须是第一个可选参数，否则 lint 多一条 `ModifierParameter`（本次已按"`prereleaseEnabled` 改成必填、`modifier` 留在最后"修掉，警告数保持 34）。
-- **未做（不造假）**：未 push / 未打 tag / 未发真实 beta；模拟机闭环（0.1.0 正式机不提示 beta → 手装 beta → beta.1 自动提示 → 正式版把 beta 带回）待跑；`makeUpdateJson` 已用本机签名 APK 干跑出 `channel=stable` 清单（`build/tmp/updateTest.json`，未入库）；`release_channels.py --self-test` 5 正常 + 5 失败本地已绿，CI 真跑要等第一次真 tag。
+- **首次真实 beta tag（2026-10-19）**：`main` 与 annotated tag `v0.2.0-beta` 已 push；tag 执行对象为 `1f210dd`、指向提交 `a1fe132`。release run `39144887744` 在第一步版本门失败：tag `v0.2.0-beta` 与 `version.properties` 的 `v0.1.0` 不一致。失败发生在构建与建 Release 之前，**没有产生 beta APK / `update-prerelease.json` / GitHub Release**。修复路径：在 `main` 上 `bumpVersion -PversionName=0.2.0-beta.1`（当前 `versionCode=1`，应变为 2）→ 提交 → 先推 `main`，再新建并推 annotated tag `v0.2.0-beta.1`；旧失败 tag 可在确认无 Release 后删除，若复用旧名则必须先删本地和远端 tag，不能直接强推覆盖。
+- **未做（不造假）**：真实 beta 尚未发布；模拟机闭环（0.1.0 正式机不提示 beta → 手装 beta → beta.1 自动提示 → 正式版把 beta 带回）待跑；`makeUpdateJson` 已用本机签名 APK 干跑出 `channel=stable` 清单（`build/tmp/updateTest.json`，未入库）；`release_channels.py --self-test` 5 正常 + 5 失败本地已绿，CI 已实际跑到首个 tag 的版本门。
 
 **AI 设置·供应商预选（用户点名）——已交付（2026-10-18，两片）**：四档预置（DeepSeek / OpenCode Zen / OpenCode Go / 自定义），
 **四样配置每家各存一份、切家不串台**，老配置按地址自动认领（决策 **D113**，规范 **§13·补三十九**）。切片：`2818b76` 纯逻辑
