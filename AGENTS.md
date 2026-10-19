@@ -22,7 +22,7 @@ Android 单端本地记账 App「一笔一记 / penned」，功能对标"一木�
 - Room schema 变更必须：version+1、写 Migration、更新 schema JSON（`app/schemas/` 提交进仓库）、附 migration 测试
 - 流水时间存 `dateEpochMinute`（本地墙钟，分钟精度）
 - 依赖版本只认 `gradle/libs.versions.toml`；**不得升级/新增依赖**，需要就写进 board 提案区等人批
-- 本机 `dl.google.com` 不通：仓库镜像已在 `settings.gradle.kts` 配置（阿里云 google/gradle-plugin + Maven Central），**不得移除**
+- 本机 `dl.google.com` 不通：仓库镜像已在 `settings.gradle.kts` 配置（阿里云 google/gradle-plugin + Maven Central + 腾讯 maven-public 兜底），**不得移除**
 - 构建用 `./gradlew`（JAVA_HOME=jdk-21 已就位；PATH 里的 java 是 1.8，别用它）
 - 分类图标不引 material-icons-extended，用自绘矢量（见 `ui/icons/`）或色块+文字
 - Robolectric 测试统一 `@Config(sdk = [35], qualifiers = "w400dp-h800dp")`（D016/D018；sdk36 会触发 FileDescriptor 崩溃，默认视口会把 weight 区域压没）

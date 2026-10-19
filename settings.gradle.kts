@@ -5,6 +5,8 @@ pluginManagement {
         maven("https://maven.aliyun.com/repository/google")
         mavenCentral()
         gradlePluginPortal()
+        // CI 已验证可达；放在现有源之后兜底，避免单镜像瞬时解析失败（不改依赖版本）
+        maven("https://mirrors.cloud.tencent.com/nexus/repository/maven-public/")
     }
 }
 
@@ -15,6 +17,7 @@ dependencyResolutionManagement {
         maven("https://maven.aliyun.com/repository/google")
         mavenCentral()
         maven("https://maven.aliyun.com/repository/public")
+        maven("https://mirrors.cloud.tencent.com/nexus/repository/maven-public/")
     }
 }
 
