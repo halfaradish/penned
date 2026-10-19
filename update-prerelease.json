@@ -1,0 +1,12 @@
+{
+  "versionCode": 3,
+  "versionName": "0.2.0-beta.1",
+  "channel": "prerelease",
+  "publishedAt": "2026-10-19T04:26:51Z",
+  "tag": "v0.2.0-beta.1",
+  "minVersionCode": 1,
+  "changelog": ["新增：标签、退款 / 优惠 / 报销、债务与还款", "新增：账单与截图导入、AI 辅助记账、通知自动记账", "修复：若干已知问题"],
+  "sha256": "1a94cfa28fdd150d180238bc752c47583414881d5c7a19bd2ede67f78a239475",
+  "size": 2600127,
+  "urls": ["https://github.com/halfaradish/penned/releases/download/v0.2.0-beta.1/penned-0.2.0-beta.1.apk"]
+}
