@@ -4,7 +4,7 @@
 
 ## 进行中
 
-**预发布通道（D114，用户点名）——已实现；annotated tag 与签名 Secrets 门均已修复并过全量 gate（1047/0，lint 0 error / 34 warnings），待重发 beta（2026-10-19）**：
+**预发布通道（D114，用户点名）——已实现并首次发布成功（`v0.2.0-beta.1`）；模拟机升级闭环待跑（2026-10-19）**：
 用户要求能发 `v0.2.0-dev` / `-beta` / `-beta.1` 类非正式版：正式版（纯数字）不收非正式版通知，非正式版始终更新到日期最新；
 并指出「beta 收正式版后会掉回正式通道、收不到 0.3.x-beta」的漏洞。落地口径：
 - **双清单**：`update.json` 只由正式版流水写；`update-prerelease.json` 每次发版覆盖（正式版 base 不倒退时也写，beta 用户跟着升正式版）。清单 v1.1 加可选 `channel` / `publishedAt` / `tag`；0.1.0 只认正式清单，服务端隔离是它唯一防线。
@@ -17,7 +17,8 @@
 - **annotated tag 误判（2026-10-19）**：第二次 release run `39192839376` 对应 `0.2.0-beta.1（3）`，远端 tag `41cdb2f` 经 Git 与 GitHub API 双重核对均为 annotated tag（object type `tag` → commit `b8a3ec9`），但 `actions/checkout@v4` 在 tag 事件按 commit SHA 抓取，生成同名**本地轻量 tag**，导致 workflow 的 `git cat-file -t` 看到 `commit` 并误报。`.github/workflows/release.yml` 已改为在类型检查前显式执行 `git fetch --force origin refs/tags/${TAG}:refs/tags/${TAG}`；本地用同样的“commit SHA → 同名 tag”再拉取流程复现：修复前为 `commit`，修复后为 `tag`，tag 注释可读。顺带修掉测试与发版版本号的耦合：`AboutViewModel` 可注入 `versionName/versionCode`，测试固定 `0.1.0（1）` 而生产默认仍读 `BuildConfig`；全量 **1047/0**、lint **0 error / 34 warnings**。仍无 beta APK / 预发布清单 / GitHub Release；下一次需把该修复提交进 `main`，再用包含修复的提交重打 beta tag。
 - **签名 Secrets 门退出码（2026-10-19）**：重打 tag 后版本门已过，run 进入「检查签名 Secrets」；四个 secret 在日志中均显示 `***`（表示都有值），却仍以 exit 1 失败。根因是脚本把成功标记初始化为 `ok=1`，全部存在时最后 `exit $ok` 反而退出 1。现改为 `missing=0`，缺项才置 1，最后 `exit "$missing"`；这不是 Repository secrets 配置错误。
 - **CI 插件解析根因与修复（2026-10-19）**：run `39196638942` 前 8 步全过，`assembleRelease` 在解析 KSP `2.3.12` 插件时失败。临时 diag run `39198597884` 在同一 runner 上实测：阿里云 `gradle-plugin` 对 KSP POM 返回 **502**，Maven Central 200、Gradle Plugin Portal 303、腾讯 maven-public 200；Gradle 遇首个仓库 502 会**终止插件解析**，不会继续尝试后面的仓库。按 D115 改为 `com.google.devtools.ksp` 组走 `exclusiveContent` → Maven Central，保留原镜像顺序与腾讯兜底；全新 `GRADLE_USER_HOME` 的 `help --info` 已确认 KSP 全链路从 Maven Central 解析成功。临时 `diag.yml` 已删除。
-- **未做（不造假）**：真实 beta 尚未发布；模拟机闭环（0.1.0 正式机不提示 beta → 手装 beta → beta.1 自动提示 → 正式版把 beta 带回）待跑；`makeUpdateJson` 已用本机签名 APK 干跑出 `channel=stable` 清单（`build/tmp/updateTest.json`，未入库）；`release_channels.py --self-test` 5 正常 + 5 失败本地已绿，CI 已实际跑到首个 tag 的版本门。
+- **首次 beta 发布成功（2026-10-19）**：修复提交 `9bfcb5a`，annotated tag `v0.2.0-beta.1` → `9bfcb5a`；release run `39199056553` 全绿。GitHub Release 已标记 prerelease，资产为 `penned-0.2.0-beta.1.apk`（2,600,127 bytes）与 `update-prerelease.json`（566 bytes）；预发布清单 `versionCode=3`、`channel=prerelease`、sha256 与 APK 对得上。正式 `update.json` 保持 `versionCode=1 / 0.1.0` 未变；bot 已把预发布清单提回 `main`（`f601ed0`）。
+- **未做（不造假）**：模拟机闭环（0.1.0 正式机不提示 beta → 手装 beta → beta.1 自动提示 → 正式版把 beta 带回）待跑；`makeUpdateJson` 已用本机签名 APK 干跑出 `channel=stable` 清单（`build/tmp/updateTest.json`，未入库）；`release_channels.py --self-test` 5 正常 + 5 失败本地已绿，真实 beta 发布流水已全绿。
 
 **AI 设置·供应商预选（用户点名）——已交付（2026-10-18，两片）**：四档预置（DeepSeek / OpenCode Zen / OpenCode Go / 自定义），
 **四样配置每家各存一份、切家不串台**，老配置按地址自动认领（决策 **D113**，规范 **§13·补三十九**）。切片：`2818b76` 纯逻辑
