@@ -54,6 +54,22 @@ class LlmProviderTest {
     }
 
     @Test
+    fun `只有 Go 要求会话头_地址是文档给的 OpenAI 兼容基址`() {
+        // D116：Go 的 OpenAI 兼容基址在 /inference/go/openai/v1（不是旧预置的 /zen/go/v1）
+        assertEquals("https://opencode.ai/inference/go/openai/v1", LlmProvider.OPENCODE_GO.presetBaseUrl)
+        assertEquals("x-opencode-session", LlmProvider.OPENCODE_GO.sessionHeader)
+        LlmProvider.entries.filter { it != LlmProvider.OPENCODE_GO }.forEach {
+            assertNull("${it.label} 不该要求会话头", it.sessionHeader)
+        }
+        // 旧预置仍能被认回 Go（D113 装过的用户要能平滑升级）
+        assertEquals(
+            LlmProvider.OPENCODE_GO,
+            LlmProvider.inferByBaseUrl(LlmProvider.LEGACY_OPENCODE_GO_BASE_URL),
+        )
+        assertTrue(LlmProvider.LEGACY_OPENCODE_GO_BASE_URL != LlmProvider.OPENCODE_GO.presetBaseUrl)
+    }
+
+    @Test
     fun `老配置按地址认领_表驱动`() {
         val cases = listOf(
             "https://api.deepseek.com" to LlmProvider.DEEPSEEK,

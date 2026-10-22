@@ -193,7 +193,7 @@ class AiSettingsScreenTest {
         }
         // 四档都在，副标题 = 预置地址（自定义那档给一句说明）
         LlmProvider.entries.forEach { composeRule.onNodeWithText(it.label).assertIsDisplayed() }
-        composeRule.onNodeWithText("https://opencode.ai/zen/go/v1").assertIsDisplayed()
+        composeRule.onNodeWithText(LlmProvider.OPENCODE_GO.presetBaseUrl!!).assertIsDisplayed()
         composeRule.onNodeWithText("地址、模型、Key 都自己填").assertIsDisplayed()
         // 「已选」只出现在当前那行，且只有一处
         assertEquals(1, composeRule.onAllNodesWithText("已选").fetchSemanticsNodes().size)

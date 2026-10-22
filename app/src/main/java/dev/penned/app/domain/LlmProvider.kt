@@ -23,6 +23,13 @@ enum class LlmProvider(
     val presetModel: String?,
     /** 设置页「供应商」行下面那行口径提示（只讲"这家有什么不一样"）。 */
     val hint: String,
+    /**
+     * 这家网关要求的**额外请求头**（头名；值由设置层生成稳定 ID）：null = 不要求。
+     *
+     * OpenCode Go 是唯一一家要的：缺 `x-opencode-session` 时它在鉴权**之前**就回 400
+     * `MissingSessionID`（D116 实测），所以这个头不是可选项。
+     */
+    val sessionHeader: String? = null,
 ) {
     DEEPSEEK(
         id = "deepseek",
@@ -41,9 +48,11 @@ enum class LlmProvider(
     OPENCODE_GO(
         id = "opencode-go",
         label = "OpenCode Go",
-        presetBaseUrl = "https://opencode.ai/zen/go/v1",
+        // Go 的 OpenAI 兼容基址在 /inference/go/openai/v1；旧预置的 /zen/go/v1 会被 repair 换掉（D116）
+        presetBaseUrl = "https://opencode.ai/inference/go/openai/v1",
         presetModel = "deepseek-v4.1-flash",
-        hint = "订阅版网关（Go / Go Plus）；模型范围与 Zen 略不同，同样用不了 GPT / Claude / Gemini 那批",
+        hint = "订阅版网关（Go / Go Plus）；Key 要建在已订阅 Go 的 workspace 上，只走 OpenAI 兼容路由",
+        sessionHeader = "x-opencode-session",
     ),
     CUSTOM(
         id = "custom",
@@ -57,6 +66,12 @@ enum class LlmProvider(
     companion object {
         /** 没选过时的默认档（= 老用户那份扁平配置的落点）。 */
         val DEFAULT: LlmProvider = CUSTOM
+
+        /**
+         * D113 里 Go 预置错的地址（D116 换成 [OPENCODE_GO] 的正式地址）。
+         * 只用来**精确匹配**旧值做一次性修复——用户自己填的其它地址一概不碰。
+         */
+        const val LEGACY_OPENCODE_GO_BASE_URL = "https://opencode.ai/zen/go/v1"
 
         /** 认不出的 id 一律落到 [DEFAULT]（存储里存的是 [id]，将来加/删档也不能炸）。 */
         fun fromId(id: String?): LlmProvider = entries.firstOrNull { it.id == id } ?: DEFAULT

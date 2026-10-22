@@ -240,4 +240,59 @@ class IntelligenceSettingsTest {
         settings.setLlmBaseUrl(LlmProvider.CUSTOM, "http://127.0.0.1:8080/v1")
         assertNull(settings.activeLlmConfig())
     }
+
+    // ---- OpenCode Go 的会话头与旧地址修复（D116）----
+
+    @Test
+    fun `Go 的配置带稳定会话头 别家不带`() = runTest {
+        resetLlm()
+        settings.setLlmEnabled(true)
+        settings.setLlmProvider(LlmProvider.OPENCODE_GO)
+        settings.setLlmBaseUrl(LlmProvider.OPENCODE_GO, LlmProvider.OPENCODE_GO.presetBaseUrl)
+        settings.setLlmApiKey(LlmProvider.OPENCODE_GO, "sk-go")
+        settings.setLlmModel(LlmProvider.OPENCODE_GO, "deepseek-v4.1-flash")
+
+        val first = settings.activeLlmConfig()
+        val second = settings.activeLlmConfig()
+        assertEquals(setOf("x-opencode-session"), first?.extraHeaders?.keys)
+        assertTrue(first?.extraHeaders?.getValue("x-opencode-session").orEmpty().isNotBlank())
+        // 同一台机器上稳定（网关拿它做路由/提示词缓存）
+        assertEquals(first?.extraHeaders, second?.extraHeaders)
+
+        // 只有 Go 要；其余家是空表
+        assertTrue(settings.llmExtraHeaders(LlmProvider.DEEPSEEK).isEmpty())
+        assertTrue(settings.llmExtraHeaders(LlmProvider.OPENCODE_ZEN).isEmpty())
+        assertTrue(settings.llmExtraHeaders(LlmProvider.CUSTOM).isEmpty())
+    }
+
+    @Test
+    fun `旧 Go 地址被换成新预置 用户自填的不动`() = runTest {
+        resetLlm()
+        settings.setLlmEnabled(true)
+        settings.setLlmProvider(LlmProvider.OPENCODE_GO)
+        settings.setLlmApiKey(LlmProvider.OPENCODE_GO, "sk-go")
+        settings.setLlmModel(LlmProvider.OPENCODE_GO, "deepseek-v4.1-flash")
+
+        // D113 预置的旧地址（带不带尾斜杠都算）→ 读配置时自动修
+        settings.setLlmBaseUrl(LlmProvider.OPENCODE_GO, "${LlmProvider.LEGACY_OPENCODE_GO_BASE_URL}/")
+        assertEquals(
+            LlmProvider.OPENCODE_GO.presetBaseUrl,
+            settings.activeLlmConfig()?.baseUrl,
+        )
+        assertEquals(
+            LlmProvider.OPENCODE_GO.presetBaseUrl,
+            settings.llmFields(LlmProvider.OPENCODE_GO).baseUrl,
+        )
+
+        // 用户自己填的地址一概不碰
+        settings.setLlmBaseUrl(LlmProvider.OPENCODE_GO, "https://my-proxy.example/v1")
+        settings.repairLegacyLlmPresetIfNeeded()
+        assertEquals("https://my-proxy.example/v1", settings.llmFields(LlmProvider.OPENCODE_GO).baseUrl)
+
+        // 不是 Go 那家时也不碰
+        settings.setLlmProvider(LlmProvider.CUSTOM)
+        settings.setLlmBaseUrl(LlmProvider.CUSTOM, LlmProvider.LEGACY_OPENCODE_GO_BASE_URL)
+        settings.repairLegacyLlmPresetIfNeeded()
+        assertEquals(LlmProvider.LEGACY_OPENCODE_GO_BASE_URL, settings.llmFields(LlmProvider.CUSTOM).baseUrl)
+    }
 }

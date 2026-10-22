@@ -201,6 +201,9 @@ class LlmClient(private val okHttp: OkHttpClient = defaultClient()) {
             .url(config.chatCompletionsUrl)
             .header("Authorization", "Bearer ${config.apiKey}")
             .header("Content-Type", "application/json")
+            // 网关（尤其 OpenCode Go）要求客户端用自己的 UA，不要用 okhttp 这类通用库名（D116）
+            .header("User-Agent", "penned/${dev.penned.app.BuildConfig.VERSION_NAME}")
+            .apply { config.extraHeaders.forEach { (name, value) -> header(name, value) } }
             .post(payload.toString().toRequestBody(JSON))
             .build()
     }

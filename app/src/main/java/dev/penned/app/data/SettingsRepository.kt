@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.io.File
+import java.util.UUID
 
 /** 一家供应商的四样配置（null = 这一家还没配过）。自定义那档落在 M4 的四个老键上（D113）。 */
 data class LlmFields(
@@ -196,12 +197,49 @@ class SettingsRepository(private val context: Context) {
      * 截图导入与账单导入共用这一份口径（M4 时两处各抄了一遍，D113 收口到这里）。
      */
     suspend fun activeLlmConfig(): LlmConfig? {
+        // 消费路径也要认领/修一次：用户可能升级后直奔截图导入，没进过 AI 设置页（D116）
+        adoptLegacyLlmConfigIfNeeded()
+        repairLegacyLlmPresetIfNeeded()
         if (!llmEnabled.first()) return null
-        val fields = llmFields(LlmProvider.fromId(llmProvider.first()))
+        val provider = LlmProvider.fromId(llmProvider.first())
+        val fields = llmFields(provider)
         if (LlmEndpoints.validate(fields.baseUrl, fields.apiKey, fields.model) != null) return null
         return LlmEndpoints.config(
             fields.baseUrl.orEmpty(), fields.apiKey.orEmpty(), fields.model.orEmpty(), fields.visionModel,
+            extraHeaders = llmExtraHeaders(provider),
         )
+    }
+
+    /**
+     * 这家网关要求的额外请求头（D116）。目前只有 OpenCode Go：缺 `x-opencode-session` 时
+     * 它在鉴权之前就回 400 `MissingSessionID`——值是本机稳定会话 ID（网关用来做路由/提示词缓存）。
+     */
+    suspend fun llmExtraHeaders(provider: LlmProvider): Map<String, String> =
+        provider.sessionHeader?.let { mapOf(it to llmSessionId()) }.orEmpty()
+
+    /**
+     * 修掉 D113 里预置错的 Go 地址（D116）：只把**恰好等于旧预置**的值换成新预置，
+     * 用户自己填的其它地址一概不碰；当前供应商不是 Go 时什么都不做。
+     */
+    suspend fun repairLegacyLlmPresetIfNeeded() {
+        val prefs = context.settingsDataStore().data.first()
+        val provider = LlmProvider.fromId(prefs[KEY_LLM_PROVIDER])
+        if (provider != LlmProvider.OPENCODE_GO) return
+        val key = keyLlm(provider, LlmSlot.BASE_URL)
+        val stored = prefs[key]?.trim()?.trimEnd('/') ?: return
+        if (!stored.equals(LlmProvider.LEGACY_OPENCODE_GO_BASE_URL, ignoreCase = true)) return
+        val fixed = provider.presetBaseUrl ?: return
+        context.settingsDataStore().edit { it[key] = fixed }
+    }
+
+    /** 本机稳定会话 ID（随机 UUID，只用于网关路由/缓存，不含任何用户信息）；首次读到就落盘。 */
+    private suspend fun llmSessionId(): String {
+        val prefs = context.settingsDataStore().edit { current ->
+            if (current[KEY_LLM_SESSION_ID].isNullOrBlank()) {
+                current[KEY_LLM_SESSION_ID] = UUID.randomUUID().toString()
+            }
+        }
+        return prefs[KEY_LLM_SESSION_ID].orEmpty()
     }
 
     /**
@@ -332,6 +370,7 @@ class SettingsRepository(private val context: Context) {
         private val KEY_LLM_API_KEY = stringPreferencesKey("llm_api_key")
         private val KEY_LLM_MODEL = stringPreferencesKey("llm_model")
         private val KEY_LLM_VISION_MODEL = stringPreferencesKey("llm_vision_model")
+        private val KEY_LLM_SESSION_ID = stringPreferencesKey("llm_session_id")
         private val KEY_AUTO_ENTRY_ENABLED = booleanPreferencesKey("auto_entry_enabled")
         private val KEY_AUTO_ENTRY_PACKAGES = stringPreferencesKey("auto_entry_packages")
     }

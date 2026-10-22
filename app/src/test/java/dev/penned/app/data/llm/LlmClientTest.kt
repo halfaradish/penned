@@ -172,6 +172,30 @@ class LlmClientTest {
     }
 
     @Test
+    fun `供应商要求的额外请求头原样带上`() {
+        server.on(CHAT_PATH, body = okBody("""{"amount":1}"""))
+        val config = LlmEndpoints.config(
+            TEST_BASE, "sk", "glm-4.6", null,
+            extraHeaders = mapOf("x-opencode-session" to "sess-123"),
+        )
+        runBlocking { client.complete(config, "x") }
+
+        val request = server.requests.single()
+        assertEquals("sess-123", request.headers["x-opencode-session"])
+        // 标准头照旧（额外头不是替身），且用自家 UA 而不是 okhttp/…
+        assertEquals("Bearer sk", request.headers["authorization"])
+        assertEquals("application/json; charset=utf-8", request.headers["content-type"])
+        assertTrue(request.headers["user-agent"].orEmpty().startsWith("penned/"))
+    }
+
+    @Test
+    fun `没要求额外头的供应商不多发头`() {
+        server.on(CHAT_PATH, body = okBody("""{"amount":1}"""))
+        runBlocking { client.complete(config(), "x") }
+        assertEquals(null, server.requests.single().headers["x-opencode-session"])
+    }
+
+    @Test
     fun `测试连接_通与不通`() {
         server.on(CHAT_PATH, body = okBody("""{"amount":0.01}"""))
         assertEquals(null, runBlocking { client.testConnection(config()) })

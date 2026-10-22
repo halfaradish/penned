@@ -4,6 +4,17 @@
 
 ## 进行中
 
+**OpenCode Go 供应商修复（D116，2026-10-22，用户报障）——已修复并实测通过（用户换新 Key 后 200；测试经宿主代理绕过模拟机 NAT 故障）**：
+用户报「AI 设置里的 OpenCode Go 配好后，测试连接报『请求被拒（4xx）』」。逐层实测（匿名 curl + 官方文档/源码）定位到三个叠在一起的问题：
+- **基址**：D113 预置的 `https://opencode.ai/zen/go/v1` 是控制台旧口径；Go 的 OpenAI 兼容基址是 `https://opencode.ai/inference/go/openai/v1`。
+- **缺会话头（4xx 的直接原因）**：Go 网关在鉴权之前要求 `x-opencode-session`，缺了回 **400 MissingSessionID**；文档 `Where can I use it` 第 3 条明确要求。
+- **UA**：文档要求客户端用自己的 User-Agent（不要 okhttp 这类库名），原来发的是 `okhttp/4.12.0`。
+- **修法**：`LlmConfig.extraHeaders` + `LlmProvider.sessionHeader`（只有 Go 要 `x-opencode-session`）；`SettingsRepository` 生成并持久化稳定 UUID（`llm_session_id`）；`activeLlmConfig()` 与「测试连接」共用同一份头；客户端统一 `User-Agent: penned/<version>`；旧预置地址按精确值一次性修复（进设置/消费时都修）；Go 的 401 文案改成「Key 无效或没开通 Go（401）：确认 Key 建在已订阅 Go / Go Plus 的 workspace 上」。
+- **测试**：`LlmClientTest`（额外头透传 / 自家 UA / 别家不多发）、`LlmProviderTest`（新基址 + 仅 Go 要会话头）、`IntelligenceSettingsTest`（会话 ID 稳定、只 Go 带、旧地址修复不碰自填）、`AiSettingsScreenTest`（抽屉副标题随预置走）；全量 **1052 / 0 失败**（1016 → 1036 → 1052），lint **0 error / 36 warnings**（改动文件无新增告警）。全量首轮/次轮撞到四处已知 Robolectric+Compose flake（`AddDebtFlowTest`、`AddEditSubCategoryTest`、`AddReimburseFlowTest`、`AddRefundFlowTest`），单跑四处全过，复跑全量绿。
+- **模拟机（GxuDev，`emulator-5554`，debug 0.2.0-beta.1，保留原数据）**：进 AI 设置时旧地址已自动变成 `https://opencode.ai/inference/go/openai/v1`；旧 Key 时期错误从 **400 MissingSessionID** 变为 **401 Invalid credential**（会话头已通过）。只核对元信息发现 Go 槽位是一把 **53 字符的旧 Key，前缀不是用户新 Key 的 `oc_sk_66d3679a57a1`**——401 的真正原因是 App 还没用上新 Key（DeepSeek 的 401 是用户轮换 Key，属预期）。用户更新 Key 后，存储里是 **51 字符、前缀匹配、无空白** 的新 Key；再点测试连接 → **「连上了：deepseek-v4.1-flash 回话正常」**（截图 `docs/local/界面重构验证/go_ok.png`）。**注意**：当时模拟机 NAT 出站已坏（连 `1.1.1.1:443` 都超时，路由表缺默认路由/重启未恢复），测试经宿主侧 CONNECT 代理转发 TCP（只转发字节，不解密、不读请求体）；App 请求本身没改，代理只是替代坏掉的模拟机出网。
+- **顺带加固**：AI 设置的写入从 `viewModelScope` 改到应用级协程（`appScopeLaunch`）——粘贴 Key 后立刻返回时，最后一笔写入不再可能被页面销毁取消。
+- **未验（缺料，不造假）**：OpenCode Zen 连接（没有 Zen Key）；模拟机 NAT 出站的恢复（测试用宿主代理绕过，不影响 App 侧结论）。
+
 **预发布通道（D114，用户点名）——已实现并首次发布成功（`v0.2.0-beta.1`）；模拟机升级闭环待跑（2026-10-19）**：
 用户要求能发 `v0.2.0-dev` / `-beta` / `-beta.1` 类非正式版：正式版（纯数字）不收非正式版通知，非正式版始终更新到日期最新；
 并指出「beta 收正式版后会掉回正式通道、收不到 0.3.x-beta」的漏洞。落地口径：

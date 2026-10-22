@@ -24,6 +24,11 @@ data class LlmConfig(
     val model: String,
     /** 视觉模型：空 = 跟 [model]（同一家的多模态型号常常就是同一个名字）。 */
     val visionModel: String?,
+    /**
+     * 供应商网关要求的额外请求头（D116）：目前只有 OpenCode Go 的 `x-opencode-session`。
+     * 空 = 只发标准的 Authorization / Content-Type。
+     */
+    val extraHeaders: Map<String, String> = emptyMap(),
 ) {
     /** OpenAI 兼容的对话端点。 */
     val chatCompletionsUrl: String get() = "$baseUrl/chat/completions"
@@ -62,12 +67,19 @@ object LlmEndpoints {
     }
 
     /** 归一一份可用配置（调用方已过 [validate]）。 */
-    fun config(baseUrl: String, apiKey: String, model: String, visionModel: String?): LlmConfig =
+    fun config(
+        baseUrl: String,
+        apiKey: String,
+        model: String,
+        visionModel: String?,
+        extraHeaders: Map<String, String> = emptyMap(),
+    ): LlmConfig =
         LlmConfig(
             baseUrl = baseUrl.trim().trimEnd('/'),
             apiKey = apiKey.trim(),
             model = model.trim(),
             visionModel = visionModel?.trim()?.takeIf { it.isNotEmpty() },
+            extraHeaders = extraHeaders,
         )
 
     /** 校验失败时给用户看的一句话。 */

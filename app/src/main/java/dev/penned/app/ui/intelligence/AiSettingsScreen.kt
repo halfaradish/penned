@@ -130,6 +130,8 @@ class AiSettingsViewModel(private val app: PennedApplication) : ViewModel() {
      */
     suspend fun load(): AiSettingsUiState {
         app.settings.adoptLegacyLlmConfigIfNeeded()
+        // D116：D113 预置错的 Go 地址在这里一次修掉（只认旧预置的精确值）
+        app.settings.repairLegacyLlmPresetIfNeeded()
         return currentState()
     }
 
@@ -202,22 +204,31 @@ class AiSettingsViewModel(private val app: PennedApplication) : ViewModel() {
         }
         _test.value = TestState.Testing
         viewModelScope.launch {
-            val config = LlmEndpoints.config(snapshot.baseUrl, snapshot.apiKey, snapshot.model, snapshot.visionModel)
+            // 与两条导入路径同一份口径：Go 这类网关要求的会话头也一起带上（D116）
+            val config = LlmEndpoints.config(
+                snapshot.baseUrl, snapshot.apiKey, snapshot.model, snapshot.visionModel,
+                extraHeaders = app.settings.llmExtraHeaders(snapshot.provider),
+            )
             _test.value = when (val result = client.extractText(config, LlmClient.TEST_PROMPT)) {
                 is LlmResult.Ok -> TestState.Ok(result.model)
-                is LlmResult.Err -> TestState.Failed(testMessage(result.reason))
+                is LlmResult.Err -> TestState.Failed(testMessage(result.reason, snapshot.provider))
             }
         }
     }
 
     /** 把每个失败原因落到**不同的一句话**（页面直接显示）。 */
-    private fun testMessage(reason: LlmError): String = when (reason) {
+    private fun testMessage(reason: LlmError, provider: LlmProvider): String = when (reason) {
         LlmError.NOT_CONFIGURED -> "还没配好：服务地址、API Key、模型都要填"
         LlmError.INSECURE_URL -> "只支持 https 地址（正式版禁明文）"
         LlmError.MALFORMED_URL -> "地址格式不对，形如 https://open.bigmodel.cn/api/paas/v4"
         LlmError.NETWORK -> "连不上：检查网络或地址"
         LlmError.TIMEOUT -> "超时：服务没在 60 秒内回话"
-        LlmError.UNAUTHORIZED -> "Key 无效（401）"
+        LlmError.UNAUTHORIZED -> if (provider == LlmProvider.OPENCODE_GO) {
+            // Go 的 Key 绑 workspace：没订阅 Go / 建在别的 workspace 都会得到同一个 401（D116）
+            "Key 无效或没开通 Go（401）：确认 Key 建在已订阅 Go / Go Plus 的 workspace 上"
+        } else {
+            "Key 无效（401）"
+        }
         LlmError.FORBIDDEN -> "没有权限（403）"
         LlmError.RATE_LIMITED -> "被限流了（429），等会儿再试"
         LlmError.REJECTED -> "请求被拒（4xx）：地址或模型名不对，或这个模型不支持这种用法"
@@ -226,7 +237,9 @@ class AiSettingsViewModel(private val app: PennedApplication) : ViewModel() {
     }
 
     private fun persist(block: suspend () -> Unit) {
-        viewModelScope.launch { block() }
+        // 设置写入**不能绑页面生命周期**：粘贴完 Key 立刻返回时 viewModelScope 会被取消，
+        // 最后一笔写入可能没落盘（D116 排查：App 里仍是旧 Key）。改走应用级协程。
+        app.appScopeLaunch(block)
     }
 }
 
