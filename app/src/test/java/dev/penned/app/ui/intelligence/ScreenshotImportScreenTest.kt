@@ -42,9 +42,18 @@ class ScreenshotImportScreenTest {
         endpointLabel = "open.bigmodel.cn",
         modelLabel = "glm-4v",
         rows = listOf(
-            ScreenshotRow("r1", TxType.EXPENSE, 6707, "拼多多平台商户", 29_870_021L, true, false),
-            ScreenshotRow("r2", TxType.EXPENSE, 1200, "西大朴诚食堂 自动扣款成功", 29_869_000L, true, false),
-            ScreenshotRow("r3", TxType.INCOME, 8800, "微信红包-来自姐姐", 29_869_000L, true, true),
+            ScreenshotRow(
+                "r1", TxType.EXPENSE, 6707, "拼多多平台商户", 29_870_021L, true, false,
+                merchant = "拼多多平台商户", categoryId = "c1", categoryName = "购物消费",
+            ),
+            ScreenshotRow(
+                "r2", TxType.EXPENSE, 1200, "西大朴诚食堂 自动扣款成功", 29_869_000L, true, false,
+                merchant = "西大朴诚食堂", categoryId = "c2", categoryName = "食品餐饮 / 午餐",
+            ),
+            ScreenshotRow(
+                "r3", TxType.INCOME, 8800, "微信红包-来自姐姐", 29_869_000L, true, true,
+                merchant = "微信红包-来自姐姐", categoryId = "c3", categoryName = "红包",
+            ),
         ),
         droppedRows = 1,
         accounts = listOf(AccountOption("a1", "微信零钱"), AccountOption("a2", "中国银行储蓄卡")),
@@ -73,6 +82,9 @@ class ScreenshotImportScreenTest {
         composeRule.onNodeWithText("识别到 3 笔，确认后一起导入").assertIsDisplayed()
         composeRule.onNodeWithText("微信零钱").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("拼多多平台商户").performScrollTo().assertIsDisplayed()
+        // AI 贴上的分类逐行显示（重复行的分类不计入"已贴"）
+        composeRule.onNodeWithText("已贴 2 笔").assertIsDisplayed()
+        composeRule.onNodeWithText("食品餐饮 / 午餐").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("全部导入 2 笔").performScrollTo().assertIsDisplayed()
         capture("m4_list_preview")
     }
@@ -110,7 +122,9 @@ class ScreenshotImportScreenTest {
             }
         }
         composeRule.onNodeWithTag(SCREENSHOT_PRIVACY_TAG).assertIsDisplayed()
-        composeRule.onNodeWithText("这张图将发送给 open.bigmodel.cn / glm-4v").assertIsDisplayed()
+        composeRule.onNodeWithText(
+            "这张图将发送给 open.bigmodel.cn / glm-4v；归类只额外发商户名与现有分类名（不发金额、时间、单号）",
+        ).assertIsDisplayed()
         composeRule.onNodeWithText("正在识别第 2/3 张…").assertIsDisplayed()
         capture("m4_screenshot_recognizing")
     }

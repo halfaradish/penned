@@ -40,6 +40,7 @@ import androidx.lifecycle.viewModelScope
 import dev.penned.app.PennedApplication
 import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.data.db.entity.BookEntity
+import dev.penned.app.data.db.entity.CategoryEntity
 import dev.penned.app.data.importer.AccountMapping
 import dev.penned.app.data.importer.BillContainer
 import dev.penned.app.data.importer.BillFile
@@ -58,10 +59,13 @@ import dev.penned.app.domain.AccountGuess
 import dev.penned.app.domain.AccountType
 import dev.penned.app.domain.BillDedupe
 import dev.penned.app.domain.BillRowCounts
+import dev.penned.app.domain.CategoryAssignment
+import dev.penned.app.domain.CategorySource
 import dev.penned.app.domain.ColumnMappingSuggestion
 import dev.penned.app.domain.LlmConfig
 import dev.penned.app.domain.LlmSuggestions
 import dev.penned.app.domain.MerchantCategorySuggestion
+import dev.penned.app.domain.MerchantNeed
 import dev.penned.app.domain.RuleTargetType
 import dev.penned.app.domain.Money
 import dev.penned.app.ui.components.PennedButton
@@ -109,9 +113,10 @@ data class BillImportUiState(
     val accounts: List<AccountEntity> = emptyList(),
     val books: List<BookEntity> = emptyList(),
     val targetBookId: String? = null,
-    /** 分类来源说明：分类列命中 / 关键词规则命中 / 待补。 */
+    /** 分类来源说明：分类列命中 / 关键词规则命中 / AI 建议 / 待补。 */
     val categoryFromColumn: Int = 0,
     val categoryFromRule: Int = 0,
+    val categoryFromAi: Int = 0,
     val categoryMissing: Int = 0,
     /** 通用模式的表头（认不出两家来源时才有；列映射 UI 用）。 */
     val genericHeader: List<String> = emptyList(),
@@ -156,6 +161,9 @@ class BillImportViewModel(
     private var lastFile: BillFile? = null
     private val assist = LlmImportAssist()
 
+    /** AI 贴过的分类：key = 方向 + 商户名（`MerchantNeed.key`），value = 本账本现有分类 id。 */
+    private val aiCategoryByKey = HashMap<String, String>()
+
     fun load(charsetOverride: Charset? = null) {
         viewModelScope.launch {
             _state.value = _state.value.copy(loading = true, error = null)
@@ -180,72 +188,92 @@ class BillImportViewModel(
     /** 解析结果 → 一页状态（查重、账户映射、分类来源统计都在这里收口；通用模式重解析也走它）。 */
     private suspend fun refreshFrom(parsedBill: ParsedBill, file: BillFile) {
         parsed = parsedBill
-        run {
-            run {
-                val bookId = app.settings.currentBookId.first()
-                val importableRows = parsedBill.rows.filterNotNull()
-                val existingIds = bookId?.let { id ->
-                    repo.existingExternalIds(id, importableRows.mapNotNull { it.externalId })
-                } ?: emptySet()
-                val minutes = importableRows.map { it.dateEpochMinute }
-                val existingKeys = bookId?.let { id ->
-                    if (minutes.isEmpty()) emptySet() else {
-                        repo.existingFallbackKeys(id, minutes.min(), minutes.max())
-                    }
-                } ?: emptySet()
-                val (keep, dup) = BillDedupe.partition(importableRows, existingIds, existingKeys)
-
-                val mappings = bookId?.let { repo.buildAccountMappings(it, keep) } ?: emptyList()
-                val accounts = bookId?.let { app.database.accountDao().allInBook(it) } ?: emptyList()
-                val books = app.database.bookDao().observeAll().first()
-                val categories = bookId?.let { app.database.categoryDao().allInBook(it) } ?: emptyList()
-                val rules = bookId?.let { app.database.keywordRuleDao().allInBook(it) } ?: emptyList()
-                var fromColumn = 0
-                var fromRule = 0
-                var missing = 0
-                keep.forEach { row ->
-                    val hint = row.categoryHint
-                    val byName = hint != null && categories.any { it.name == hint }
-                    val resolved = repo.resolveCategoryId(bookId ?: "", row, categories, rules)
-                    when {
-                        resolved == null -> missing++
-                        byName -> fromColumn++
-                        else -> fromRule++
-                    }
-                }
-
-                _state.value = BillImportUiState(
-                    loading = false,
-                    fileName = fileName,
-                    source = parsedBill.source,
-                    // 通用模式（认不出两家来源）才给列映射 UI：第 1 行当表头
-                    genericHeader = if (parsedBill.source == BillSource.GENERIC) {
-                        file.rows.firstOrNull().orEmpty()
-                    } else {
-                        emptyList()
-                    },
-                    // 通用模式重解析时保留当前映射（首帧为空 = 还没认列）
-                    genericMapping = if (parsedBill.source == BillSource.GENERIC) {
-                        _state.value.genericMapping
-                    } else {
-                        emptyMap()
-                    },
-                    container = file.container,
-                    charsetLabel = file.charsetLabel,
-                    headerRowIndex = parsedBill.headerRowIndex,
-                    // 计数卡上的"将导入"要的是**去重后**的数（不是解析出的候选数），否则
-                    // "将导入 + 重复"会超过总行数——真机走查一眼看出来的
-                    counts = parsedBill.counts.copy(importable = keep.size, duplicate = dup.size),
-                    importable = keep,
-                    mappings = mappings,
-                    accounts = accounts,
-                    books = books,
-                    targetBookId = bookId,
-                    categoryFromColumn = fromColumn,
-                    categoryFromRule = fromRule,
-                    categoryMissing = missing,
-                )
+        val bookId = app.settings.currentBookId.first()
+        val importableRows = parsedBill.rows.filterNotNull()
+        val existingIds = bookId?.let { id ->
+            repo.existingExternalIds(id, importableRows.mapNotNull { it.externalId })
+        } ?: emptySet()
+        val minutes = importableRows.map { it.dateEpochMinute }
+        val existingKeys = bookId?.let { id ->
+            if (minutes.isEmpty()) emptySet() else {
+                repo.existingFallbackKeys(id, minutes.min(), minutes.max())
             }
+        } ?: emptySet()
+        val (keep, dup) = BillDedupe.partition(importableRows, existingIds, existingKeys)
+
+        val mappings = bookId?.let { repo.buildAccountMappings(it, keep) } ?: emptyList()
+        val accounts = bookId?.let { app.database.accountDao().allInBook(it) } ?: emptyList()
+        val books = app.database.bookDao().observeAll().first()
+        val categories = bookId?.let { app.database.categoryDao().allInBook(it) } ?: emptyList()
+        val rules = bookId?.let { app.database.keywordRuleDao().allInBook(it) } ?: emptyList()
+
+        // AI 建议来自商户名；重解析 / 切编码后按同一份映射重新贴上（不丢）
+        val annotated = applyAiCategory(keep)
+        val categoryCounts = countCategorySources(annotated, categories, rules)
+
+        _state.value = BillImportUiState(
+            loading = false,
+            fileName = fileName,
+            source = parsedBill.source,
+            // 通用模式（认不出两家来源）才给列映射 UI：第 1 行当表头
+            genericHeader = if (parsedBill.source == BillSource.GENERIC) {
+                file.rows.firstOrNull().orEmpty()
+            } else {
+                emptyList()
+            },
+            // 通用模式重解析时保留当前映射（首帧为空 = 还没认列）
+            genericMapping = if (parsedBill.source == BillSource.GENERIC) {
+                _state.value.genericMapping
+            } else {
+                emptyMap()
+            },
+            container = file.container,
+            charsetLabel = file.charsetLabel,
+            headerRowIndex = parsedBill.headerRowIndex,
+            // 计数卡上的"将导入"要的是**去重后**的数（不是解析出的候选数），否则
+            // "将导入 + 重复"会超过总行数——真机走查一眼看出来的
+            counts = parsedBill.counts.copy(importable = keep.size, duplicate = dup.size),
+            importable = annotated,
+            mappings = mappings,
+            accounts = accounts,
+            books = books,
+            targetBookId = bookId,
+            categoryFromColumn = categoryCounts.column,
+            categoryFromRule = categoryCounts.rule,
+            categoryFromAi = categoryCounts.ai,
+            categoryMissing = categoryCounts.missing,
+            // 重解析不清掉已经问到的建议与"存为规则"的提示
+            aiMapping = _state.value.aiMapping,
+            aiMerchants = _state.value.aiMerchants,
+            rulesSaved = _state.value.rulesSaved,
+        )
+    }
+
+    /** 把 AI 建议按「方向 + 商户名」贴到行上（匹配不上 = 保持未分类）。 */
+    private fun applyAiCategory(rows: List<dev.penned.app.domain.BillRow>): List<dev.penned.app.domain.BillRow> =
+        rows.map { row ->
+            val merchant = CategoryAssignment.merchantOf(row)
+            val categoryId = merchant?.let { aiCategoryByKey[MerchantNeed.keyOf(it, row.expense)] }
+            row.copy(suggestedCategoryId = categoryId)
+        }
+
+    private data class CategoryCounts(
+        val column: Int = 0,
+        val rule: Int = 0,
+        val ai: Int = 0,
+        val missing: Int = 0,
+    )
+
+    private fun countCategorySources(
+        rows: List<dev.penned.app.domain.BillRow>,
+        categories: List<CategoryEntity>,
+        rules: List<KeywordRuleEntity>,
+    ): CategoryCounts = rows.fold(CategoryCounts()) { acc, row ->
+        when (CategoryAssignment.resolve(row, categories, rules).source) {
+            CategorySource.COLUMN -> acc.copy(column = acc.column + 1)
+            CategorySource.RULE -> acc.copy(rule = acc.rule + 1)
+            CategorySource.AI -> acc.copy(ai = acc.ai + 1)
+            CategorySource.NONE -> acc.copy(missing = acc.missing + 1)
         }
     }
 
@@ -315,7 +343,10 @@ class BillImportViewModel(
         reparseGeneric(mapping)
     }
 
-    /** 「AI 补分类」：只发商户名 + 分类名（≤100/批）。 */
+    /**
+     * 「AI 自动贴分类」：只发商户名 + 分类名（按收支分域、≤100/批），结果**直接贴到将导入的行上**
+     * （D117）——导入时不再需要第二次手动确认，落库就是这些分类。
+     */
     fun requestAiCategories() {
         viewModelScope.launch {
             val config = llmConfig()
@@ -323,39 +354,66 @@ class BillImportViewModel(
                 _state.value = _state.value.copy(aiMessage = OFFLINE_MESSAGE)
                 return@launch
             }
-            _state.value = _state.value.copy(aiBusy = true, aiMessage = null)
-            val bookId = _state.value.targetBookId ?: return@launch
-            val categories = app.database.categoryDao().allInBook(bookId)
-            val paths = categories.map { category ->
-                categories.firstOrNull { it.id == category.parentId }
-                    ?.let { "${it.name} / ${category.name}" } ?: category.name
-            }
-            val merchants = _state.value.importable.mapNotNull { it.note?.substringBefore(" · ") }
-            val collected = mutableListOf<MerchantCategorySuggestion>()
-            for (batch in LlmSuggestions.batchMerchants(merchants)) {
-                when (val result = assist.suggestMerchantCategories(config, batch, paths)) {
-                    is LlmContentResult.Ok ->
-                        collected += LlmSuggestions.parseMerchantCategories(result.content, categories)
+            val current = _state.value
+            val bookId = current.targetBookId ?: return@launch
+            _state.value = current.copy(aiBusy = true, aiMessage = null)
 
-                    is LlmContentResult.Err -> {
-                        _state.value = _state.value.copy(aiBusy = false, aiMessage = aiErrorText(result.reason))
-                        return@launch
-                    }
-                }
+            val categories = app.database.categoryDao().allInBook(bookId)
+            val rules = app.database.keywordRuleDao().allInBook(bookId)
+
+            val needs = current.importable.mapNotNull { row ->
+                CategoryAssignment.merchantOf(row)?.let { MerchantNeed(it, row.expense) }
+            }.distinctBy { it.key }
+            if (needs.isEmpty()) {
+                _state.value = current.copy(
+                    aiBusy = false,
+                    aiMessage = "这些行没有商户列（通用模式可手动映射一列），没法贴分类（会记为未分类）",
+                )
+                return@launch
             }
-            val usable = collected.filter { it.categoryId != null }
-            _state.value = _state.value.copy(
+
+            val outcome = assist.suggestCategories(config, needs, categories)
+            outcome.suggestions
+                .filter { it.categoryId != null }
+                .forEach { suggestion ->
+                    aiCategoryByKey[MerchantNeed.keyOf(suggestion.merchant, suggestion.expense)] =
+                        suggestion.categoryId!!
+                }
+
+            // 网络回来后以最新状态为准（期间可能切了编码 / 改了列映射）
+            val latest = _state.value
+            val annotated = applyAiCategory(latest.importable)
+            val counts = countCategorySources(annotated, categories, rules)
+            val usableCount = outcome.suggestions.count { it.categoryId != null }
+            val message = when {
+                outcome.error != null ->
+                    "AI 贴了 ${counts.ai} 笔；后面失败了：${aiErrorText(outcome.error)}（没贴上的会记为未分类）"
+                usableCount == 0 -> "AI 没认出可用的分类（这些会记为未分类）"
+                else -> null
+            }
+            _state.value = latest.copy(
+                importable = annotated,
                 aiBusy = false,
-                aiMerchants = usable,
-                aiMessage = if (usable.isEmpty()) "AI 没给出可用的分类建议" else null,
+                aiMerchants = outcome.suggestions.filter { it.categoryId != null },
+                aiMessage = message,
+                categoryFromColumn = counts.column,
+                categoryFromRule = counts.rule,
+                categoryFromAi = counts.ai,
+                categoryMissing = counts.missing,
             )
         }
     }
 
     /** 「把这些商户 → 分类存为关键词规则」：写 `keyword_rules`，下次导入/一句话本地命中（不再花 LLM）。 */
     fun saveAsKeywordRules() {
-        val rows = _state.value.aiMerchants
         val bookId = _state.value.targetBookId ?: return
+        // 同一个商户在收支两域给了不同分类时不存（规则表没有"方向"维度，存了会串域）
+        val rows = _state.value.aiMerchants
+            .filter { it.categoryId != null }
+            .groupBy { it.merchant.trim().lowercase() }
+            .values
+            .filter { group -> group.map { it.categoryId }.distinct().size == 1 }
+            .map { it.first() }
         if (rows.isEmpty()) return
         viewModelScope.launch {
             val dao = app.database.keywordRuleDao()
@@ -771,10 +829,16 @@ fun BillImportContent(
                     contentPadding = PaddingValues(0.dp),
                 ) {
                     Text(
-                        "AI 补分类（可选；只发商户名与分类名，不发金额/时间/单号）",
+                        "AI 自动贴分类（可选；只发商户名与分类名，不发金额/时间/单号）",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = PennedSpacing.lg, top = PennedSpacing.sm),
+                    )
+                    Text(
+                        "AI 只从「现有分类」里挑，认不出的行保持未分类；点一下就把建议贴到下面将导入的流水上",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = PennedSpacing.lg, vertical = PennedSpacing.xs),
                     )
                     state.aiMapping?.let { suggestion ->
                         Text(
@@ -836,7 +900,7 @@ fun BillImportContent(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         PennedButton(
-                            text = if (state.aiBusy) "问 AI 中…" else "AI 补分类",
+                            text = if (state.aiBusy) "问 AI 中…" else "AI 自动贴分类",
                             enabled = !state.aiBusy && state.counts.importable > 0,
                             fillWidth = false,
                             onClick = onAskAiCategories,
@@ -901,7 +965,8 @@ fun BillImportContent(
 
             // ⑤ 分类来源说明
             Text(
-                "分类：按名命中 ${state.categoryFromColumn} · 关键词规则 ${state.categoryFromRule} · 待补 ${state.categoryMissing}" +
+                "分类：按名命中 ${state.categoryFromColumn} · 关键词规则 ${state.categoryFromRule} · " +
+                    "AI ${state.categoryFromAi} · 待补 ${state.categoryMissing}" +
                     "（导入时不会新建分类）",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

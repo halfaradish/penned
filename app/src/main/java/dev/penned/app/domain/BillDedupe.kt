@@ -16,6 +16,20 @@ data class BillRow(
     val categoryHint: String?,
     /** 原始行（预览页"看看这一行"用；**不落库**）。 */
     val raw: List<String> = emptyList(),
+    /**
+     * AI 建议的分类（**已按名字在本地匹配到本账本现有的分类**，D117）。
+     *
+     * 导入时只在「平台分类列」与「关键词规则」都没命中时才采用——它是兜底，不是覆盖。
+     * 匹配不上 / 模型拿不准 = null（落库后就是「未分类」）。
+     */
+    val suggestedCategoryId: String? = null,
+    /**
+     * 交易对方原始列（微信/支付宝的「交易对方」/通用模式映射的 merchant）。
+     *
+     * 与 [note] 分开存：AI 归类只许发这一段。备注里还拼着商品说明与状态文字，
+     * 通用模式没映射商户列时更可能混进商品名/单号（D117 的外发边界）。
+     */
+    val merchant: String? = null,
 ) {
     /** 无单号时的"疑似重复"键：时间 + 金额 + 方向 + 备注（R15 的退路口径）。 */
     val fallbackKey: String get() = "$dateEpochMinute|$amountCents|${if (expense) "E" else "I"}|${note.orEmpty()}"

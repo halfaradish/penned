@@ -1,13 +1,17 @@
 package dev.penned.app.data.llm
 
+import dev.penned.app.data.db.entity.CategoryEntity
 import dev.penned.app.data.update.FakeHttpServer
+import dev.penned.app.domain.CategoryType
 import dev.penned.app.domain.LlmEndpoints
 import dev.penned.app.domain.LlmSuggestions
+import dev.penned.app.domain.MerchantNeed
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -71,8 +75,10 @@ class LlmImportAssistTest {
      * **坑**：Android 的 `org.json` 会把非 ASCII 写成 \uXXXX，所以不能拿原始 body 断中文——
      * 一定要先解析回 JSON 再取 `messages[0].content[0].text`。
      */
-    private fun lastPrompt(): String {
-        val payload = JSONObject(lastRequestBody())
+    private fun lastPrompt(): String = promptOf(lastRequestBody())
+
+    private fun promptOf(body: String): String {
+        val payload = JSONObject(body)
         return payload.getJSONArray("messages").getJSONObject(0)
             .getJSONArray("content").getJSONObject(0).getString("text")
     }
@@ -150,5 +156,91 @@ class LlmImportAssistTest {
                 .split("\n").count { it.trim().startsWith("- ") }
         }
         assertEquals(listOf(100, 100, 50), counts)
+    }
+
+    private fun category(id: String, name: String, parentId: String? = null, income: Boolean = false) =
+        CategoryEntity(
+            id = id, bookId = "b1", parentId = parentId, name = name,
+            type = if (income) CategoryType.INCOME else CategoryType.EXPENSE,
+            createdAt = 1L, updatedAt = 1L, deviceId = "d",
+        )
+
+    @Test
+    fun `批量贴分类：按收支分两批 只回现有分类 匹配不上留空`() {
+        val categories = listOf(
+            category("c-food", "食品餐饮"),
+            category("c-breakfast", "早餐", parentId = "c-food"),
+            category("c-redpacket", "红包", income = true),
+        )
+        server.on(CHAT_PATH) { request ->
+            val prompt = promptOf(request.body)
+            val body = when {
+                prompt.contains("支出商户") ->
+                    okBody("""{"肯打鸡":"食品餐饮 / 早餐","某陌生商户":""}""")
+                prompt.contains("收入商户") -> okBody("""{"微信红包-来自姐姐":"红包"}""")
+                else -> okBody("{}")
+            }
+            FakeHttpServer.Response(body = body.toByteArray())
+        }
+
+        val outcome = runBlocking {
+            assist.suggestCategories(
+                config(),
+                needs = listOf(
+                    MerchantNeed("肯打鸡", expense = true),
+                    MerchantNeed("某陌生商户", expense = true),
+                    MerchantNeed("微信红包-来自姐姐", expense = false),
+                ),
+                categories = categories,
+            )
+        }
+        assertNull(outcome.error)
+        assertEquals(2, server.requests.size)
+
+        val byMerchant = outcome.suggestions.associateBy { it.merchant }
+        assertEquals("c-breakfast", byMerchant.getValue("肯打鸡").categoryId)
+        assertEquals(true, byMerchant.getValue("肯打鸡").expense)
+        // 模型给了空串 → 本地留空（未分类）
+        assertNull(byMerchant.getValue("某陌生商户").categoryId)
+        assertEquals("c-redpacket", byMerchant.getValue("微信红包-来自姐姐").categoryId)
+        assertEquals(false, byMerchant.getValue("微信红包-来自姐姐").expense)
+
+        // 两批各自只看到本域的分类
+        val expensePrompt = server.requests.map { promptOf(it.body) }.first { it.contains("支出商户") }
+        val incomePrompt = server.requests.map { promptOf(it.body) }.first { it.contains("收入商户") }
+        assertTrue(expensePrompt.contains("食品餐饮 / 早餐"))
+        assertTrue(!expensePrompt.contains("红包"))
+        assertTrue(incomePrompt.contains("红包"))
+        assertTrue(!incomePrompt.contains("食品餐饮"))
+    }
+
+    @Test
+    fun `批量贴分类：某一批失败保留前面的建议并带错误`() {
+        val categories = listOf(
+            category("c-food", "食品餐饮"),
+            category("c-redpacket", "红包", income = true),
+        )
+        server.on(CHAT_PATH) { request ->
+            val prompt = promptOf(request.body)
+            if (prompt.contains("支出商户")) {
+                FakeHttpServer.Response(status = 500, body = "{}".toByteArray())
+            } else {
+                FakeHttpServer.Response(body = okBody("""{"微信红包-来自姐姐":"红包"}""").toByteArray())
+            }
+        }
+        val outcome = runBlocking {
+            assist.suggestCategories(
+                config(),
+                needs = listOf(
+                    MerchantNeed("肯打鸡", expense = true),
+                    MerchantNeed("微信红包-来自姐姐", expense = false),
+                ),
+                categories = categories,
+            )
+        }
+        assertEquals(dev.penned.app.data.llm.LlmError.SERVER, outcome.error)
+        // 支出那批先失败 → 后面的收入批不再发（不无谓地多花调用）
+        assertEquals(1, server.requests.size)
+        assertTrue(outcome.suggestions.isEmpty())
     }
 }

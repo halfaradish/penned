@@ -70,6 +70,7 @@ class BillRowParserTest {
         assertEquals(1200L, normal.amountCents)
         assertTrue(normal.expense)
         assertEquals("某食堂 · 炒饭", normal.note) // 备注列是 `/`（空值占位）→ 不加
+        assertEquals("某食堂", normal.merchant) // AI 归类只发交易对方，不发整段备注
         assertEquals("WX-1", normal.externalId)
         assertEquals("零钱", normal.accountClue)
 
@@ -77,6 +78,7 @@ class BillRowParserTest {
         assertEquals(8800L, income.amountCents)
         assertEquals(false, income.expense)
         assertEquals("某人", income.note) // 商品与备注都是 `/`（占位）→ 备注只剩交易对方（交易类型不进备注）
+        assertEquals("某人", income.merchant)
         assertNull(income.accountClue) // 支付方式是 `/`
 
         assertEquals(BillBucket.STATUS_SKIP, parsed.buckets[2])
@@ -101,10 +103,12 @@ class BillRowParserTest {
         assertEquals("AL-1", first.externalId) // 尾随 \t 被 trim 掉（不 trim 去重永远不命中）
         assertEquals(1200L, first.amountCents)
         assertEquals("餐饮美食", first.categoryHint)
+        assertEquals("某美食店", first.merchant)
 
         val second = parsed.rows[1]!!
         assertEquals("XX银行储蓄卡(4936)", second.accountClue) // `&红包` 只取第一段
         assertEquals(1380L, second.amountCents)
+        assertEquals("某烤肉饭", second.merchant)
         assertEquals(minute(2025, 12, 30, 14, 17), second.dateEpochMinute)
     }
 

@@ -120,6 +120,8 @@ object BillRowParser {
                     accountClue = BillRows.accountClue(cell(line, map.payment)),
                     categoryHint = BillRows.categoryHint(cell(line, map.category)),
                     raw = line,
+                    // AI 归类只发这一段（备注里还拼着商品/状态，不能整段外发）
+                    merchant = BillRows.cell(cell(line, map.merchant)).ifEmpty { null },
                 )
             }
         }

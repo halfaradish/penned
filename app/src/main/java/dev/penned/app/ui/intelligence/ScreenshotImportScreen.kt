@@ -56,13 +56,14 @@ import dev.penned.app.data.importer.BillImportRepository
 import dev.penned.app.data.importer.ImportRepository
 import dev.penned.app.data.llm.ImagePrep
 import dev.penned.app.data.llm.LlmClient
-import dev.penned.app.data.llm.LlmContentResult
 import dev.penned.app.data.llm.LlmError
+import dev.penned.app.data.llm.LlmImportAssist
 import dev.penned.app.data.llm.LlmRowsResult
 import dev.penned.app.domain.BillDedupe
 import dev.penned.app.domain.BillRow
 import dev.penned.app.domain.LlmConfig
 import dev.penned.app.domain.LlmDraft
+import dev.penned.app.domain.MerchantNeed
 import dev.penned.app.domain.Money
 import dev.penned.app.domain.TxSource
 import dev.penned.app.domain.TxType
@@ -139,6 +140,12 @@ data class ScreenshotRow(
     val minute: Long,
     val timeFromImage: Boolean,
     val duplicate: Boolean,
+    /** 模型给的商户名（**单独留着**：备注里还拼了状态文字，分类只发这一段）。 */
+    val merchant: String? = null,
+    /** AI 贴上的分类（本账本现有分类；null = 未分类）。 */
+    val categoryId: String? = null,
+    /** 分类显示名（一级 / 二级路径；没贴上 = null）。 */
+    val categoryName: String? = null,
 )
 
 /** 页面状态。 */
@@ -168,6 +175,9 @@ data class ScreenshotUiState(
 ) {
     val importable: Int get() = rows.count { !it.duplicate }
     val duplicateCount: Int get() = rows.count { it.duplicate }
+    /** 将导入的行里已经贴上分类的笔数 / 认不出、会记为未分类的笔数。 */
+    val categorized: Int get() = rows.count { !it.duplicate && it.categoryId != null }
+    val uncategorized: Int get() = rows.count { !it.duplicate && it.categoryId == null }
     val expenseTotalCents: Long get() = rows.filter { !it.duplicate && it.type == TxType.EXPENSE }.sumOf { it.amountCents }
     val incomeTotalCents: Long get() = rows.filter { !it.duplicate && it.type == TxType.INCOME }.sumOf { it.amountCents }
     val accountName: String? get() = accounts.firstOrNull { it.id == accountId }?.name
@@ -197,6 +207,7 @@ class ScreenshotImportViewModel(
 
     private val importer = BillImportRepository(app.database, app.deviceId)
     private val legacyImport = ImportRepository(app.database, app.settings, app.deviceId)
+    private val assist = LlmImportAssist(client)
 
     /** 刚导入那一批的批次号（「撤销」= 整批软删）。 */
     private var lastBatchId: String? = null
@@ -265,22 +276,64 @@ class ScreenshotImportViewModel(
         }
 
         val rows = toRows(drafts)
+        // 识别出来就直接按商户贴现有分类（D117）：同一次用户动作里完成，不另开一次点击。
+        // 只发商户名与分类名——金额/时间/单号/备注里的状态文字都不出设备。
+        val (categorizedRows, categoryWarning) = categorize(config, rows)
         _state.update {
             it.copy(
                 busy = false,
                 progressText = null,
-                rows = rows,
-                warnings = warnings,
+                rows = categorizedRows,
+                warnings = warnings + listOfNotNull(categoryWarning),
                 droppedRows = dropped,
                 truncated = truncated,
-                error = if (rows.isEmpty() && warnings.isEmpty() && drafts.isEmpty()) {
+                error = if (categorizedRows.isEmpty() && warnings.isEmpty() && drafts.isEmpty()) {
                     "没看出这是账单——换一张试试"
                 } else {
                     null
                 },
             )
         }
-        return rows.size
+        return categorizedRows.size
+    }
+
+    /**
+     * 给识别出的行贴分类：只发**去重后的商户名**（按收支分域）+ 本账本现有分类名。
+     *
+     * 失败**不作废识别结果**（行照常可导入，只是记为未分类），给一条非致命提示。
+     */
+    private suspend fun categorize(
+        config: LlmConfig,
+        rows: List<ScreenshotRow>,
+    ): Pair<List<ScreenshotRow>, String?> {
+        val needs = rows
+            .filter { !it.duplicate }
+            .mapNotNull { row ->
+                row.merchant?.let { MerchantNeed(it, row.type != TxType.INCOME) }
+            }
+            .distinctBy { it.key }
+        if (needs.isEmpty()) return rows to null
+        val bookId = app.settings.currentBookId.first()
+            ?: return rows to "还没有账本，分类没贴（导入后为未分类）"
+        val categories = app.database.categoryDao().allInBook(bookId)
+        if (categories.isEmpty()) return rows to null
+
+        _state.update { it.copy(progressText = "正在给 ${needs.size} 个商户贴分类…") }
+        val outcome = assist.suggestCategories(config, needs, categories)
+        val byKey = outcome.suggestions
+            .filter { it.categoryId != null }
+            .associateBy { MerchantNeed.keyOf(it.merchant, it.expense) }
+        val updated = rows.map { row ->
+            val suggestion = row.merchant
+                ?.let { byKey[MerchantNeed.keyOf(it, row.type != TxType.INCOME)] }
+            if (suggestion?.categoryId != null) {
+                row.copy(categoryId = suggestion.categoryId, categoryName = suggestion.categoryName)
+            } else {
+                row
+            }
+        }
+        val warning = outcome.error?.let { "分类没贴成：${categoryErrorText(it)}（这些会记为未分类）" }
+        return updated to warning
     }
 
     /** 照片那条路：先落 cacheDir 临时文件（识别完即丢）。 */
@@ -391,6 +444,7 @@ class ScreenshotImportViewModel(
                 minute = minute,
                 timeFromImage = draft.occurredAtEpochMinute != null,
                 duplicate = false,
+                merchant = draft.merchant?.trim()?.ifEmpty { null },
             )
         }
         // 逐行标重复（保留屏幕顺序：重复行也显示、只是不导入）
@@ -412,9 +466,16 @@ class ScreenshotImportViewModel(
         LlmError.BAD_RESPONSE -> "没看出这是账单"
         else -> "AI 没配好"
     }
+
+    /** 归类那一步的错误文案：`BAD_RESPONSE` 不能再说"没看出这是账单"（账单其实已经认出来了）。 */
+    private fun categoryErrorText(reason: LlmError): String = when (reason) {
+        LlmError.BAD_RESPONSE -> "AI 回的分类格式不对"
+        LlmError.REJECTED -> "请求被拒（4xx）：这个模型不支持这种用法"
+        else -> errorText(reason)
+    }
 }
 
-/** 预览行 → 落库行（截图没有单号与账户线索；分类在落库时按关键词规则匹配）。 */
+/** 预览行 → 落库行（截图没有单号与账户线索；分类带 AI 建议，落库时按「规则优先、AI 兜底」判定）。 */
 internal fun List<ScreenshotRow>.toBillRows(): List<BillRow> = map { row ->
     BillRow(
         dateEpochMinute = row.minute,
@@ -424,6 +485,8 @@ internal fun List<ScreenshotRow>.toBillRows(): List<BillRow> = map { row ->
         externalId = null,
         accountClue = null,
         categoryHint = null,
+        suggestedCategoryId = row.categoryId,
+        merchant = row.merchant,
     )
 }
 
@@ -530,7 +593,8 @@ fun ScreenshotImportContent(
             if (state.endpointLabel != null) {
                 // 出图前的明示（隐私口径收敛在一处）
                 Text(
-                    "这张图将发送给 ${state.endpointLabel} / ${state.modelLabel.orEmpty()}",
+                    "这张图将发送给 ${state.endpointLabel} / ${state.modelLabel.orEmpty()}；" +
+                        "归类只额外发商户名与现有分类名（不发金额、时间、单号）",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
@@ -712,6 +776,15 @@ private fun ScreenshotPreview(
     ) {
         PreviewCountRow("识别", "${state.rows.size} 笔")
         PreviewCountRow("将导入", "${state.importable} 笔", emphasize = true)
+        PreviewCountRow(
+            "分类",
+            "已贴 ${state.categorized} 笔",
+            detail = if (state.uncategorized > 0) {
+                "未分类 ${state.uncategorized} 笔（AI 认不出的，导入后可在详情里改）"
+            } else {
+                null
+            },
+        )
         PreviewCountRow("重复", "${state.duplicateCount} 笔", detail = "已排除，不导入".takeIf { state.duplicateCount > 0 })
         PreviewCountRow(
             "忽略",
@@ -839,6 +912,17 @@ private fun ScreenshotRowItem(row: ScreenshotRow) {
                     )
                 }
             }
+            Text(
+                row.categoryName ?: "未分类",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (row.categoryId != null) {
+                    dev.penned.app.ui.theme.primaryInkColor()
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
         Spacer(Modifier.width(PennedSpacing.sm))
         Text(

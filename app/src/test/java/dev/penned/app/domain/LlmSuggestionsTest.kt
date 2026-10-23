@@ -76,6 +76,70 @@ class LlmSuggestionsTest {
     }
 
     @Test
+    fun `商户分类：按收支域匹配 支出不会拿到收入分类`() {
+        val food = category("c1", "食品餐饮")
+        val salary = CategoryEntity(
+            id = "c9", bookId = "b1", parentId = null, name = "工资",
+            type = CategoryType.INCOME, createdAt = 1L, updatedAt = 1L, deviceId = "d",
+        )
+        val categories = listOf(food, salary)
+
+        val expense = LlmSuggestions.parseMerchantCategories(
+            """{"某公司":"工资","肯打鸡":"食品餐饮"}""", categories, CategoryType.EXPENSE,
+        ).associateBy { it.merchant }
+        assertNull(expense.getValue("某公司").categoryId)
+        assertEquals("c1", expense.getValue("肯打鸡").categoryId)
+
+        val income = LlmSuggestions.parseMerchantCategories(
+            """{"某公司":"工资","肯打鸡":"食品餐饮"}""", categories, CategoryType.INCOME,
+        ).associateBy { it.merchant }
+        assertEquals("c9", income.getValue("某公司").categoryId)
+        assertNull(income.getValue("肯打鸡").categoryId)
+    }
+
+    @Test
+    fun `商户分类：模型抄回方向标签也能剥掉`() {
+        val categories = listOf(category("c1", "食品餐饮"))
+        val suggestion = LlmSuggestions.parseMerchantCategories(
+            """{"[支出] 肯打鸡":"食品餐饮"}""", categories, CategoryType.EXPENSE,
+        ).single()
+        assertEquals("肯打鸡", suggestion.merchant)
+        assertEquals("c1", suggestion.categoryId)
+    }
+
+    @Test
+    fun `分类路径：空格与全角斜杠都不影响匹配`() {
+        val categories = listOf(category("c1", "食品餐饮"), category("c2", "早餐", parentId = "c1"))
+        assertEquals(
+            "c2",
+            LlmSuggestions.parseMerchantCategories("""{"某店":"食品餐饮/早餐"}""", categories)
+                .single().categoryId,
+        )
+        assertEquals(
+            "c2",
+            LlmSuggestions.parseMerchantCategories("""{"某店":"食品餐饮 ／ 早餐"}""", categories)
+                .single().categoryId,
+        )
+    }
+
+    @Test
+    fun `分类路径按收支域给 一级与二级都在`() {
+        val categories = listOf(
+            category("c1", "食品餐饮"),
+            category("c2", "早餐", parentId = "c1"),
+            CategoryEntity(
+                id = "c9", bookId = "b1", parentId = null, name = "工资",
+                type = CategoryType.INCOME, createdAt = 1L, updatedAt = 1L, deviceId = "d",
+            ),
+        )
+        assertEquals(
+            listOf("食品餐饮", "食品餐饮 / 早餐"),
+            LlmSuggestions.categoryPaths(categories, CategoryType.EXPENSE),
+        )
+        assertEquals(listOf("工资"), LlmSuggestions.categoryPaths(categories, CategoryType.INCOME))
+    }
+
+    @Test
     fun `商户分类：坏输入给空列表 不炸`() {
         assertTrue(LlmSuggestions.parseMerchantCategories(null, emptyList()).isEmpty())
         assertTrue(LlmSuggestions.parseMerchantCategories("[]", emptyList()).isEmpty())

@@ -58,9 +58,10 @@ class BillImportRepositoryTest {
         accountClue: String? = null,
         categoryHint: String? = null,
         minute: Long = 1000L,
+        merchant: String? = null,
     ) = BillRow(
         dateEpochMinute = minute, amountCents = amount, expense = true, note = note,
-        externalId = externalId, accountClue = accountClue, categoryHint = categoryHint,
+        externalId = externalId, accountClue = accountClue, categoryHint = categoryHint, merchant = merchant,
     )
 
     @Test
@@ -98,9 +99,9 @@ class BillImportRepositoryTest {
         val categories = db.categoryDao().allInBook(bookId)
 
         // 平台词汇「餐饮美食」与我们的一级树不重合 → 留空，绝不新建
-        assertEquals(null, repo.resolveCategoryId(bookId, row(categoryHint = "餐饮美食"), categories, emptyList()))
+        assertEquals(null, repo.resolveCategoryId(row(categoryHint = "餐饮美食"), categories, emptyList()))
         // 同名才命中
-        assertEquals("cat-food", repo.resolveCategoryId(bookId, row(categoryHint = "食品餐饮"), categories, emptyList()))
+        assertEquals("cat-food", repo.resolveCategoryId(row(categoryHint = "食品餐饮"), categories, emptyList()))
 
         // 关键词规则命中商户 → 也填（M4-1 的引擎在这里生效）
         db.keywordRuleDao().upsert(
@@ -113,10 +114,72 @@ class BillImportRepositoryTest {
         val rules = db.keywordRuleDao().allInBook(bookId)
         assertEquals(
             "cat-food",
-            repo.resolveCategoryId(bookId, row(note = "肯打鸡 · 全家桶"), categories, rules),
+            repo.resolveCategoryId(row(note = "肯打鸡 · 全家桶"), categories, rules),
         )
         // 一条新分类都不许冒出来
         assertEquals(1, db.categoryDao().allInBook(bookId).size)
+    }
+
+    @Test
+    fun `AI 建议在列线索与规则都没命中时落库 规则优先`() = runTest {
+        db.categoryDao().upsertAll(
+            listOf(
+                CategoryEntity(
+                    id = "cat-food", bookId = bookId, name = "食品餐饮", type = CategoryType.EXPENSE,
+                    createdAt = 1L, updatedAt = 1L, deviceId = "t",
+                ),
+                CategoryEntity(
+                    id = "cat-shop", bookId = bookId, name = "购物消费", type = CategoryType.EXPENSE,
+                    createdAt = 1L, updatedAt = 1L, deviceId = "t",
+                ),
+            )
+        )
+        val categories = db.categoryDao().allInBook(bookId)
+        db.keywordRuleDao().upsert(
+            KeywordRuleEntity(
+                id = "r1", bookId = bookId, keyword = "肯打鸡", targetType = RuleTargetType.CATEGORY,
+                targetId = "cat-food", priority = 0, enabled = true,
+                createdAt = 1L, updatedAt = 1L, deviceId = "t",
+            )
+        )
+        val rules = db.keywordRuleDao().allInBook(bookId)
+
+        // 规则命中优先于 AI 建议
+        val byRule = row(externalId = "X-1", note = "肯打鸡 · 全家桶", merchant = "肯打鸡")
+            .copy(suggestedCategoryId = "cat-shop")
+        assertEquals("cat-food", repo.resolveCategoryId(byRule, categories, rules))
+        // 规则没命中 → 用 AI 建议
+        val byAi = row(externalId = "X-2", note = "陌生商户 · 小玩意", merchant = "陌生商户")
+            .copy(suggestedCategoryId = "cat-shop")
+        assertEquals("cat-shop", repo.resolveCategoryId(byAi, categories, rules))
+
+        val result = repo.import(
+            bookId = bookId,
+            fileName = "微信账单.xlsx",
+            sourceKind = "WECHAT",
+            rows = listOf(byRule, byAi),
+            mappings = emptyList(),
+            duplicateCount = 0,
+            skippedCount = 0,
+        )
+        val txs = db.transactionDao().allInBook(bookId)
+        assertEquals(2, txs.size)
+        assertEquals("cat-food", txs.first { it.externalId == "X-1" }.categoryId)
+        assertEquals("cat-shop", txs.first { it.externalId == "X-2" }.categoryId)
+        assertEquals(result.batchId, txs.first().importBatchId)
+    }
+
+    @Test
+    fun `AI 建议收支类型不符时不采用`() = runTest {
+        db.categoryDao().upsert(
+            CategoryEntity(
+                id = "cat-salary", bookId = bookId, name = "工资", type = CategoryType.INCOME,
+                createdAt = 1L, updatedAt = 1L, deviceId = "t",
+            )
+        )
+        val categories = db.categoryDao().allInBook(bookId)
+        val expenseRow = row(note = "某公司").copy(suggestedCategoryId = "cat-salary")
+        assertNull(repo.resolveCategoryId(expenseRow, categories, emptyList()))
     }
 
     @Test

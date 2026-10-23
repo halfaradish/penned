@@ -7,11 +7,13 @@ import dev.penned.app.PennedApplication
 import dev.penned.app.domain.LlmProvider
 import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.data.db.entity.BookEntity
+import dev.penned.app.data.db.entity.CategoryEntity
 import dev.penned.app.data.db.entity.ImportBatchEntity
 import dev.penned.app.data.db.entity.TransactionEntity
 import dev.penned.app.data.llm.LlmClient
 import dev.penned.app.data.update.FakeHttpServer
 import dev.penned.app.domain.AccountType
+import dev.penned.app.domain.CategoryType
 import dev.penned.app.domain.TxSource
 import dev.penned.app.domain.TxType
 import kotlinx.coroutines.runBlocking
@@ -104,6 +106,11 @@ class ScreenshotImportViewModelTest {
         )
         .toString()
 
+    /** 取请求里的提示词（Android 的 org.json 会把非 ASCII 写成 \uXXXX，必须解析回来再断中文）。 */
+    private fun promptOf(body: String): String =
+        JSONObject(body).getJSONArray("messages").getJSONObject(0)
+            .getJSONArray("content").getJSONObject(0).getString("text")
+
     /** 真实列表图的形状：两笔支出 + 一笔收入（脱敏后的样张）。 */
     private val listRows = """{"rows":[
         {"type":"EXPENSE","amount":67.07,"merchant":"拼多多平台商户","time":"10月18日 09:23"},
@@ -147,6 +154,113 @@ class ScreenshotImportViewModelTest {
         // 预览就是"确认"这一步：没点导入之前库里什么都没有
         assertEquals(0, app.database.pendingEntryDao().countPending())
         assertEquals(0, app.database.transactionDao().allInBook(bookId).size)
+    }
+
+    /** 现有分类（支出两棵树 + 收入一个）。 */
+    private suspend fun seedCategories() {
+        val now = System.currentTimeMillis()
+        app.database.categoryDao().upsertAll(
+            listOf(
+                CategoryEntity(
+                    id = "cat-shop", bookId = bookId, name = "购物消费", type = CategoryType.EXPENSE,
+                    createdAt = now, updatedAt = now, deviceId = "t",
+                ),
+                CategoryEntity(
+                    id = "cat-food", bookId = bookId, name = "食品餐饮", type = CategoryType.EXPENSE,
+                    createdAt = now, updatedAt = now, deviceId = "t",
+                ),
+                CategoryEntity(
+                    id = "cat-lunch", bookId = bookId, parentId = "cat-food", name = "午餐",
+                    type = CategoryType.EXPENSE, createdAt = now, updatedAt = now, deviceId = "t",
+                ),
+                CategoryEntity(
+                    id = "cat-red", bookId = bookId, name = "红包", type = CategoryType.INCOME,
+                    createdAt = now, updatedAt = now, deviceId = "t",
+                ),
+            )
+        )
+    }
+
+    /** 识别请求（带图）回 rows，归类请求（纯文本）回商户 → 分类名。 */
+    private fun routeRecognitionAndCategories(
+        rowsBody: String = listRows,
+        categoriesBody: String,
+    ) {
+        server.on("/v1/chat/completions") { request ->
+            val isImage = request.body.contains("\"image_url\"")
+            val content = if (isImage) rowsBody else categoriesBody
+            FakeHttpServer.Response(body = okBody(content).toByteArray())
+        }
+    }
+
+    @Test
+    fun `识别后自动按商户贴现有分类 认不出的留未分类`() = runBlocking {
+        seedCategories()
+        val rows = """{"rows":[
+            {"type":"EXPENSE","amount":67.07,"merchant":"拼多多平台商户","time":"10月18日 09:23"},
+            {"type":"EXPENSE","amount":12.00,"merchant":"西大朴诚食堂","time":"10月17日 13:19","note":"自动扣款成功"},
+            {"type":"INCOME","amount":88.00,"merchant":"微信红包-来自姐姐","time":"10月14日 13:18"},
+            {"type":"EXPENSE","amount":9.90,"merchant":"陌生商户","time":"10月14日 10:00"}
+        ]}"""
+        routeRecognitionAndCategories(
+            rowsBody = rows,
+            categoriesBody = """{"拼多多平台商户":"购物消费","西大朴诚食堂":"食品餐饮 / 午餐","微信红包-来自姐姐":"红包"}""",
+        )
+
+        assertEquals(4, viewModel.recognize(listOf(pngFile())))
+        val state = viewModel.state.value
+        assertEquals("cat-shop", state.rows[0].categoryId)
+        assertEquals("cat-lunch", state.rows[1].categoryId)
+        assertEquals("食品餐饮 / 午餐", state.rows[1].categoryName)
+        assertEquals("cat-red", state.rows[2].categoryId)
+        // 模型没给"陌生商户"分类 → 保持未分类（不硬猜）
+        assertNull(state.rows[3].categoryId)
+        assertEquals(3, state.categorized)
+        assertEquals(1, state.uncategorized)
+        assertTrue(state.warnings.isEmpty())
+
+        // 归类请求只带商户名与分类名：金额、时间、状态文字都不出设备
+        val categoryPrompt = server.requests
+            .map { promptOf(it.body) }
+            .filterNot { it.contains("这是一张支付/账单截图") }
+            .joinToString("\n")
+        assertTrue(categoryPrompt.contains("拼多多平台商户"))
+        assertTrue(categoryPrompt.contains("食品餐饮 / 午餐"))
+        listOf("67.07", "12.00", "88.00", "09:23", "13:19", "10月18日", "自动扣款成功", "2026-").forEach { secret ->
+            assertTrue("归类请求里不该出现「$secret」", !categoryPrompt.contains(secret))
+        }
+
+        // 导入后分类真的落库
+        viewModel.import()
+        awaitState { !it.importing && it.imported == 4 }
+        val txs = app.database.transactionDao().allInBook(bookId)
+        assertEquals(4, txs.size)
+        assertEquals("cat-shop", txs.first { it.amountCents == 6707L }.categoryId)
+        assertEquals("cat-lunch", txs.first { it.amountCents == 1200L }.categoryId)
+        assertEquals("cat-red", txs.first { it.amountCents == 8800L }.categoryId)
+        assertNull(txs.first { it.amountCents == 990L }.categoryId)
+    }
+
+    @Test
+    fun `归类失败不清空识别结果 只留提示 导入仍可用`() = runBlocking {
+        seedCategories()
+        server.on("/v1/chat/completions") { request ->
+            if (request.body.contains("\"image_url\"")) {
+                FakeHttpServer.Response(body = okBody(listRows).toByteArray())
+            } else {
+                FakeHttpServer.Response(status = 401, body = "{}".toByteArray())
+            }
+        }
+        assertEquals(3, viewModel.recognize(listOf(pngFile())))
+        val state = viewModel.state.value
+        assertEquals(3, state.rows.size)
+        assertEquals(0, state.categorized)
+        assertEquals(3, state.uncategorized)
+        assertTrue(state.warnings.single().contains("分类没贴成"))
+
+        viewModel.import()
+        awaitState { !it.importing && it.imported == 3 }
+        assertTrue(app.database.transactionDao().allInBook(bookId).all { it.categoryId == null })
     }
 
     @Test

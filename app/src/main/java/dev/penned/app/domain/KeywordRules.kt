@@ -26,7 +26,16 @@ data class RuleHit(
  */
 object KeywordRules {
 
-    fun match(text: String?, rules: List<KeywordRuleEntity>): RuleHit? {
+    /**
+     * [accept] 用来跳过"目标不能用"的命中再继续往后找（D117）：分类导入时，前面若先命中一条
+     * **标签**规则（或目标分类已被删/隐藏），仍应让后面那条分类规则生效——否则一条标签规则会把
+     * 后面的分类规则全挡住。
+     */
+    fun match(
+        text: String?,
+        rules: List<KeywordRuleEntity>,
+        accept: (RuleHit) -> Boolean = { true },
+    ): RuleHit? {
         if (text.isNullOrBlank()) return null
         val haystack = text.lowercase()
         val ordered = rules
@@ -35,7 +44,8 @@ object KeywordRules {
         for (rule in ordered) {
             val needle = rule.keyword.trim().lowercase()
             if (needle.isNotEmpty() && haystack.contains(needle)) {
-                return RuleHit(rule.id, rule.keyword, rule.targetType, rule.targetId)
+                val hit = RuleHit(rule.id, rule.keyword, rule.targetType, rule.targetId)
+                if (accept(hit)) return hit
             }
         }
         return null

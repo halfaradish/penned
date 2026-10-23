@@ -21,7 +21,26 @@ data class MerchantCategorySuggestion(
     val merchant: String,
     val categoryName: String?,
     val categoryId: String?,
+    /** 这个商户是按支出还是收入归类的（同名商户在两个域里可以是不同分类）。 */
+    val expense: Boolean = true,
 )
+
+/**
+ * 待归类的商户（同一个名字可能在支出与收入里各出现一次，必须分开问，D117）。
+ *
+ * [key] 是本地查找用的稳定键：方向 + 去首尾空白的小写名字。
+ */
+data class MerchantNeed(
+    val merchant: String,
+    val expense: Boolean,
+) {
+    val key: String get() = keyOf(merchant, expense)
+
+    companion object {
+        fun keyOf(merchant: String, expense: Boolean): String =
+            "${if (expense) "E" else "I"}|${merchant.trim().lowercase()}"
+    }
+}
 
 /**
  * LLM 建议的**本地校验与落地**（M4-6，纯函数 + 表驱动）。
@@ -67,27 +86,56 @@ object LlmSuggestions {
      * 解析商户分类建议：出参形如 `{"肯打鸡":"食品餐饮","某咖啡":"食品餐饮 / 早餐"}`。
      *
      * **只按名字在本地匹配**（一级名或"一级 / 二级"路径），匹配不上 → `categoryId = null`（留空，不猜）。
+     * [type] 非空时只在这一域的分类里匹配（支出商户永远拿不到收入分类）。
      */
     fun parseMerchantCategories(
         content: String?,
         categories: List<dev.penned.app.data.db.entity.CategoryEntity>,
+        type: CategoryType? = null,
     ): List<MerchantCategorySuggestion> {
         val json = parseObject(content) ?: return emptyList()
+        val scoped = if (type == null) categories else categories.filter { it.type == type }
         val byPath = HashMap<String, String>()
-        categories.forEach { category ->
-            byPath[category.name] = category.id
-            val parent = categories.firstOrNull { it.id == category.parentId }
-            if (parent != null) byPath["${parent.name} / ${category.name}"] = category.id
+        scoped.forEach { category ->
+            byPath[normalizeCategoryPath(category.name)] = category.id
+            val parent = categories.firstOrNull { it.id == category.parentId && it.type == category.type }
+            if (parent != null) {
+                byPath[normalizeCategoryPath("${parent.name} / ${category.name}")] = category.id
+            }
         }
-        return json.keys().asSequence().map { merchant ->
-            val name = json.optString(merchant).trim().ifEmpty { null }
+        return json.keys().asSequence().map { rawKey ->
+            // 模型偶尔会把提示词里的方向标签一起抄回来；剥掉再匹配
+            val merchant = rawKey.trim().removePrefix("[支出]").removePrefix("[收入]").trim()
+            val name = json.optString(rawKey).trim().ifEmpty { null }
             MerchantCategorySuggestion(
                 merchant = merchant,
                 categoryName = name,
-                categoryId = name?.let { byPath[it] },
+                categoryId = name?.let { byPath[normalizeCategoryPath(it)] },
             )
         }.toList()
     }
+
+    /** 路径归一：`食品餐饮/午餐`、`食品餐饮 ／ 午餐` 与 `食品餐饮 / 午餐` 都当同一条（模型不保证空格）。 */
+    private fun normalizeCategoryPath(text: String): String =
+        text.replace('／', '/').split('/').joinToString(" / ") { it.trim() }
+
+    /**
+     * 现有分类 → 提示词里的「一级 / 二级」路径（只给同一域；父级找不到就只给名字）。
+     *
+     * 同一棵树的路径去重（用户可能建了同名子类），保持 `sortOrder` 的先后顺序。
+     */
+    fun categoryPaths(
+        categories: List<dev.penned.app.data.db.entity.CategoryEntity>,
+        type: CategoryType,
+    ): List<String> = categories
+        .asSequence()
+        .filter { it.type == type }
+        .map { category ->
+            categories.firstOrNull { it.id == category.parentId && it.type == type }
+                ?.let { "${it.name} / ${category.name}" } ?: category.name
+        }
+        .distinct()
+        .toList()
 
     /**
      * 商户名去重 + 分批（每批 ≤ [batchSize]，默认 100）：只发**去重后的商户名**，

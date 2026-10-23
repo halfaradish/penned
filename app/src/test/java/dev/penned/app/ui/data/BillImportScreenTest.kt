@@ -18,6 +18,7 @@ import dev.penned.app.domain.BillRow
 import dev.penned.app.domain.BillRowCounts
 import dev.penned.app.ui.theme.PennedTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -89,7 +90,7 @@ class BillImportScreenTest {
         composeRule.onNodeWithText("25.80").performScrollTo().assertIsDisplayed() // 支出合计 12.00 + 13.80
         composeRule.onNodeWithText("88.00").performScrollTo().assertIsDisplayed() // 收入合计
         composeRule.onNodeWithText("账户映射（将新建 1 个）").assertIsDisplayed()
-        composeRule.onNodeWithText("分类：按名命中 2 · 关键词规则 0 · 待补 1（导入时不会新建分类）")
+        composeRule.onNodeWithText("分类：按名命中 2 · 关键词规则 0 · AI 0 · 待补 1（导入时不会新建分类）")
             .performScrollTo().assertIsDisplayed()
         capture("m4_bill_preview")
     }
@@ -238,6 +239,26 @@ class BillImportScreenTest {
         }
         composeRule.onNodeWithText("已存为关键词规则：下次导入与一句话记账本地直接命中，不再花 AI")
             .performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun aiCategoriesApplyToImportAndShowCount() {
+        var asked = false
+        composeRule.setContent {
+            PennedTheme {
+                BillImportContent(
+                    state().copy(categoryFromAi = 2, categoryMissing = 0),
+                    onBack = {},
+                    onAskAiCategories = { asked = true },
+                )
+            }
+        }
+        // AI 贴上的笔数出现在分类来源行（导入时直接落库，不再是"只看建议"）
+        composeRule.onNodeWithText("分类：按名命中 2 · 关键词规则 0 · AI 2 · 待补 0（导入时不会新建分类）")
+            .performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("AI 自动贴分类").performScrollTo().performClick()
+        assertTrue(asked)
+        capture("m4_bill_ai_categories")
     }
 
     @Test

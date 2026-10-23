@@ -8,9 +8,9 @@ import dev.penned.app.data.db.entity.TransactionEntity
 import dev.penned.app.domain.AccountGuess
 import dev.penned.app.domain.AccountType
 import dev.penned.app.domain.BillRow
+import dev.penned.app.domain.CategoryAssignment
+import dev.penned.app.domain.CategoryResolution
 import dev.penned.app.domain.CategoryType
-import dev.penned.app.domain.KeywordRules
-import dev.penned.app.domain.RuleTargetType
 import dev.penned.app.domain.TxSource
 import dev.penned.app.domain.TxType
 import java.util.UUID
@@ -70,24 +70,20 @@ class BillImportRepository(
     /**
      * 分类线索 → 我们的分类（**只按名字匹配，匹配不上返回 null**；B1 裁决绝不新建）。
      *
-     * 两级都认：一级分类名与"一级 / 二级"路径都能对；同时把关键词规则（M4-1）的命中作为补充。
+     * 判定顺序收口在 [CategoryAssignment.resolve]：平台分类列 → 关键词规则 → AI 建议（D117）。
      */
     suspend fun resolveCategoryId(
-        bookId: String,
         row: BillRow,
         categories: List<CategoryEntity>,
         rules: List<dev.penned.app.data.db.entity.KeywordRuleEntity>,
-    ): String? {
-        val hint = row.categoryHint
-        if (hint != null) {
-            val exact = categories.firstOrNull { it.name == hint }
-            if (exact != null) return exact.id
-            val sub = categories.firstOrNull { it.parentId != null && it.name == hint }
-            if (sub != null) return sub.id
-        }
-        val hit = KeywordRules.match(row.note, rules) ?: return null
-        return hit.takeIf { it.targetType == RuleTargetType.CATEGORY }?.targetId
-    }
+    ): String? = resolveCategory(row, categories, rules).categoryId
+
+    /** 带来源的判定（预览页"按名命中 / 关键词规则 / AI / 待补"四类计数用）。 */
+    fun resolveCategory(
+        row: BillRow,
+        categories: List<CategoryEntity>,
+        rules: List<dev.penned.app.data.db.entity.KeywordRuleEntity>,
+    ): CategoryResolution = CategoryAssignment.resolve(row, categories, rules)
 
     /**
      * 落库：先按 [mappings] 备好账户（新建的写进去），再分块写流水与批次。
@@ -155,7 +151,7 @@ class BillImportRepository(
                     amountCents = row.amountCents,
                     accountId = row.accountClue?.let { accountIdByClue[it] } ?: fallbackAccountId,
                     targetAccountId = null,
-                    categoryId = resolveCategoryId(bookId, row, categories, rules),
+                    categoryId = resolveCategoryId(row, categories, rules),
                     dateEpochMinute = row.dateEpochMinute,
                     note = row.note,
                     source = txSource,
