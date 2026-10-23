@@ -36,11 +36,10 @@ class PennedApplication : Application() {
         super.onCreate()
         appScope.launch {
             DefaultSeed.seedIfEmpty(database, deviceId, System.currentTimeMillis())
-            // 首次启动把当前账本设置落盘，否则直接读 settings.currentBookId 的消费方（如添加账户）会拿到 null
-            if (settings.currentBookId.firstOrNull() == null) {
-                database.bookDao().observeAll().firstOrNull()?.firstOrNull()?.let {
-                    settings.setCurrentBook(it.id)
-                }
+            // 首次启动把当前账本设置落盘。**只能用"未设置才写"**：种子协程与 UI 并发，
+            // 先读后写会把用户/测试刚选的账本覆盖掉（D117 收尾实测）。
+            database.bookDao().observeAll().firstOrNull()?.firstOrNull()?.let {
+                settings.setCurrentBookIfAbsent(it.id)
             }
         }
     }

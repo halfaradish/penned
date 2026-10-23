@@ -52,6 +52,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.penned.app.PennedApplication
 import dev.penned.app.data.db.entity.ImportBatchEntity
+import dev.penned.app.data.db.entity.CategoryEntity
+import dev.penned.app.data.db.entity.KeywordRuleEntity
 import dev.penned.app.data.importer.BillImportRepository
 import dev.penned.app.data.importer.ImportRepository
 import dev.penned.app.data.llm.ImagePrep
@@ -61,10 +63,13 @@ import dev.penned.app.data.llm.LlmImportAssist
 import dev.penned.app.data.llm.LlmRowsResult
 import dev.penned.app.domain.BillDedupe
 import dev.penned.app.domain.BillRow
+import dev.penned.app.domain.CategoryType
+import dev.penned.app.domain.KeywordRules
 import dev.penned.app.domain.LlmConfig
 import dev.penned.app.domain.LlmDraft
 import dev.penned.app.domain.MerchantNeed
 import dev.penned.app.domain.Money
+import dev.penned.app.domain.RuleTargetType
 import dev.penned.app.domain.TxSource
 import dev.penned.app.domain.TxType
 import dev.penned.app.domain.mergedNote
@@ -298,7 +303,8 @@ class ScreenshotImportViewModel(
     }
 
     /**
-     * 给识别出的行贴分类：只发**去重后的商户名**（按收支分域）+ 本账本现有分类名。
+     * 给识别出的行贴分类：**关键词规则优先，AI 兜底**（与落库判定一致），
+     * 只把还没分类的商户发出去（去重后、按收支分域）+ 本账本现有分类名。
      *
      * 失败**不作废识别结果**（行照常可导入，只是记为未分类），给一条非致命提示。
      */
@@ -306,24 +312,39 @@ class ScreenshotImportViewModel(
         config: LlmConfig,
         rows: List<ScreenshotRow>,
     ): Pair<List<ScreenshotRow>, String?> {
-        val needs = rows
-            .filter { !it.duplicate }
-            .mapNotNull { row ->
-                row.merchant?.let { MerchantNeed(it, row.type != TxType.INCOME) }
-            }
-            .distinctBy { it.key }
-        if (needs.isEmpty()) return rows to null
         val bookId = app.settings.currentBookId.first()
             ?: return rows to "还没有账本，分类没贴（导入后为未分类）"
         val categories = app.database.categoryDao().allInBook(bookId)
         if (categories.isEmpty()) return rows to null
+        val rules = app.database.keywordRuleDao().allInBook(bookId)
+
+        // 规则命中先行（预览里显示的就是落库会得到的那个分类）
+        val ruleCategories = rows.associate { row ->
+            row.id to ruleCategory(row, categories, rules)
+        }
+        val needs = rows
+            .filter { !it.duplicate && ruleCategories[it.id] == null }
+            .mapNotNull { row ->
+                row.merchant?.let { MerchantNeed(it, row.type != TxType.INCOME) }
+            }
+            .distinctBy { it.key }
+        val fromRule = rows.map { row ->
+            val resolved = ruleCategories[row.id]
+            if (resolved != null) {
+                row.copy(categoryId = resolved.first, categoryName = resolved.second)
+            } else {
+                row
+            }
+        }
+        if (needs.isEmpty()) return fromRule to null
 
         _state.update { it.copy(progressText = "正在给 ${needs.size} 个商户贴分类…") }
         val outcome = assist.suggestCategories(config, needs, categories)
         val byKey = outcome.suggestions
             .filter { it.categoryId != null }
             .associateBy { MerchantNeed.keyOf(it.merchant, it.expense) }
-        val updated = rows.map { row ->
+        val updated = fromRule.map { row ->
+            if (row.categoryId != null) return@map row // 规则已给
             val suggestion = row.merchant
                 ?.let { byKey[MerchantNeed.keyOf(it, row.type != TxType.INCOME)] }
             if (suggestion?.categoryId != null) {
@@ -332,8 +353,26 @@ class ScreenshotImportViewModel(
                 row
             }
         }
-        val warning = outcome.error?.let { "分类没贴成：${categoryErrorText(it)}（这些会记为未分类）" }
+        val warning = outcome.error?.let { "分类没贴成：${categoryErrorText(it)}（没贴上的会记为未分类）" }
         return updated to warning
+    }
+
+    /** 关键词规则能不能给这一行一个**可用的分类**（标签规则、隐藏/删除目标都不算）。 */
+    private fun ruleCategory(
+        row: ScreenshotRow,
+        categories: List<CategoryEntity>,
+        rules: List<KeywordRuleEntity>,
+    ): Pair<String, String>? {
+        val type = if (row.type == TxType.INCOME) CategoryType.INCOME else CategoryType.EXPENSE
+        val usable = categories.filter { !it.deleted && !it.hidden && it.type == type }
+        val byId = usable.associateBy { it.id }
+        val hit = KeywordRules.match(row.note, rules) {
+            it.targetType == RuleTargetType.CATEGORY && byId.containsKey(it.targetId)
+        } ?: return null
+        val category = byId[hit.targetId] ?: return null
+        val parent = categories.firstOrNull { it.id == category.parentId && it.type == type }
+        val name = parent?.let { "${it.name} / ${category.name}" } ?: category.name
+        return category.id to name
     }
 
     /** 照片那条路：先落 cacheDir 临时文件（识别完即丢）。 */

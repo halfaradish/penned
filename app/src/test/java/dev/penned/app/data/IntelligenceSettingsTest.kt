@@ -295,4 +295,11 @@ class IntelligenceSettingsTest {
         settings.repairLegacyLlmPresetIfNeeded()
         assertEquals(LlmProvider.LEGACY_OPENCODE_GO_BASE_URL, settings.llmFields(LlmProvider.CUSTOM).baseUrl)
     }
+
+    @Test
+    fun `当前账本只在没设过时写入 不覆盖已选的`() = runTest {
+        settings.setCurrentBook("book-picked")
+        settings.setCurrentBookIfAbsent("book-seeded")
+        assertEquals("book-picked", settings.currentBookId.first())
+    }
 }

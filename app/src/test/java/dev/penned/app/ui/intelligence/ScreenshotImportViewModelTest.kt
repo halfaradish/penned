@@ -9,11 +9,13 @@ import dev.penned.app.data.db.entity.AccountEntity
 import dev.penned.app.data.db.entity.BookEntity
 import dev.penned.app.data.db.entity.CategoryEntity
 import dev.penned.app.data.db.entity.ImportBatchEntity
+import dev.penned.app.data.db.entity.KeywordRuleEntity
 import dev.penned.app.data.db.entity.TransactionEntity
 import dev.penned.app.data.llm.LlmClient
 import dev.penned.app.data.update.FakeHttpServer
 import dev.penned.app.domain.AccountType
 import dev.penned.app.domain.CategoryType
+import dev.penned.app.domain.RuleTargetType
 import dev.penned.app.domain.TxSource
 import dev.penned.app.domain.TxType
 import kotlinx.coroutines.runBlocking
@@ -61,7 +63,6 @@ class ScreenshotImportViewModelTest {
                 chain.proceed(original.newBuilder().url(server.url(original.url.encodedPath)).build())
             }
             .build()
-        viewModel = ScreenshotImportViewModel(app, LlmClient(client))
 
         runBlocking {
             val now = System.currentTimeMillis()
@@ -75,6 +76,9 @@ class ScreenshotImportViewModelTest {
             app.settings.setLlmApiKey(LlmProvider.CUSTOM, "sk-test")
             app.settings.setLlmModel(LlmProvider.CUSTOM, "glm-4.6")
         }
+
+        // VM 的 init 会读当前账本，放到账本设置之后再建
+        viewModel = ScreenshotImportViewModel(app, LlmClient(client))
     }
 
     @After
@@ -239,6 +243,44 @@ class ScreenshotImportViewModelTest {
         assertEquals("cat-lunch", txs.first { it.amountCents == 1200L }.categoryId)
         assertEquals("cat-red", txs.first { it.amountCents == 8800L }.categoryId)
         assertNull(txs.first { it.amountCents == 990L }.categoryId)
+    }
+
+    @Test
+    fun `关键词规则优先于 AI 截图预览与落库一致`() = runBlocking {
+        seedCategories()
+        val now = System.currentTimeMillis()
+        app.database.keywordRuleDao().upsert(
+            KeywordRuleEntity(
+                id = "r-pdd", bookId = bookId, keyword = "拼多多", targetType = RuleTargetType.CATEGORY,
+                targetId = "cat-food", priority = 0, enabled = true,
+                createdAt = now, updatedAt = now, deviceId = "t",
+            )
+        )
+        routeRecognitionAndCategories(
+            categoriesBody = """{"西大朴诚食堂":"食品餐饮 / 午餐","微信红包-来自姐姐":"红包"}""",
+        )
+        viewModel.recognize(listOf(pngFile()))
+
+        val state = viewModel.state.value
+        // 规则命中 → 预览显示规则分类（不是模型可能给的那个）
+        assertEquals("cat-food", state.rows[0].categoryId)
+        assertEquals("食品餐饮", state.rows[0].categoryName)
+        assertEquals("cat-lunch", state.rows[1].categoryId)
+        assertEquals("cat-red", state.rows[2].categoryId)
+
+        // 规则已经解决的那一笔不再发给 AI（省一次 token）
+        val categoryPrompt = server.requests
+            .map { promptOf(it.body) }
+            .filterNot { it.contains("这是一张支付/账单截图") }
+            .joinToString("\n")
+        assertTrue(!categoryPrompt.contains("拼多多平台商户"))
+        assertTrue(categoryPrompt.contains("西大朴诚食堂"))
+
+        // 落库与预览一致
+        viewModel.import()
+        awaitState { !it.importing && it.imported == 3 }
+        val txs = app.database.transactionDao().allInBook(bookId)
+        assertEquals("cat-food", txs.first { it.amountCents == 6707L }.categoryId)
     }
 
     @Test

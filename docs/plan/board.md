@@ -10,7 +10,8 @@
 - **文件导入**：「AI 补分类」改名「AI 自动贴分类」，建议直接贴到将导入的行上；分类来源计数变为 `按名命中 / 关键词规则 / AI / 待补` 四类。
 - **截图导入**：识别完成后**同一次动作里自动归类**（不另点按钮），预览逐行显示分类，计数卡显示「已贴 N / 未分类 M」；归类失败只给提示，不清空识别结果，导入仍可用。
 - **归类质量/隐私**：按收支分两批调用（支出商户只看支出分类、收入只看收入），优先二级、拿不准给空串、不许用「其他」兜底；路径兼容 `一级/二级`、`一级 / 二级`、全角斜杠。只发**商户名 + 现有分类名**，商户名只取 `BillRow.merchant`（不从备注猜；通用模式没映射商户列就不发 AI），金额/时间/单号/状态文字一律不出设备。
-- **测试**：`CategoryAssignmentTest` 8 / `LlmSuggestionsTest` +4 / `LlmImportAssistTest` +2 / `BillImportRepositoryTest` +2 / `ScreenshotImportViewModelTest` +2 / `BillImportScreenTest` +1 / 截图基线更新。全量 **1071 / 0 失败**（1052 → 1071），lint **0 error / 36 warnings**（改动文件无新增告警）。**零 schema 变更、零新增依赖、AI 仍默认关**。
+- **测试**：`CategoryAssignmentTest` 8 / `LlmSuggestionsTest` +4 / `LlmImportAssistTest` +2 / `BillImportRepositoryTest` +2 / `ScreenshotImportViewModelTest` +3（含规则优先与预览一致）/ `BillImportScreenTest` +1 / `IntelligenceSettingsTest` +1 / 截图基线更新。全量 **1073 / 0 失败**（1052 → 1073），lint **0 error / 36 warnings**（改动文件无新增告警）。**零 schema 变更、零新增依赖、AI 仍默认关**。
+- **顺带修掉全量假失败的系统性根因（D118）**：`PennedApplication` 首启种子协程用「先读 currentBook 再写」初始化账本，会覆盖 UI/测试刚选的账本 → Add* 页去默认账本找分类、偶发 Compose 超时。改成 `SettingsRepository.setCurrentBookIfAbsent`（DataStore 事务内判空写入）。修后全量复跑不再出现该批假失败。
 - **未验**：真机真 Key 下的归类准确率（假服务器 + 本地纯函数链路已覆盖）；真实账单文件上的 AI 按钮仍待有 Key 时走一遍。
 
 **OpenCode Go 供应商修复（D116，2026-10-22，用户报障）——已修复并实测通过（用户换新 Key 后 200；测试经宿主代理绕过模拟机 NAT 故障）**：

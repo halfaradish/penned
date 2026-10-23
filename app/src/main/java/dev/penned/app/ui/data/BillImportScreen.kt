@@ -361,13 +361,23 @@ class BillImportViewModel(
             val categories = app.database.categoryDao().allInBook(bookId)
             val rules = app.database.keywordRuleDao().allInBook(bookId)
 
-            val needs = current.importable.mapNotNull { row ->
-                CategoryAssignment.merchantOf(row)?.let { MerchantNeed(it, row.expense) }
-            }.distinctBy { it.key }
+            val needs = current.importable
+                .filter { CategoryAssignment.resolve(it, categories, rules).source == CategorySource.NONE }
+                .mapNotNull { row ->
+                    CategoryAssignment.merchantOf(row)?.let { MerchantNeed(it, row.expense) }
+                }
+                .distinctBy { it.key }
             if (needs.isEmpty()) {
+                val alreadyCategorized = current.importable.any {
+                    CategoryAssignment.resolve(it, categories, rules).source != CategorySource.NONE
+                }
                 _state.value = current.copy(
                     aiBusy = false,
-                    aiMessage = "这些行没有商户列（通用模式可手动映射一列），没法贴分类（会记为未分类）",
+                    aiMessage = if (alreadyCategorized) {
+                        "所有行都已经有分类了，不用再问 AI"
+                    } else {
+                        "这些行没有商户列（通用模式可手动映射一列），没法贴分类（会记为未分类）"
+                    },
                 )
                 return@launch
             }

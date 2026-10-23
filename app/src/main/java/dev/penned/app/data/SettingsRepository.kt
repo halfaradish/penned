@@ -320,6 +320,19 @@ class SettingsRepository(private val context: Context) {
         context.settingsDataStore().edit { it[KEY_CURRENT_BOOK] = id }
     }
 
+    /**
+     * **只在还没选过账本时**写入（首启种子用）。
+     *
+     * 不能写成"先 `currentBookId.first()` 判空、再 `setCurrentBook`"：种子跑在应用级 IO 协程里，
+     * 与 UI / 测试设置当前账本是并发的，读后写会把别人刚选的账本覆盖掉（D117 收尾实测的 Add* 假失败根因）。
+     * 判断与写入必须在同一次 DataStore 事务里。
+     */
+    suspend fun setCurrentBookIfAbsent(id: String) {
+        context.settingsDataStore().edit { prefs ->
+            if (prefs[KEY_CURRENT_BOOK] == null) prefs[KEY_CURRENT_BOOK] = id
+        }
+    }
+
     suspend fun setPinHash(stored: String?) {
         context.settingsDataStore().edit {
             if (stored == null) it.remove(KEY_PIN_HASH) else it[KEY_PIN_HASH] = stored
